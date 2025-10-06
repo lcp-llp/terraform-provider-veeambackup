@@ -1,0 +1,189 @@
+trigger:
+  tags:
+    include:
+    - '*'
+  branches:
+    exclude:
+    - '*'
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - group: 'terraform'
+  - name: terraformVersion 
+    value: '1.12.2'
+  - name: providerName
+    value: 'veeam'
+  - name: gnupgVersion
+    value: '2.4.3'
+  - name: repoName
+    value: 'lcp-llp/terraform-provider-veeam'  # Replace with your actual GitHub org/user and repo name
+
+jobs:
+  - job: build_provider
+    displayName: 'Build Terraform Provider'
+    steps:
+    - task: DownloadSecureFile@1
+      name: gpgKey
+      inputs:
+        secureFile: 'private-key2.gpg'
+
+    - script: |
+        echo "Checking the GPG key file..."
+        ls -lh $(gpgKey.secureFilePath)
+        sha256sum $(gpgKey.secureFilePath)
+      displayName: 'Check GPG Key File'
+    #
+    - script: |
+        sudo apt-get update
+        sudo apt-get install -y wget build-essential libbz2-dev zlib1g-dev libsqlite3-dev libssl-dev libreadline-dev libffi-dev
+        sudo apt-get install -y libassuan-dev libnpth0-dev
+      displayName: 'Install Dependencies'
+
+    - script: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential libgcrypt20-dev libgpg-error-dev libassuan-dev libksba-dev libnpth0-dev
+      displayName: 'Install GnuPG and cryptographic dependencies'
+
+    - script: |
+        wget https://gnupg.org/ftp/gcrypt/libgpg-error/libgpg-error-1.46.tar.bz2
+        tar -xvjf libgpg-error-1.46.tar.bz2
+        cd libgpg-error-1.46
+        ./configure
+        make
+        sudo make install
+      displayName: 'Install libgpg-error'
+
+    - script: |
+        wget https://gnupg.org/ftp/gcrypt/libksba/libksba-1.6.3.tar.bz2
+        tar -xvjf libksba-1.6.3.tar.bz2
+        cd libksba-1.6.3
+        ./configure
+        make
+        sudo make install
+      displayName: 'Install libksba'
+
+    - script: |
+        wget https://gnupg.org/ftp/gcrypt/gnupg/gnupg-$(gnupgVersion).tar.bz2
+        tar -xvjf gnupg-$(gnupgVersion).tar.bz2
+        cd gnupg-$(gnupgVersion)
+        ./configure
+        make
+        sudo make install
+      env:
+        gnupgVersion: $(gnupgVersion)
+      displayName: 'Download and Install GnuPG'
+
+    - script: |
+        echo "Installing GitHub CLI..."
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+        sudo apt update
+        sudo apt install gh
+      displayName: 'Install GitHub CLI'
+
+    - script: |
+        sudo apt-get -y install wget
+        wget https://golang.org/dl/go1.21.3.linux-amd64.tar.gz
+        sudo tar -C /usr/local -xzf go1.21.3.linux-amd64.tar.gz
+        echo "##vso[task.prependpath]/usr/local/go/bin"
+      displayName: 'Install Go'
+
+    - script: |
+        version=$(git describe --tags --abbrev=0)
+        version=$(echo "$version" | sed 's/^v//') # Remove leading 'v' if present
+        echo "##vso[task.setvariable variable=releaseVersion]$version"
+        echo $version
+      displayName: 'Get Version Number from Tag'
+
+    - script: |
+        go version
+        echo "Importing GPG Key..."
+        gpg --version
+        gpg-agent --version
+          echo "Killing all GPG-related processes..."
+        gpgconf --kill all
+        echo "Restarting GPG agent..."
+        gpg-agent --daemon
+        gpg --verbose --batch --yes --passphrase $(GpgPassphrase) --import $(gpgKey.secureFilePath)
+      displayName: 'Build and Sign Terraform Provider'
+
+    - script: |
+        echo "Building provider for multiple platforms..."
+        platforms=('linux/amd64' 'linux/arm64' 'linux/arm' 'darwin/amd64' 'darwin/arm64' 'windows/amd64' 'windows/386')
+        for platform in "${platforms[@]}"
+        do
+          GOOS=$(echo $platform | cut -d '/' -f1)
+          GOARCH=$(echo $platform | cut -d '/' -f2)
+          output_name="terraform-provider-$(providerName)_v$(releaseVersion)"
+          if [ "$GOOS" == "windows" ]; then
+            output_name+='.exe'
+          fi
+
+          echo "Building for $GOOS/$GOARCH..."
+          env GOOS=$GOOS GOARCH=$GOARCH go build -o $output_name .
+
+          # Zip the binary
+          zip "terraform-provider-$(providerName)_$(releaseVersion)_${GOOS}_${GOARCH}.zip" $output_name
+        done
+      displayName: 'Cross-compile Provider'
+
+    - script: |
+        echo "Creating checksums and manifest..."
+        # Initialize the manifest content
+        manifest_content=""
+        shasum_content=""
+
+        for file in terraform-provider-$(providerName)_$(releaseVersion)_*.zip
+        do
+          os_arch=$(echo $file | sed -E 's/.*_([^_]+_[^_]+)\.zip/\1/')
+          os=$(echo $os_arch | cut -d '_' -f1)
+          arch=$(echo $os_arch | cut -d '_' -f2)
+
+          # Create SHASUM for current file
+          shasum -a 256 $file >> "terraform-provider-$(providerName)_$(releaseVersion)_SHA256SUMS"
+        done
+
+        # Create manifest_content from terraform-registry-manifest.json
+        manifest_content=$(cat terraform-registry-manifest.json)
+
+        # Create manifest file
+        echo $manifest_content > "terraform-provider-$(providerName)_$(releaseVersion)_manifest.json"
+
+        # Append SHASUM for the manifest
+        shasum -a 256 "terraform-provider-$(providerName)_$(releaseVersion)_manifest.json" >> "terraform-provider-$(providerName)_$(releaseVersion)_SHA256SUMS"
+
+        # Sign the SHA256SUMS file
+        gpg --batch --yes --pinentry-mode loopback --passphrase $(GpgPassphrase) --detach-sign "terraform-provider-$(providerName)_$(releaseVersion)_SHA256SUMS"
+        ls -l
+ 
+    - script: |
+        echo "Archiving artifacts..."
+        # Creating a directory to store all artifacts
+        mkdir artifacts
+        # Copying all necessary files into the artifacts directory
+        cp terraform-provider-$(providerName)_$(releaseVersion)_*.zip artifacts/
+        cp terraform-provider-$(providerName)_$(releaseVersion)_SHA256SUMS artifacts/
+        cp terraform-provider-$(providerName)_$(releaseVersion)_SHA256SUMS.sig artifacts/
+        cp terraform-provider-$(providerName)_$(releaseVersion)_manifest.json artifacts/
+      displayName: 'Archive Artifacts'
+
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: 'artifacts'
+        artifact: 'providerArtifacts'
+        publishLocation: 'pipeline'
+      displayName: 'Publish Artifacts'
+
+    - script: |
+        echo "Creating GitHub release..."
+        export GITHUB_TOKEN=$(GitHubPAT)
+        export repoName=$(repoName)
+        gh release create "$(releaseVersion)" ./artifacts/* \
+          --repo "$repoName" \
+          --title "Release $(releaseVersion)" \
+          --notes "Release notes for $(releaseVersion)"
+      displayName: 'Create GitHub Release'
+      env:
+        GITHUB_TOKEN: $(GitHubPAT)
