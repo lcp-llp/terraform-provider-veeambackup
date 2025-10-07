@@ -14,11 +14,11 @@ variables:
   - name: terraformVersion 
     value: '1.12.2'
   - name: providerName
-    value: 'veeam'
+    value: 'veeambackup'
   - name: gnupgVersion
     value: '2.4.3'
   - name: repoName
-    value: 'lcp-llp/terraform-provider-veeam'  # Replace with your actual GitHub org/user and repo name
+    value: 'lcp-llp/terraform-provider-veeambackup'  # Replace with your actual GitHub org/user and repo name
 
 jobs:
   - job: build_provider
