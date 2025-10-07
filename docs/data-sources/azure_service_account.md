@@ -1,4 +1,4 @@
-# veeam_azure_service_account Data Source
+# veeambackup_azure_service_account Data Source
 
 Retrieves information about a specific Azure service account from Veeam Backup for Microsoft Azure.
 
@@ -6,14 +6,14 @@ Retrieves information about a specific Azure service account from Veeam Backup f
 
 ```hcl
 # Get a specific service account by ID
-data "veeam_azure_service_account" "production" {
+data "veeambackup_azure_service_account" "production" {
   account_id = "service-account-123"
 }
 
 # Get a service account using the ID from the list datasource
-data "veeam_azure_service_accounts" "all" {}
+data "veeambackup_azure_service_accounts" "all" {}
 
-data "veeam_azure_service_account" "production_detailed" {
+data "veeambackup_azure_service_account" "production_detailed" {
   account_id = data.veeam_azure_service_accounts.all.service_accounts_by_name["production-backup-sa"]
 }
 
@@ -39,7 +39,7 @@ locals {
 }
 
 # Use service account in repository datasource
-data "veeam_azure_backup_repository" "my_repo" {
+data "veeambackup_azure_backup_repository" "my_repo" {
   repository_id      = "repo-123"
   service_account_id = data.veeam_azure_service_account.production.account_id
 }
@@ -87,7 +87,7 @@ GET /api/v8.1/accounts/azure/service/{accountId}
 ### Validating Service Account State
 
 ```hcl
-data "veeam_azure_service_account" "check" {
+data "veeambackup_azure_service_account" "check" {
   account_id = var.service_account_id
 }
 
@@ -107,7 +107,7 @@ resource "null_resource" "backup_job" {
 ### Checking Permissions State
 
 ```hcl
-data "veeam_azure_service_account" "production" {
+data "veeambackup_azure_service_account" "production" {
   account_id = var.service_account_id
 }
 
@@ -131,7 +131,7 @@ output "permissions_check" {
 ### Monitoring Certificate Expiry
 
 ```hcl
-data "veeam_azure_service_account" "production" {
+data "veeambackup_azure_service_account" "production" {
   account_id = var.service_account_id
 }
 
@@ -153,7 +153,7 @@ output "certificate_info" {
 ### Cross-referencing with Subscriptions
 
 ```hcl
-data "veeam_azure_service_account" "production" {
+data "veeambackup_azure_service_account" "production" {
   account_id = var.service_account_id
 }
 
@@ -171,7 +171,7 @@ output "subscription_access" {
 ### Checking Purpose Compatibility
 
 ```hcl
-data "veeam_azure_service_account" "account" {
+data "veeambackup_azure_service_account" "account" {
   account_id = var.service_account_id
 }
 
@@ -196,7 +196,7 @@ resource "some_backup_job" "example" {
 ### Complete Service Account Audit
 
 ```hcl
-data "veeam_azure_service_account" "audit" {
+data "veeambackup_azure_service_account" "audit" {
   account_id = var.service_account_id
 }
 

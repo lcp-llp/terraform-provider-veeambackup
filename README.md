@@ -40,14 +40,14 @@ data "veeam_azure_backup_repositories" "all" {}
 
 # Get a specific repository
 data "veeam_azure_backup_repository" "production" {
-  repository_id = data.veeam_azure_backup_repositories.all.repositories_by_name["production-repo"]
+  repository_id = data.veeambackup_azure_backup_repositories.all.repositories_by_name["production-repo"]
 }
 
 output "repository_info" {
   value = {
-    name   = data.veeam_azure_backup_repository.production.name
-    status = data.veeam_azure_backup_repository.production.status
-    tier   = data.veeam_azure_backup_repository.production.tier
+    name   = data.veeambackup_azure_backup_repository.production.name
+    status = data.veeambackup_azure_backup_repository.production.status
+    tier   = data.veeambackup_azure_backup_repository.production.tier
   }
 }
 ```
@@ -60,14 +60,14 @@ data "veeam_azure_service_accounts" "all" {}
 
 # Get a specific service account
 data "veeam_azure_service_account" "production" {
-  account_id = data.veeam_azure_service_accounts.all.service_accounts_by_name["production-sa"]
+  account_id = data.veeambackup_azure_service_accounts.all.service_accounts_by_name["production-sa"]
 }
 
 output "service_account_info" {
   value = {
-    name         = data.veeam_azure_service_account.production.name
-    tenant_name  = data.veeam_azure_service_account.production.tenant_name
-    purposes     = data.veeam_azure_service_account.production.purposes
+    name         = data.veeambackup_azure_service_account.production.name
+    tenant_name  = data.veeambackup_azure_service_account.production.tenant_name
+    purposes     = data.veeambackup_azure_service_account.production.purposes
   }
 }
 ```
@@ -77,10 +77,10 @@ output "service_account_info" {
 Configure the provider using environment variables:
 
 ```bash
-export VEEAM_HOSTNAME="https://your-veeam-server.com"
-export VEEAM_API_KEY="your-api-key"
-export VEEAM_USERNAME="your-username"
-export VEEAM_PASSWORD="your-password"
+export VEEAMBACKUP_HOSTNAME="https://your-veeam-server.com"
+export VEEAMBACKUP_API_KEY="your-api-key"
+export VEEAMBACKUP_USERNAME="your-username"
+export VEEAMBACKUP_PASSWORD="your-password"
 ```
 
 ## Available Data Sources
@@ -103,8 +103,8 @@ data "veeam_azure_service_accounts" "all" {}
 
 # Use lookup maps for easy reference
 locals {
-  production_repo_id = data.veeam_azure_backup_repositories.all.repositories_by_name["production-repo"]
-  production_sa_id   = data.veeam_azure_service_accounts.all.service_accounts_by_name["production-sa"]
+  production_repo_id = data.veeambackup_azure_backup_repositories.all.repositories_by_name["production-repo"]
+  production_sa_id   = data.veeambackup_azure_service_accounts.all.service_accounts_by_name["production-sa"]
 }
 
 # Get detailed information
@@ -132,13 +132,13 @@ data "veeam_azure_service_accounts" "backup_accounts" {
 # Validate compatibility
 locals {
   compatible_combinations = [
-    for repo in data.veeam_azure_backup_repositories.production_ready.repositories : {
+    for repo in data.veeambackup_azure_backup_repositories.production_ready.repositories : {
       repository_id      = repo.id
       repository_name    = repo.name
       service_account_id = repo.service_account_id
-      service_account_name = data.veeam_azure_service_accounts.backup_accounts.service_accounts_by_id[repo.service_account_id]
+      service_account_name = data.veeambackup_azure_service_accounts.backup_accounts.service_accounts_by_id[repo.service_account_id]
     }
-    if contains([for sa in data.veeam_azure_service_accounts.backup_accounts.service_accounts : sa.id], repo.service_account_id)
+    if contains([for sa in data.veeambackup_azure_service_accounts.backup_accounts.service_accounts : sa.id], repo.service_account_id)
   ]
 }
 ```

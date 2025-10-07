@@ -1,4 +1,4 @@
-# veeam_azure_service_accounts Data Source
+# veeambackup_azure_service_accounts Data Source
 
 Retrieves a list of Azure service accounts from Veeam Backup for Microsoft Azure with optional filtering and pagination.
 
@@ -6,38 +6,38 @@ Retrieves a list of Azure service accounts from Veeam Backup for Microsoft Azure
 
 ```hcl
 # Get all Azure service accounts
-data "veeam_azure_service_accounts" "all" {}
+data "veeambackup_azure_service_accounts" "all" {}
 
 # Get service accounts with a specific purpose
-data "veeam_azure_service_accounts" "backup_accounts" {
+data "veeambackup_azure_service_accounts" "backup_accounts" {
   purpose = "Backup"
 }
 
 # Get service accounts with filtering and pagination
-data "veeam_azure_service_accounts" "production" {
+data "veeambackup_azure_service_accounts" "production" {
   filter = "prod*"
   limit  = 10
   offset = 0
 }
 
 # Get service accounts for replication
-data "veeam_azure_service_accounts" "replication" {
+data "veeambackup_azure_service_accounts" "replication" {
   purpose = "Replication"
 }
 
 # Access service account data
 output "service_account_names" {
-  value = [for account in data.veeam_azure_service_accounts.all.service_accounts : account.name]
+  value = [for account in data.veeambackup_azure_service_accounts.all.service_accounts : account.name]
 }
 
 # Use the name-to-ID lookup map
 output "production_sa_id" {
-  value = data.veeam_azure_service_accounts.all.service_accounts_by_name["production-service-account"]
+  value = data.veeambackup_azure_service_accounts.all.service_accounts_by_name["production-service-account"]
 }
 
 # Use the ID-to-name lookup map
 output "sa_name_by_id" {
-  value = data.veeam_azure_service_accounts.all.service_accounts_by_id["sa-abc123-def456"]
+  value = data.veeambackup_azure_service_accounts.all.service_accounts_by_id["sa-abc123-def456"]
 }
 ```
 
@@ -84,14 +84,14 @@ GET /api/v8.1/accounts/azure/service
 ### Finding a Service Account by Name
 
 ```hcl
-data "veeam_azure_service_accounts" "all" {}
+data "veeambackup_azure_service_accounts" "all" {}
 
 locals {
-  production_sa_id = data.veeam_azure_service_accounts.all.service_accounts_by_name["production-service-account"]
+  production_sa_id = data.veeambackup_azure_service_accounts.all.service_accounts_by_name["production-service-account"]
 }
 
 # Use in repository datasource
-data "veeam_azure_backup_repository" "prod_repo" {
+data "veeambackup_azure_backup_repository" "prod_repo" {
   repository_id      = "repo-123"
   service_account_id = local.production_sa_id
 }
@@ -100,15 +100,15 @@ data "veeam_azure_backup_repository" "prod_repo" {
 ### Filtering by Purpose
 
 ```hcl
-data "veeam_azure_service_accounts" "backup_only" {
+data "veeambackup_azure_service_accounts" "backup_only" {
   purpose = "Backup"
 }
 
-data "veeam_azure_service_accounts" "replication_only" {
+data "veeambackup_azure_service_accounts" "replication_only" {
   purpose = "Replication"
 }
 
-data "veeam_azure_service_accounts" "both_purposes" {
+data "veeambackup_azure_service_accounts" "both_purposes" {
   purpose = "Both"
 }
 ```
@@ -116,11 +116,11 @@ data "veeam_azure_service_accounts" "both_purposes" {
 ### Listing Enabled Service Accounts
 
 ```hcl
-data "veeam_azure_service_accounts" "all" {}
+data "veeambackup_azure_service_accounts" "all" {}
 
 locals {
   enabled_accounts = [
-    for account in data.veeam_azure_service_accounts.all.service_accounts :
+    for account in data.veeambackup_azure_service_accounts.all.service_accounts :
     account if account.is_enabled
   ]
 }
@@ -133,12 +133,12 @@ output "enabled_service_accounts" {
 ### Checking Certificate Expiry
 
 ```hcl
-data "veeam_azure_service_accounts" "all" {}
+data "veeambackup_azure_service_accounts" "all" {}
 
 locals {
   # Get accounts with certificates expiring soon (you would implement date logic)
   accounts_expiring_soon = [
-    for account in data.veeam_azure_service_accounts.all.service_accounts :
+    for account in data.veeambackup_azure_service_accounts.all.service_accounts :
     account if account.certificate_expiry != ""
   ]
 }
@@ -154,12 +154,12 @@ output "certificate_expiry_report" {
 ### Pagination
 
 ```hcl
-data "veeam_azure_service_accounts" "page1" {
+data "veeambackup_azure_service_accounts" "page1" {
   limit  = 20
   offset = 0
 }
 
-data "veeam_azure_service_accounts" "page2" {
+data "veeambackup_azure_service_accounts" "page2" {
   limit  = 20
   offset = 20
 }
@@ -168,14 +168,14 @@ data "veeam_azure_service_accounts" "page2" {
 ### Cross-referencing with Repositories
 
 ```hcl
-data "veeam_azure_service_accounts" "all" {}
-data "veeam_azure_backup_repositories" "all" {}
+data "veeambackup_azure_service_accounts" "all" {}
+data "veeambackup_azure_backup_repositories" "all" {}
 
 # Create a map of repositories to their associated service accounts
 locals {
   repo_service_account_map = {
-    for repo in data.veeam_azure_backup_repositories.all.repositories :
-    repo.name => data.veeam_azure_service_accounts.all.service_accounts_by_id[repo.service_account_id]
+    for repo in data.veeambackup_azure_backup_repositories.all.repositories :
+    repo.name => data.veeambackup_azure_service_accounts.all.service_accounts_by_id[repo.service_account_id]
     if repo.service_account_id != ""
   }
 }

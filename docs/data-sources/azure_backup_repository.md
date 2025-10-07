@@ -1,4 +1,4 @@
-# veeam_azure_backup_repository Data Source
+# veeambackup_azure_backup_repository Data Source
 
 Retrieves information about a specific Azure backup repository from Veeam Backup for Microsoft Azure.
 
