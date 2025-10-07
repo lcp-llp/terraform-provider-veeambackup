@@ -14,34 +14,34 @@ data "veeambackup_azure_service_account" "production" {
 data "veeambackup_azure_service_accounts" "all" {}
 
 data "veeambackup_azure_service_account" "production_detailed" {
-  account_id = data.veeam_azure_service_accounts.all.service_accounts_by_name["production-backup-sa"]
+  account_id = data.veeambackup_azure_service_accounts.all.service_accounts_by_name["production-backup-sa"]
 }
 
 # Use the detailed service account data
 output "service_account_details" {
   value = {
-    name                     = data.veeam_azure_service_account.production.name
-    application_id           = data.veeam_azure_service_account.production.application_id
-    tenant_id                = data.veeam_azure_service_account.production.tenant_id
-    tenant_name              = data.veeam_azure_service_account.production.tenant_name
-    account_state            = data.veeam_azure_service_account.production.account_state
-    region                   = data.veeam_azure_service_account.production.region
-    purposes                 = data.veeam_azure_service_account.production.purposes
-    subscription_ids         = data.veeam_azure_service_account.production.subscription_ids
-    azure_permissions_state  = data.veeam_azure_service_account.production.azure_permissions_state
-    expiration_date          = data.veeam_azure_service_account.production.expiration_date
+    name                     = data.veeambackup_azure_service_account.production.name
+    application_id           = data.veeambackup_azure_service_account.production.application_id
+    tenant_id                = data.veeambackup_azure_service_account.production.tenant_id
+    tenant_name              = data.veeambackup_azure_service_account.production.tenant_name
+    account_state            = data.veeambackup_azure_service_account.production.account_state
+    region                   = data.veeambackup_azure_service_account.production.region
+    purposes                 = data.veeambackup_azure_service_account.production.purposes
+    subscription_ids         = data.veeambackup_azure_service_account.production.subscription_ids
+    azure_permissions_state  = data.veeambackup_azure_service_account.production.azure_permissions_state
+    expiration_date          = data.veeambackup_azure_service_account.production.expiration_date
   }
 }
 
 # Check if service account has backup purposes
 locals {
-  has_backup_purpose = contains(data.veeam_azure_service_account.production.purposes, "Backup")
+  has_backup_purpose = contains(data.veeambackup_azure_service_account.production.purposes, "Backup")
 }
 
 # Use service account in repository datasource
 data "veeambackup_azure_backup_repository" "my_repo" {
   repository_id      = "repo-123"
-  service_account_id = data.veeam_azure_service_account.production.account_id
+  service_account_id = data.veeambackup_azure_service_account.production.account_id
 }
 ```
 
@@ -93,7 +93,7 @@ data "veeambackup_azure_service_account" "check" {
 
 # Validate service account is in created state
 locals {
-  account_ready = data.veeam_azure_service_account.check.account_state == "Created"
+  account_ready = data.veeambackup_azure_service_account.check.account_state == "Created"
 }
 
 # Use in conditional logic
@@ -113,17 +113,17 @@ data "veeambackup_azure_service_account" "production" {
 
 locals {
   has_all_permissions = contains(
-    data.veeam_azure_service_account.production.azure_permissions_state,
+    data.veeambackup_azure_service_account.production.azure_permissions_state,
     "AllPermissionsAvailable"
   )
 }
 
 output "permissions_check" {
   value = {
-    account_name           = data.veeam_azure_service_account.production.name
+    account_name           = data.veeambackup_azure_service_account.production.name
     has_all_permissions    = local.has_all_permissions
-    permissions_state      = data.veeam_azure_service_account.production.azure_permissions_state
-    last_checked          = data.veeam_azure_service_account.production.azure_permissions_state_check_time_utc
+    permissions_state      = data.veeambackup_azure_service_account.production.azure_permissions_state
+    last_checked          = data.veeambackup_azure_service_account.production.azure_permissions_state_check_time_utc
   }
 }
 ```
@@ -137,15 +137,15 @@ data "veeambackup_azure_service_account" "production" {
 
 # Alert if certificate expires soon (you would implement date comparison logic)
 locals {
-  expiration_date = data.veeam_azure_service_account.production.expiration_date
-  certificate_name = data.veeam_azure_service_account.production.application_certificate_name
+  expiration_date = data.veeambackup_azure_service_account.production.expiration_date
+  certificate_name = data.veeambackup_azure_service_account.production.application_certificate_name
 }
 
 output "certificate_info" {
   value = {
     certificate_name = local.certificate_name
     expiration_date  = local.expiration_date
-    account_name     = data.veeam_azure_service_account.production.name
+    account_name     = data.veeambackup_azure_service_account.production.name
   }
 }
 ```
@@ -160,10 +160,10 @@ data "veeambackup_azure_service_account" "production" {
 # Output subscription information
 output "subscription_access" {
   value = {
-    account_name                    = data.veeam_azure_service_account.production.name
-    subscription_ids                = data.veeam_azure_service_account.production.subscription_ids
-    worker_deployment_subscription  = data.veeam_azure_service_account.production.subscription_id_for_worker_deployment
-    management_group                = data.veeam_azure_service_account.production.management_group_name
+    account_name                    = data.veeambackup_azure_service_account.production.name
+    subscription_ids                = data.veeambackup_azure_service_account.production.subscription_ids
+    worker_deployment_subscription  = data.veeambackup_azure_service_account.production.subscription_id_for_worker_deployment
+    management_group                = data.veeambackup_azure_service_account.production.management_group_name
   }
 }
 ```
@@ -176,8 +176,8 @@ data "veeambackup_azure_service_account" "account" {
 }
 
 locals {
-  supports_backup      = contains(data.veeam_azure_service_account.account.purposes, "Backup")
-  supports_replication = contains(data.veeam_azure_service_account.account.purposes, "Replication")
+  supports_backup      = contains(data.veeambackup_azure_service_account.account.purposes, "Backup")
+  supports_replication = contains(data.veeambackup_azure_service_account.account.purposes, "Replication")
   
   # Determine if account can be used for specific operations
   can_create_backup_job = local.supports_backup
@@ -188,7 +188,7 @@ locals {
 resource "some_backup_job" "example" {
   count = local.can_create_backup_job ? 1 : 0
   
-  service_account_id = data.veeam_azure_service_account.account.account_id
+  service_account_id = data.veeambackup_azure_service_account.account.account_id
   # ... other configuration
 }
 ```
@@ -203,31 +203,31 @@ data "veeambackup_azure_service_account" "audit" {
 output "service_account_audit" {
   value = {
     basic_info = {
-      name             = data.veeam_azure_service_account.audit.name
-      description      = data.veeam_azure_service_account.audit.description
-      account_state    = data.veeam_azure_service_account.audit.account_state
-      account_origin   = data.veeam_azure_service_account.audit.account_origin
-      region           = data.veeam_azure_service_account.audit.region
+      name             = data.veeambackup_azure_service_account.audit.name
+      description      = data.veeambackup_azure_service_account.audit.description
+      account_state    = data.veeambackup_azure_service_account.audit.account_state
+      account_origin   = data.veeambackup_azure_service_account.audit.account_origin
+      region           = data.veeambackup_azure_service_account.audit.region
     }
     azure_integration = {
-      application_id   = data.veeam_azure_service_account.audit.application_id
-      tenant_id        = data.veeam_azure_service_account.audit.tenant_id
-      tenant_name      = data.veeam_azure_service_account.audit.tenant_name
-      cloud_state      = data.veeam_azure_service_account.audit.cloud_state
+      application_id   = data.veeambackup_azure_service_account.audit.application_id
+      tenant_id        = data.veeambackup_azure_service_account.audit.tenant_id
+      tenant_name      = data.veeambackup_azure_service_account.audit.tenant_name
+      cloud_state      = data.veeambackup_azure_service_account.audit.cloud_state
     }
     permissions = {
-      state            = data.veeam_azure_service_account.audit.azure_permissions_state
-      last_checked     = data.veeam_azure_service_account.audit.azure_permissions_state_check_time_utc
+      state            = data.veeambackup_azure_service_account.audit.azure_permissions_state
+      last_checked     = data.veeambackup_azure_service_account.audit.azure_permissions_state_check_time_utc
     }
     certificate = {
-      name             = data.veeam_azure_service_account.audit.application_certificate_name
-      expiration_date  = data.veeam_azure_service_account.audit.expiration_date
+      name             = data.veeambackup_azure_service_account.audit.application_certificate_name
+      expiration_date  = data.veeambackup_azure_service_account.audit.expiration_date
     }
     capabilities = {
-      purposes                        = data.veeam_azure_service_account.audit.purposes
-      selected_for_workermanagement   = data.veeam_azure_service_account.audit.selected_for_workermanagement
-      subscription_ids                = data.veeam_azure_service_account.audit.subscription_ids
-      worker_deployment_subscription  = data.veeam_azure_service_account.audit.subscription_id_for_worker_deployment
+      purposes                        = data.veeambackup_azure_service_account.audit.purposes
+      selected_for_workermanagement   = data.veeambackup_azure_service_account.audit.selected_for_workermanagement
+      subscription_ids                = data.veeambackup_azure_service_account.audit.subscription_ids
+      worker_deployment_subscription  = data.veeambackup_azure_service_account.audit.subscription_id_for_worker_deployment
     }
   }
 }
