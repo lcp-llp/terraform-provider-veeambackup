@@ -1,7 +1,7 @@
 package main
 
 import (
-	"terraform-provider-veeam/provider"
+	"terraform-provider-veeambackup/provider"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/plugin"
 )

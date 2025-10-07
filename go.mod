@@ -1,4 +1,4 @@
-module terraform-provider-veeam
+module terraform-provider-veeambackup
 
 go 1.23.3
 

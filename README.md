@@ -163,7 +163,7 @@ This provider is designed for Veeam Backup for Microsoft Azure version 8.1 REST 
 ### Building the Provider
 
 ```bash
-go build -o terraform-provider-veeam
+go build -o terraform-provider-veeambackup
 ```
 
 ### Running Tests
