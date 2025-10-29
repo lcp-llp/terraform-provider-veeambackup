@@ -36,7 +36,9 @@ func Provider() *schema.Provider {
 				DefaultFunc: schema.EnvDefaultFunc("VEEAMBACKUP_PASSWORD", nil),
 			},
 		},
-		ResourcesMap: map[string]*schema.Resource{},
+		ResourcesMap: map[string]*schema.Resource{
+    		"veeambackup_azure_service_account": resourceAzureServiceAccount(),
+		},
 		DataSourcesMap: map[string]*schema.Resource{
 			"veeambackup_azure_backup_repositories": dataSourceAzureBackupRepositories(),
 			"veeambackup_azure_backup_repository":   dataSourceAzureBackupRepository(),
