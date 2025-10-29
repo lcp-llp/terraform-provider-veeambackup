@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -300,9 +299,106 @@ func resourceAzureServiceAccountRead(ctx context.Context, d *schema.ResourceData
 }
 
 func resourceAzureServiceAccountUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// For now, return an error indicating updates are not supported
-	// You may need to implement PUT/PATCH requests depending on the API
-	return diag.FromErr(fmt.Errorf("Azure service account updates are not currently supported"))
+    client := meta.(*AuthClient)
+
+    accountID := d.Id()
+
+    // Check if there are any changes to update
+    if !d.HasChanges("account_info", "client_login_parameters") {
+        return nil
+    }
+
+    // Extract account info
+    accountInfoList := d.Get("account_info").([]interface{})
+    if len(accountInfoList) == 0 {
+        return diag.FromErr(fmt.Errorf("account_info is required"))
+    }
+    accountInfoMap := accountInfoList[0].(map[string]interface{})
+
+    // Extract client login parameters
+    clientLoginList := d.Get("client_login_parameters").([]interface{})
+    if len(clientLoginList) == 0 {
+        return diag.FromErr(fmt.Errorf("client_login_parameters is required"))
+    }
+    clientLoginMap := clientLoginList[0].(map[string]interface{})
+
+    // Build the request payload for update
+    request := ServiceAccountRequest{
+        AccountInfo: AccountInfo{
+            Name:        accountInfoMap["name"].(string),
+            Description: accountInfoMap["description"].(string),
+        },
+        ClientLoginParameters: ClientLoginParameters{
+            ApplicationID: clientLoginMap["application_id"].(string),
+            Environment:   clientLoginMap["environment"].(string),
+            TenantID:      clientLoginMap["tenant_id"].(string),
+        },
+    }
+
+    // Add optional fields
+    if v, ok := clientLoginMap["client_secret"]; ok && v.(string) != "" {
+        request.ClientLoginParameters.ClientSecret = v.(string)
+    }
+    if v, ok := clientLoginMap["application_certificate"]; ok && v.(string) != "" {
+        request.ClientLoginParameters.ApplicationCertificate = v.(string)
+    }
+    if v, ok := clientLoginMap["certificate_password"]; ok && v.(string) != "" {
+        request.ClientLoginParameters.CertificatePassword = v.(string)
+    }
+
+    // Convert azure_account_purpose set to slice
+    if v, ok := clientLoginMap["azure_account_purpose"]; ok {
+        purposeSet := v.(*schema.Set)
+        purposes := make([]string, purposeSet.Len())
+        for i, purpose := range purposeSet.List() {
+            purposes[i] = purpose.(string)
+        }
+        request.ClientLoginParameters.AzureAccountPurpose = purposes
+    }
+
+    // Convert subscriptions set to slice
+    if v, ok := clientLoginMap["subscriptions"]; ok {
+        subscriptionSet := v.(*schema.Set)
+        subscriptions := make([]string, subscriptionSet.Len())
+        for i, subscription := range subscriptionSet.List() {
+            subscriptions[i] = subscription.(string)
+        }
+        request.ClientLoginParameters.Subscriptions = subscriptions
+    }
+
+    // Marshal the request to JSON
+    jsonData, err := json.Marshal(request)
+    if err != nil {
+        return diag.FromErr(fmt.Errorf("failed to marshal update request: %w", err))
+    }
+
+    // Construct the API URL for update
+    apiURL := fmt.Sprintf("%s/api/v8.1/accounts/azure/service/updateByApp/%s", client.hostname, accountID)
+
+    // Make the PUT API request
+    resp, err := client.MakeAuthenticatedRequest("PUT", apiURL, bytes.NewBuffer(jsonData))
+    if err != nil {
+        return diag.FromErr(fmt.Errorf("failed to update Azure service account: %w", err))
+    }
+    defer resp.Body.Close()
+
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return diag.FromErr(fmt.Errorf("failed to read response body: %w", err))
+    }
+
+    if resp.StatusCode == 404 {
+        // Resource no longer exists
+        d.SetId("")
+        return diag.FromErr(fmt.Errorf("Azure service account with ID %s not found", accountID))
+    }
+
+    if resp.StatusCode != 200 && resp.StatusCode != 204 {
+        return diag.FromErr(fmt.Errorf("failed to update Azure service account with status %d: %s", resp.StatusCode, string(body)))
+    }
+
+    // Read the updated resource to refresh state
+    return resourceAzureServiceAccountRead(ctx, d, meta)
 }
 
 func resourceAzureServiceAccountDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
