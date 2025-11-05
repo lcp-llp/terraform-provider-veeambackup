@@ -30,7 +30,7 @@ type ClientLoginParameters struct {
 	ClientSecret            string   `json:"clientSecret,omitempty"`
 	ApplicationCertificate  string   `json:"applicationCertificate,omitempty"`
 	CertificatePassword     string   `json:"certificatePassword,omitempty"`
-	AzureAccountPurpose     []string `json:"azureAccountPurpose,omitempty"`
+	AzureAccountPurpose     []string `json:"azureAccountPurposes,omitempty"`
 	Subscriptions           []string `json:"subscriptions,omitempty"`
 }
 
@@ -107,7 +107,7 @@ func resourceAzureServiceAccount() *schema.Resource {
 							Sensitive:   true,
 							Description: "The password for the application certificate.",
 						},
-						"azure_account_purpose": {
+						"azure_account_purposes": {
 							Type:        schema.TypeSet,
 							Optional:    true,
 							Description: "Specifies operations that can be performed using the service account.",
@@ -193,8 +193,8 @@ func resourceAzureServiceAccountCreate(ctx context.Context, d *schema.ResourceDa
 		request.ClientLoginParameters.CertificatePassword = v.(string)
 	}
 
-	// Convert azure_account_purpose set to slice
-	if v, ok := clientLoginMap["azure_account_purpose"]; ok {
+	// Convert azure_account_purposes set to slice
+	if v, ok := clientLoginMap["azure_account_purposes"]; ok {
 		purposeSet := v.(*schema.Set)
 		purposes := make([]string, purposeSet.Len())
 		for i, purpose := range purposeSet.List() {
@@ -346,8 +346,8 @@ func resourceAzureServiceAccountUpdate(ctx context.Context, d *schema.ResourceDa
         request.ClientLoginParameters.CertificatePassword = v.(string)
     }
 
-    // Convert azure_account_purpose set to slice
-    if v, ok := clientLoginMap["azure_account_purpose"]; ok {
+    // Convert azure_account_purposes set to slice
+    if v, ok := clientLoginMap["azure_account_purposes"]; ok {
         purposeSet := v.(*schema.Set)
         purposes := make([]string, purposeSet.Len())
         for i, purpose := range purposeSet.List() {
