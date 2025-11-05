@@ -18,7 +18,7 @@ resource "veeambackup_azure_service_account" "production" {
     environment    = "Global"
     client_secret  = var.azure_client_secret
     
-    azure_account_purpose = [
+    azure_account_purposes = [
       "VirtualMachineBackup",
       "VirtualMachineRestore",
       "Repository"
@@ -45,7 +45,7 @@ resource "veeambackup_azure_service_account" "certificate_auth" {
     application_certificate    = file("path/to/certificate.pfx")
     certificate_password       = var.certificate_password
     
-    azure_account_purpose = [
+    azure_account_purposes = [
       "VirtualMachineBackup",
       "Repository"
     ]
@@ -69,7 +69,7 @@ resource "veeambackup_azure_service_account" "government" {
     environment    = "USGovernment"
     client_secret  = var.gov_client_secret
     
-    azure_account_purpose = [
+    azure_account_purposes = [
       "VirtualMachineBackup",
       "VirtualMachineRestore"
     ]
@@ -120,7 +120,7 @@ Required:
 Optional:
 
 - `application_certificate` (String) The application certificate for the Azure service account.
-- `azure_account_purpose` (Set of String) Specifies operations that can be performed using the service account. Valid values are: `None`, `WorkerManagement`, `Repository`, `Unknown`, `VirtualMachineBackup`, `VirtualMachineRestore`, `AzureSqlBackup`, `AzureSqlRestore`, `AzureFiles`, `VnetBackup`, `VnetRestore`, `CosmosBackup`, `CosmosRestore`.
+- `azure_account_purposes` (Set of String) Specifies operations that can be performed using the service account. Valid values are: `None`, `WorkerManagement`, `Repository`, `Unknown`, `VirtualMachineBackup`, `VirtualMachineRestore`, `AzureSqlBackup`, `AzureSqlRestore`, `AzureFiles`, `VnetBackup`, `VnetRestore`, `CosmosBackup`, `CosmosRestore`.
 - `certificate_password` (String, Sensitive) The password for the application certificate.
 - `client_secret` (String, Sensitive) The client secret for the Azure service account.
 - `environment` (String) The Azure environment (e.g., Global, USGovernment, Germany, China). Defaults to `"Global"`.
@@ -137,7 +137,7 @@ terraform import veeambackup_azure_service_account.example account-id-123
 ## Notes
 
 - Either `client_secret` or `application_certificate` (with optional `certificate_password`) must be provided for authentication.
-- The `azure_account_purpose` determines what operations this service account can perform within Veeam Backup for Microsoft Azure.
+- The `azure_account_purposes` determines what operations this service account can perform within Veeam Backup for Microsoft Azure.
 - When specifying subscriptions, ensure the service account has appropriate permissions on those subscriptions.
 - The service account must be created using an existing Entra ID application that has the necessary permissions configured.
 

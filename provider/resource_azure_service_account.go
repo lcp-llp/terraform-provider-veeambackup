@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -38,6 +39,18 @@ type ClientLoginParameters struct {
 type ServiceAccountResponse struct {
 	AccountID string `json:"accountId"`
 	// Add other response fields as needed
+}
+
+// OperationResponse represents an async operation response
+type OperationResponse struct {
+	ID        string `json:"id"`
+	StartTime string `json:"startTime"`
+	Status    string `json:"status"`
+	Links     struct {
+		Self struct {
+			Href string `json:"href"`
+		} `json:"self"`
+	} `json:"_links"`
 }
 
 func resourceAzureServiceAccount() *schema.Resource {
@@ -234,6 +247,30 @@ func resourceAzureServiceAccountCreate(ctx context.Context, d *schema.ResourceDa
 		return diag.FromErr(fmt.Errorf("failed to read response body: %w", err))
 	}
 
+	// Handle async operation (202 Accepted)
+	if resp.StatusCode == 202 {
+		// Parse the operation response
+		var opResponse OperationResponse
+		if err := json.Unmarshal(body, &opResponse); err != nil {
+			return diag.FromErr(fmt.Errorf("failed to parse operation response: %w", err))
+		}
+
+		// Wait for the operation to complete
+		accountID, err := waitForOperation(ctx, client, opResponse.ID)
+		if err != nil {
+			return diag.FromErr(fmt.Errorf("failed to wait for service account creation: %w", err))
+		}
+
+		// Set the resource ID
+		d.SetId(accountID)
+		if err := d.Set("account_id", accountID); err != nil {
+			return diag.FromErr(fmt.Errorf("failed to set account_id: %w", err))
+		}
+
+		// Read the created resource to populate all attributes
+		return resourceAzureServiceAccountRead(ctx, d, meta)
+	}
+
 	if resp.StatusCode != 201 && resp.StatusCode != 200 {
 		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
 	}
@@ -427,4 +464,76 @@ func resourceAzureServiceAccountDelete(ctx context.Context, d *schema.ResourceDa
 	}
 
 	return nil
+}
+
+// OperationResult represents the final result of an operation
+type OperationResult struct {
+	ID        string      `json:"id"`
+	StartTime string      `json:"startTime"`
+	EndTime   string      `json:"endTime,omitempty"`
+	Status    string      `json:"status"`
+	Result    interface{} `json:"result,omitempty"`
+	Error     interface{} `json:"error,omitempty"`
+}
+
+// waitForOperation waits for an async operation to complete and returns the account ID
+func waitForOperation(ctx context.Context, client *AuthClient, operationID string) (string, error) {
+	apiURL := fmt.Sprintf("%s/api/v8.1/operations/%s", client.hostname, operationID)
+	
+	for {
+		select {
+		case <-ctx.Done():
+			return "", fmt.Errorf("operation cancelled by context")
+		default:
+			// Continue polling
+		}
+
+		resp, err := client.MakeAuthenticatedRequest("GET", apiURL, nil)
+		if err != nil {
+			return "", fmt.Errorf("failed to check operation status: %w", err)
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return "", fmt.Errorf("failed to read operation response: %w", err)
+		}
+
+		if resp.StatusCode != 200 {
+			return "", fmt.Errorf("operation status check failed with status %d: %s", resp.StatusCode, string(body))
+		}
+
+		var opResult OperationResult
+		if err := json.Unmarshal(body, &opResult); err != nil {
+			return "", fmt.Errorf("failed to parse operation result: %w", err)
+		}
+
+		switch opResult.Status {
+		case "Success", "Completed":
+			// Extract account ID from result
+			if opResult.Result != nil {
+				if resultMap, ok := opResult.Result.(map[string]interface{}); ok {
+					if accountID, ok := resultMap["accountId"].(string); ok {
+						return accountID, nil
+					}
+				}
+			}
+			return "", fmt.Errorf("operation completed but no account ID found in result")
+		
+		case "Failed", "Error":
+			errorMsg := "operation failed"
+			if opResult.Error != nil {
+				errorMsg = fmt.Sprintf("operation failed: %v", opResult.Error)
+			}
+			return "", fmt.Errorf(errorMsg)
+		
+		case "Running", "InProgress":
+			// Continue polling - wait 5 seconds before next check
+			time.Sleep(5 * time.Second)
+			continue
+		
+		default:
+			return "", fmt.Errorf("unknown operation status: %s", opResult.Status)
+		}
+	}
 }
