@@ -580,13 +580,16 @@ func findServiceAccountByName(client *AuthClient, name string) (string, error) {
 		return "", fmt.Errorf("failed to read service accounts response: %w", err)
 	}
 
-	var accounts []AzureServiceAccount
-	if err := json.Unmarshal(body, &accounts); err != nil {
+	// The API returns an object with a "data" field containing the array of accounts
+	var response struct {
+		Data []AzureServiceAccount `json:"data"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
 		return "", fmt.Errorf("failed to parse service accounts response: %w", err)
 	}
 
 	// Find the account with matching name
-	for _, account := range accounts {
+	for _, account := range response.Data {
 		if account.Name == name {
 			return account.ID, nil
 		}
