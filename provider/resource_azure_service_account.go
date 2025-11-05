@@ -25,7 +25,7 @@ type AccountInfo struct {
 
 type ClientLoginParameters struct {
 	ApplicationID           string   `json:"applicationId"`
-	Environment             string   `json:"environment"`
+	Environment             string   `json:"azureEnvironment"`
 	TenantID                string   `json:"tenantId"`
 	ClientSecret            string   `json:"clientSecret,omitempty"`
 	ApplicationCertificate  string   `json:"applicationCertificate,omitempty"`
