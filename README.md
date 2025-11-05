@@ -26,7 +26,6 @@ terraform {
 
 provider "veeam" {
   hostname = "https://your-veeam-server.com"
-  api_key  = "your-api-key"
   username = "your-username"
   password = "your-password"
 }
@@ -78,7 +77,6 @@ Configure the provider using environment variables:
 
 ```bash
 export VEEAMBACKUP_HOSTNAME="https://your-veeam-server.com"
-export VEEAMBACKUP_API_KEY="your-api-key"
 export VEEAMBACKUP_USERNAME="your-username"
 export VEEAMBACKUP_PASSWORD="your-password"
 ```

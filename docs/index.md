@@ -8,7 +8,6 @@ The VeeamBackup provider is used to interact with Veeam Backup for Microsoft Azu
 # Configure the VeeamBackup Provider
 provider "veeambackup" {
   hostname = "https://your-veeam-server.com"
-  api_key  = "your-api-key"
   username = "your-username"
   password = "your-password"
 }
@@ -24,7 +23,7 @@ data "veeambackup_azure_service_account" "production" {
 
 ## Authentication
 
-The provider supports OAuth2 authentication with the Veeam Backup for Microsoft Azure REST API. Authentication requires both an API key and username/password credentials.
+The provider supports OAuth2 authentication with the Veeam Backup for Microsoft Azure REST API. Authentication uses username/password credentials to obtain an access token via the OAuth2 Password grant flow.
 
 ### Environment Variables
 
@@ -32,7 +31,6 @@ You can provide your credentials via environment variables:
 
 ```bash
 export VEEAMBACKUP_HOSTNAME="https://your-veeam-server.com"
-export VEEAMBACKUP_API_KEY="your-api-key"
 export VEEAMBACKUP_USERNAME="your-username"
 export VEEAMBACKUP_PASSWORD="your-password"
 ```
@@ -45,19 +43,16 @@ export VEEAMBACKUP_PASSWORD="your-password"
 - `username` (String) - Username for authenticating with the Veeam Backup for Microsoft Azure server. Can also be sourced from the `VEEAMBACKUP_USERNAME` environment variable.
 - `password` (String, Sensitive) - Password for authenticating with the Veeam Backup for Microsoft Azure server. Can also be sourced from the `VEEAMBACKUP_PASSWORD` environment variable.
 
-### Optional
-
-- `api_key` (String, Sensitive) - API key for authenticating with the Veeam Backup for Microsoft Azure server. Required for most operations. Can also be sourced from the `VEEAMBACKUP_API_KEY` environment variable.
-
 ## API Compatibility
 
 This provider is compatible with Veeam Backup for Microsoft Azure version 8.1 REST API.
 
 ## Authentication Flow
 
-1. The provider uses the provided API key and username/password to authenticate with the `/api/oauth2/token` endpoint
-2. Upon successful authentication, an access token is retrieved and used for subsequent API calls
-3. The provider automatically handles token refresh using the refresh token when needed
+1. The provider uses the provided username/password to authenticate with the `/api/oauth2/token` endpoint using the OAuth2 Password grant type
+2. Upon successful authentication, an access token and refresh token are retrieved and used for subsequent API calls
+3. The provider automatically handles token refresh using the refresh token when the access token expires
+4. All API requests include the access token in the Authorization header as `Bearer <token>`
 4. All API requests include the access token in the `Bearer <JWT>` format in the Authorization header
 
 ## Error Handling

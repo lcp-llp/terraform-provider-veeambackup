@@ -13,7 +13,6 @@ import (
 // AuthClient handles authentication with Veeam Backup for Microsoft Azure REST API
 type AuthClient struct {
 	hostname     string
-	apiKey       string
 	username     string
 	password     string
 	accessToken  string
@@ -51,10 +50,9 @@ type ErrorResponse struct {
 }
 
 // NewAuthClient creates a new authentication client
-func NewAuthClient(hostname, username, password, apiKey string) *AuthClient {
+func NewAuthClient(hostname, username, password string) *AuthClient {
 	return &AuthClient{
 		hostname:   strings.TrimSuffix(hostname, "/"),
-		apiKey:     apiKey,
 		username:   username,
 		password:   password,
 		httpClient: &http.Client{Timeout: 30 * time.Second},
@@ -79,11 +77,6 @@ func (c *AuthClient) Authenticate() error {
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
-
-	// Add API key to Authorization header if provided
-	if c.apiKey != "" {
-		req.Header.Set("Authorization", c.apiKey)
-	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -136,11 +129,6 @@ func (c *AuthClient) RefreshAccessToken() error {
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
-
-	// Add API key to Authorization header if provided
-	if c.apiKey != "" {
-		req.Header.Set("Authorization", c.apiKey)
-	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
