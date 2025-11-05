@@ -15,13 +15,6 @@ func Provider() *schema.Provider {
 				Description: "Hostname or IP address of the Veeam Backup for Microsoft Azure server.",
 				DefaultFunc: schema.EnvDefaultFunc("VEEAM_HOSTNAME", nil),
 			},
-			"api_key": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Sensitive:   true,
-				Description: "API key for authenticating with the Veeam Backup for Microsoft Azure server. Required for most operations.",
-				DefaultFunc: schema.EnvDefaultFunc("VEEAMBACKUP_API_KEY", nil),
-			},
 			"username": {
 				Type:        schema.TypeString,
 				Required:    true,
@@ -38,6 +31,7 @@ func Provider() *schema.Provider {
 		},
 		ResourcesMap: map[string]*schema.Resource{
     		"veeambackup_azure_service_account": resourceAzureServiceAccount(),
+			"veeambackup_azure_vm_backup_policy": resourceAzureVMBackupPolicy(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
 			"veeambackup_azure_backup_repositories": dataSourceAzureBackupRepositories(),
@@ -52,7 +46,6 @@ func Provider() *schema.Provider {
 // providerConfigure configures the provider and returns a client
 func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 	hostname := d.Get("hostname").(string)
-	apiKey := d.Get("api_key").(string)
 	username := d.Get("username").(string)
 	password := d.Get("password").(string)
 
@@ -67,7 +60,7 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 	}
 
 	// Create the authentication client
-	authClient := NewAuthClient(hostname, username, password, apiKey)
+	authClient := NewAuthClient(hostname, username, password)
 
 	// Test authentication
 	if err := authClient.Authenticate(); err != nil {
