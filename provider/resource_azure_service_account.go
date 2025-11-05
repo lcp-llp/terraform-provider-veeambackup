@@ -255,10 +255,17 @@ func resourceAzureServiceAccountCreate(ctx context.Context, d *schema.ResourceDa
 			return diag.FromErr(fmt.Errorf("failed to parse operation response: %w", err))
 		}
 
-		// Wait for the operation to complete
-		accountID, err := waitForOperation(ctx, client, opResponse.ID)
+		// Wait for the operation to complete - don't expect account ID in result
+		err := waitForOperationCompletion(ctx, client, opResponse.ID)
 		if err != nil {
 			return diag.FromErr(fmt.Errorf("failed to wait for service account creation: %w", err))
+		}
+
+		// Find the created service account by name since API doesn't return ID
+		accountName := accountInfoMap["name"].(string)
+		accountID, err := findServiceAccountByName(client, accountName)
+		if err != nil {
+			return diag.FromErr(fmt.Errorf("service account created successfully but failed to retrieve account ID: %w", err))
 		}
 
 		// Set the resource ID
@@ -275,15 +282,17 @@ func resourceAzureServiceAccountCreate(ctx context.Context, d *schema.ResourceDa
 		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
 	}
 
-	// Parse the response to get the account ID
-	var response ServiceAccountResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to parse response: %w", err))
+	// For 200 response, the API literally returns "string" - not useful for getting account ID
+	// We need to find the created service account by name
+	accountName := accountInfoMap["name"].(string)
+	accountID, err := findServiceAccountByName(client, accountName)
+	if err != nil {
+		return diag.FromErr(fmt.Errorf("service account created successfully (response: %s) but failed to retrieve account ID: %w", string(body), err))
 	}
 
 	// Set the resource ID and computed attributes
-	d.SetId(response.AccountID)
-	if err := d.Set("account_id", response.AccountID); err != nil {
+	d.SetId(accountID)
+	if err := d.Set("account_id", accountID); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to set account_id: %w", err))
 	}
 
@@ -510,15 +519,27 @@ func waitForOperation(ctx context.Context, client *AuthClient, operationID strin
 
 		switch opResult.Status {
 		case "Success", "Completed":
-			// Extract account ID from result
+			// Extract account ID from result - try multiple possible locations
 			if opResult.Result != nil {
+				// Try direct accountId field
 				if resultMap, ok := opResult.Result.(map[string]interface{}); ok {
 					if accountID, ok := resultMap["accountId"].(string); ok {
 						return accountID, nil
 					}
+					// Try id field as backup
+					if accountID, ok := resultMap["id"].(string); ok {
+						return accountID, nil
+					}
+					// Log the actual result structure for debugging
+					resultJson, _ := json.Marshal(opResult.Result)
+					return "", fmt.Errorf("operation completed but no account ID found in result. Result structure: %s", string(resultJson))
+				}
+				// If result is a string, it might be the account ID directly
+				if accountID, ok := opResult.Result.(string); ok {
+					return accountID, nil
 				}
 			}
-			return "", fmt.Errorf("operation completed but no account ID found in result")
+			return "", fmt.Errorf("operation completed but result is empty or null")
 		
 		case "Failed", "Error":
 			errorMsg := "operation failed"
@@ -534,6 +555,97 @@ func waitForOperation(ctx context.Context, client *AuthClient, operationID strin
 		
 		default:
 			return "", fmt.Errorf("unknown operation status: %s", opResult.Status)
+		}
+	}
+}
+
+// findServiceAccountByName searches for a service account by name and returns its ID
+func findServiceAccountByName(client *AuthClient, name string) (string, error) {
+	// Use the existing datasource logic to find the service account
+	apiURL := fmt.Sprintf("%s/api/v8.1/accounts/azure/service", client.hostname)
+	
+	resp, err := client.MakeAuthenticatedRequest("GET", apiURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to list service accounts: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("failed to list service accounts with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read service accounts response: %w", err)
+	}
+
+	var accounts []AzureServiceAccount
+	if err := json.Unmarshal(body, &accounts); err != nil {
+		return "", fmt.Errorf("failed to parse service accounts response: %w", err)
+	}
+
+	// Find the account with matching name
+	for _, account := range accounts {
+		if account.Name == name {
+			return account.ID, nil
+		}
+	}
+
+	return "", fmt.Errorf("service account with name '%s' not found", name)
+}
+
+// waitForOperationCompletion waits for an async operation to complete (doesn't return result data)
+func waitForOperationCompletion(ctx context.Context, client *AuthClient, operationID string) error {
+	apiURL := fmt.Sprintf("%s/api/v8.1/operations/%s", client.hostname, operationID)
+	
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("operation cancelled by context")
+		default:
+			// Continue polling
+		}
+
+		resp, err := client.MakeAuthenticatedRequest("GET", apiURL, nil)
+		if err != nil {
+			return fmt.Errorf("failed to check operation status: %w", err)
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return fmt.Errorf("failed to read operation response: %w", err)
+		}
+
+		if resp.StatusCode != 200 {
+			return fmt.Errorf("operation status check failed with status %d: %s", resp.StatusCode, string(body))
+		}
+
+		var opResult OperationResult
+		if err := json.Unmarshal(body, &opResult); err != nil {
+			return fmt.Errorf("failed to parse operation result: %w", err)
+		}
+
+		switch opResult.Status {
+		case "Success", "Completed":
+			// Operation completed successfully
+			return nil
+		
+		case "Failed", "Error":
+			errorMsg := "operation failed"
+			if opResult.Error != nil {
+				errorMsg = fmt.Sprintf("operation failed: %v", opResult.Error)
+			}
+			return fmt.Errorf(errorMsg)
+		
+		case "Running", "InProgress":
+			// Continue polling - wait 5 seconds before next check
+			time.Sleep(5 * time.Second)
+			continue
+		
+		default:
+			return fmt.Errorf("unknown operation status: %s", opResult.Status)
 		}
 	}
 }
