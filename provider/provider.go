@@ -31,6 +31,7 @@ func Provider() *schema.Provider {
 		},
 		ResourcesMap: map[string]*schema.Resource{
     		"veeambackup_azure_service_account": resourceAzureServiceAccount(),
+			"veeambackup_azure_vm_backup_policy": resourceAzureVMBackupPolicy(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
 			"veeambackup_azure_backup_repositories": dataSourceAzureBackupRepositories(),
