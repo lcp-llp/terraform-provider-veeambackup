@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -255,17 +256,10 @@ func resourceAzureServiceAccountCreate(ctx context.Context, d *schema.ResourceDa
 			return diag.FromErr(fmt.Errorf("failed to parse operation response: %w", err))
 		}
 
-		// Wait for the operation to complete - don't expect account ID in result
-		err := waitForOperationCompletion(ctx, client, opResponse.ID)
+		// Wait for the operation to complete and get the account ID from result
+		accountID, err := waitForOperation(ctx, client, opResponse.ID)
 		if err != nil {
 			return diag.FromErr(fmt.Errorf("failed to wait for service account creation: %w", err))
-		}
-
-		// Find the created service account by name since API doesn't return ID
-		accountName := accountInfoMap["name"].(string)
-		accountID, err := findServiceAccountByName(client, accountName)
-		if err != nil {
-			return diag.FromErr(fmt.Errorf("service account created successfully but failed to retrieve account ID: %w", err))
 		}
 
 		// Set the resource ID
@@ -282,13 +276,8 @@ func resourceAzureServiceAccountCreate(ctx context.Context, d *schema.ResourceDa
 		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
 	}
 
-	// For 200 response, the API literally returns "string" - not useful for getting account ID
-	// We need to find the created service account by name
-	accountName := accountInfoMap["name"].(string)
-	accountID, err := findServiceAccountByName(client, accountName)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("service account created successfully (response: %s) but failed to retrieve account ID: %w", string(body), err))
-	}
+	// For 200 response, the API returns the account ID directly as a string
+	accountID := strings.Trim(string(body), "\"") // Remove quotes if present
 
 	// Set the resource ID and computed attributes
 	d.SetId(accountID)
@@ -519,27 +508,16 @@ func waitForOperation(ctx context.Context, client *AuthClient, operationID strin
 
 		switch opResult.Status {
 		case "Success", "Completed":
-			// Extract account ID from result - try multiple possible locations
+			// According to API docs and Python script, result field contains the account ID as a string
 			if opResult.Result != nil {
-				// Try direct accountId field
-				if resultMap, ok := opResult.Result.(map[string]interface{}); ok {
-					if accountID, ok := resultMap["accountId"].(string); ok {
-						return accountID, nil
-					}
-					// Try id field as backup
-					if accountID, ok := resultMap["id"].(string); ok {
-						return accountID, nil
-					}
-					// Log the actual result structure for debugging
-					resultJson, _ := json.Marshal(opResult.Result)
-					return "", fmt.Errorf("operation completed but no account ID found in result. Result structure: %s", string(resultJson))
-				}
-				// If result is a string, it might be the account ID directly
 				if accountID, ok := opResult.Result.(string); ok {
 					return accountID, nil
 				}
+				// Log the actual result for debugging
+				resultJson, _ := json.Marshal(opResult.Result)
+				return "", fmt.Errorf("operation completed but result is not a string. Result: %s (type: %T)", string(resultJson), opResult.Result)
 			}
-			return "", fmt.Errorf("operation completed but result is empty or null")
+			return "", fmt.Errorf("operation completed but result field is null")
 		
 		case "Failed", "Error":
 			errorMsg := "operation failed"
@@ -585,17 +563,20 @@ func findServiceAccountByName(client *AuthClient, name string) (string, error) {
 		Data []AzureServiceAccount `json:"data"`
 	}
 	if err := json.Unmarshal(body, &response); err != nil {
-		return "", fmt.Errorf("failed to parse service accounts response: %w", err)
+		// If the structured approach fails, try to debug the actual response
+		return "", fmt.Errorf("failed to parse service accounts response (response: %s): %w", string(body), err)
 	}
 
-	// Find the account with matching name
+	// Debug: log all account names for troubleshooting
+	var accountNames []string
 	for _, account := range response.Data {
+		accountNames = append(accountNames, account.Name)
 		if account.Name == name {
 			return account.ID, nil
 		}
 	}
 
-	return "", fmt.Errorf("service account with name '%s' not found", name)
+	return "", fmt.Errorf("service account with name '%s' not found. Available accounts: %v", name, accountNames)
 }
 
 // waitForOperationCompletion waits for an async operation to complete (doesn't return result data)
