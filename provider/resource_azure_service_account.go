@@ -446,7 +446,7 @@ func resourceAzureServiceAccountUpdate(ctx context.Context, d *schema.ResourceDa
         }
 
         // Wait for the async operation to complete
-        if err := client.waitForOperationCompletion(operationID); err != nil {
+        if err := waitForOperationCompletion(ctx, client, operationID); err != nil {
             return diag.FromErr(fmt.Errorf("failed to complete update operation: %w", err))
         }
     } else if resp.StatusCode != 200 && resp.StatusCode != 204 {
