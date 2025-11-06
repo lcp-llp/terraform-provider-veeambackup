@@ -428,7 +428,28 @@ func resourceAzureServiceAccountUpdate(ctx context.Context, d *schema.ResourceDa
         return diag.FromErr(fmt.Errorf("Azure service account with ID %s not found", accountID))
     }
 
-    if resp.StatusCode != 200 && resp.StatusCode != 204 {
+    if resp.StatusCode == 202 {
+        // Async operation - wait for completion
+        var operationResponse map[string]interface{}
+        if err := json.Unmarshal(body, &operationResponse); err != nil {
+            return diag.FromErr(fmt.Errorf("failed to parse operation response: %w", err))
+        }
+
+        operation, ok := operationResponse["operation"].(map[string]interface{})
+        if !ok {
+            return diag.FromErr(fmt.Errorf("invalid operation format in response"))
+        }
+
+        operationID, ok := operation["id"].(string)
+        if !ok {
+            return diag.FromErr(fmt.Errorf("operation ID not found in response"))
+        }
+
+        // Wait for the async operation to complete
+        if err := client.waitForOperationCompletion(operationID); err != nil {
+            return diag.FromErr(fmt.Errorf("failed to complete update operation: %w", err))
+        }
+    } else if resp.StatusCode != 200 && resp.StatusCode != 204 {
         return diag.FromErr(fmt.Errorf("failed to update Azure service account with status %d: %s", resp.StatusCode, string(body)))
     }
 
