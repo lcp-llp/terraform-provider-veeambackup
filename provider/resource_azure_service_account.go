@@ -435,12 +435,8 @@ func resourceAzureServiceAccountUpdate(ctx context.Context, d *schema.ResourceDa
             return diag.FromErr(fmt.Errorf("failed to parse operation response: %w", err))
         }
 
-        operation, ok := operationResponse["operation"].(map[string]interface{})
-        if !ok {
-            return diag.FromErr(fmt.Errorf("invalid operation format in response"))
-        }
-
-        operationID, ok := operation["id"].(string)
+        // For update operations, the operation ID is directly in the response
+        operationID, ok := operationResponse["id"].(string)
         if !ok {
             return diag.FromErr(fmt.Errorf("operation ID not found in response"))
         }
