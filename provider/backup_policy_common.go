@@ -94,6 +94,230 @@ func BackupPolicyCommonSchema() map[string]*schema.Schema {
 				},
 			},
 		},
+		"daily_schedule": {
+			Type:        schema.TypeList,
+			Optional:    true,
+			MaxItems:    1,
+			Description: "Daily backup schedule settings.",
+			Elem: &schema.Resource{
+				Schema: map[string]*schema.Schema{
+					"daily_type": {
+						Type:        schema.TypeString,
+						Optional:    true,
+						Description: "Type of daily schedule.",
+					},
+					"selected_days": {
+						Type:        schema.TypeList,
+						Optional:    true,
+						Elem: &schema.Schema{Type: schema.TypeString},
+						Description: "Days selected for daily schedule.",
+					},
+					"runs_per_hour": {
+						Type:        schema.TypeInt,
+						Optional:    true,
+						Description: "Number of runs per hour.",
+					},
+					"snapshot_schedule": {
+						Type:        schema.TypeList,
+						Optional:    true,
+						MaxItems:    1,
+						Elem: &schema.Resource{
+							Schema: map[string]*schema.Schema{
+								"start_time": {Type: schema.TypeInt, Optional: true, Description: "Snapshot start time."},
+								"enabled":    {Type: schema.TypeBool, Required: true, Description: "Snapshot enabled."},
+							},
+						},
+						Description: "Daily snapshot schedule.",
+					},
+					"backup_schedule": {
+						Type:        schema.TypeList,
+						Optional:    true,
+						MaxItems:    1,
+						Elem: &schema.Resource{
+							Schema: map[string]*schema.Schema{
+								"start_time": {Type: schema.TypeInt, Optional: true, Description: "Backup start time."},
+								"enabled":    {Type: schema.TypeBool, Required: true, Description: "Backup enabled."},
+							},
+						},
+						Description: "Daily backup schedule.",
+					},
+				},
+			},
+		},
+		"weekly_schedule": {
+			Type:        schema.TypeList,
+			Optional:    true,
+			MaxItems:    1,
+			Description: "Weekly backup schedule settings.",
+			Elem: &schema.Resource{
+				Schema: map[string]*schema.Schema{
+					"start_time": {
+						Type:        schema.TypeInt,
+						Optional:    true,
+						Description: "Weekly schedule start time.",
+					},
+					"snapshot_schedule": {
+						Type:        schema.TypeList,
+						Optional:    true,
+						MaxItems:    1,
+						Elem: &schema.Resource{
+							Schema: map[string]*schema.Schema{
+								"start_time": {Type: schema.TypeInt, Optional: true, Description: "Snapshot start time."},
+								"enabled":    {Type: schema.TypeBool, Required: true, Description: "Snapshot enabled."},
+							},
+						},
+						Description: "Weekly snapshot schedule.",
+					},
+					"backup_schedule": {
+						Type:        schema.TypeList,
+						Optional:    true,
+						MaxItems:    1,
+						Elem: &schema.Resource{
+							Schema: map[string]*schema.Schema{
+								"start_time": {Type: schema.TypeInt, Optional: true, Description: "Backup start time."},
+								"enabled":    {Type: schema.TypeBool, Required: true, Description: "Backup enabled."},
+							},
+						},
+						Description: "Weekly backup schedule.",
+					},
+				},
+			},
+		},
+		"monthly_schedule": {
+			Type:        schema.TypeList,
+			Optional:    true,
+			MaxItems:    1,
+			Description: "Monthly backup schedule settings.",
+			Elem: &schema.Resource{
+				Schema: map[string]*schema.Schema{
+					"start_time": {Type: schema.TypeInt, Optional: true, Description: "Monthly schedule start time."},
+					"type":       {Type: schema.TypeString, Optional: true, Description: "Monthly schedule type."},
+					"day_of_week": {Type: schema.TypeString, Optional: true, Description: "Day of week for monthly schedule."},
+					"day_of_month": {Type: schema.TypeInt, Optional: true, Description: "Day of month for monthly schedule."},
+					"monthly_last_day": {Type: schema.TypeBool, Optional: true, Description: "Is last day of month."},
+					"snapshot_schedule": {
+						Type:        schema.TypeList,
+						Optional:    true,
+						MaxItems:    1,
+						Elem: &schema.Resource{
+							Schema: map[string]*schema.Schema{
+								"start_time": {Type: schema.TypeInt, Optional: true, Description: "Snapshot start time."},
+								"enabled":    {Type: schema.TypeBool, Required: true, Description: "Snapshot enabled."},
+							},
+						},
+						Description: "Monthly snapshot schedule.",
+					},
+					"backup_schedule": {
+						Type:        schema.TypeList,
+						Optional:    true,
+						MaxItems:    1,
+						Elem: &schema.Resource{
+							Schema: map[string]*schema.Schema{
+								"start_time": {Type: schema.TypeInt, Optional: true, Description: "Backup start time."},
+								"enabled":    {Type: schema.TypeBool, Required: true, Description: "Backup enabled."},
+							},
+						},
+						Description: "Monthly backup schedule.",
+					},
+				},
+			},
+		},
+		"yearly_schedule": {
+			Type:        schema.TypeList,
+			Optional:    true,
+			MaxItems:    1,
+			Description: "Yearly backup schedule settings.",
+			Elem: &schema.Resource{
+				Schema: map[string]*schema.Schema{
+					"start_time": {Type: schema.TypeInt, Optional: true, Description: "Yearly schedule start time."},
+					"month":      {Type: schema.TypeString, Optional: true, Description: "Month for yearly schedule."},
+					"type":       {Type: schema.TypeString, Optional: true, Description: "Yearly schedule type."},
+					"day_of_week": {Type: schema.TypeString, Optional: true, Description: "Day of week for yearly schedule."},
+					"day_of_month": {Type: schema.TypeInt, Optional: true, Description: "Day of month for yearly schedule."},
+					"yearly_last_day": {Type: schema.TypeBool, Optional: true, Description: "Is last day of year."},
+					"retention_years_count": {Type: schema.TypeInt, Optional: true, Description: "Retention years count."},
+					"target_repository_id": {Type: schema.TypeString, Optional: true, Description: "Target repository ID."},
+				},
+			},
+		},
+		"policy_notification_settings": {
+			Type:        schema.TypeList,
+			Optional:    true,
+			MaxItems:    1,
+			Description: "Notification settings for backup policy events.",
+			Elem: &schema.Resource{
+				Schema: map[string]*schema.Schema{
+					"enabled": {
+						Type:        schema.TypeBool,
+						Required:    true,
+						Description: "Enable notifications for this policy.",
+					},
+					"email_addresses": {
+						Type:        schema.TypeList,
+						Optional:    true,
+						Elem: &schema.Schema{Type: schema.TypeString},
+						Description: "List of email addresses to notify.",
+					},
+					"notify_on_success": {
+						Type:        schema.TypeBool,
+						Optional:    true,
+						Description: "Notify on successful backup.",
+					},
+					"notify_on_warning": {
+						Type:        schema.TypeBool,
+						Optional:    true,
+						Description: "Notify on backup warnings.",
+					},
+					"notify_on_failure": {
+						Type:        schema.TypeBool,
+						Optional:    true,
+						Description: "Notify on backup failures.",
+					},
+				},
+			},
+		},
+		"health_check_schedule": {
+			Type:        schema.TypeList,
+			Optional:    true,
+			MaxItems:    1,
+			Description: "Health check schedule for backup policy.",
+			Elem: &schema.Resource{
+				Schema: map[string]*schema.Schema{
+					"health_check_enabled": {
+						Type:        schema.TypeBool,
+						Required:    true,
+						Description: "Enable health check for this policy.",
+					},
+					"local_time": {
+						Type:        schema.TypeString,
+						Required:    true,
+						Description: "Local time for health check.",
+					},
+					"day_number_in_month": {
+						Type:        schema.TypeString,
+						Required:    true,
+						Description: "Day number in month for health check.",
+					},
+					"days_of_week": {
+						Type:        schema.TypeList,
+						Optional:    true,
+						Elem: &schema.Schema{Type: schema.TypeString},
+						Description: "Days of week for health check.",
+					},
+					"day_of_month": {
+						Type:        schema.TypeInt,
+						Optional:    true,
+						Description: "Day of month for health check.",
+					},
+					"months": {
+						Type:        schema.TypeList,
+						Optional:    true,
+						Elem: &schema.Schema{Type: schema.TypeString},
+						Description: "Months for health check.",
+					},
+				},
+			},
+		},
 	}
 }
 
