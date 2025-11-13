@@ -87,6 +87,37 @@ resource "veeambackup_azure_vm_backup_policy" "complete" {
       value = "Exclude"
     }
   }
+
+  daily_schedule {
+    daily_type = "EveryDay"
+    selected_days = ["Monday", "Wednesday", "Friday"]
+    runs_per_hour = 2
+    snapshot_schedule {
+      start_time = 1
+      enabled    = true
+    }
+    backup_schedule {
+      start_time = 2
+      enabled    = true
+    }
+  }
+
+  policy_notification_settings {
+    enabled = true
+    email_addresses = ["admin@example.com", "ops@example.com"]
+    notify_on_success = true
+    notify_on_warning = true
+    notify_on_failure = true
+  }
+
+  health_check_schedule {
+    health_check_enabled = true
+    local_time = "02:00"
+    day_number_in_month = "First"
+    days_of_week = ["Monday"]
+    day_of_month = 1
+    months = ["January", "February"]
+  }
 }
 ```
 
@@ -175,6 +206,46 @@ The `excluded_items` block supports:
 
 * `virtual_machines` - (Optional) Specifies the Azure VMs that will be excluded from the backup policy. See [Virtual Machines](#virtual-machines) above.
 * `tags` - (Optional) Specifies Azure tags to exclude from the backup policy Azure VMs that have this tag assigned. See [Tags](#tags) above.
+
+### Schedule Blocks
+
+The following schedule blocks are supported and optional:
+
+* `daily_schedule` - (Optional) Daily backup schedule settings.
+* `weekly_schedule` - (Optional) Weekly backup schedule settings.
+* `monthly_schedule` - (Optional) Monthly backup schedule settings.
+* `yearly_schedule` - (Optional) Yearly backup schedule settings.
+
+Each schedule block supports nested `snapshot_schedule` and `backup_schedule` blocks with the following arguments:
+
+* `start_time` - (Optional) Start time for the schedule.
+* `enabled` - (Required) Whether the schedule is enabled.
+
+Other schedule-specific arguments:
+* `daily_type` (daily only) - (Optional) Type of daily schedule.
+* `selected_days` (daily only) - (Optional) List of days for daily schedule.
+* `runs_per_hour` (daily only) - (Optional) Number of runs per hour.
+* `type`, `day_of_week`, `day_of_month`, `monthly_last_day` (monthly only) - (Optional) Monthly schedule details.
+* `month`, `type`, `day_of_week`, `day_of_month`, `yearly_last_day`, `retention_years_count`, `target_repository_id` (yearly only) - (Optional) Yearly schedule details.
+
+### Policy Notification Settings
+
+* `policy_notification_settings` - (Optional) Notification settings for backup policy events.
+  * `enabled` - (Required) Enable notifications for this policy.
+  * `email_addresses` - (Optional) List of email addresses to notify.
+  * `notify_on_success` - (Optional) Notify on successful backup.
+  * `notify_on_warning` - (Optional) Notify on backup warnings.
+  * `notify_on_failure` - (Optional) Notify on backup failures.
+
+### Health Check Schedule
+
+* `health_check_schedule` - (Optional) Health check schedule for backup policy.
+  * `health_check_enabled` - (Required) Enable health check for this policy.
+  * `local_time` - (Required) Local time for health check.
+  * `day_number_in_month` - (Required) Day number in month for health check.
+  * `days_of_week` - (Optional) Days of week for health check.
+  * `day_of_month` - (Optional) Day of month for health check.
+  * `months` - (Optional) Months for health check.
 
 ## Attribute Reference
 
