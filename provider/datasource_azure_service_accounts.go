@@ -14,28 +14,30 @@ import (
 
 // AzureServiceAccount represents an Azure service account from the Veeam API
 type AzureServiceAccount struct {
-	ID                string `json:"id"`
-	Name              string `json:"name"`
-	Description       string `json:"description"`
-	Purpose           string `json:"purpose"`
-	Status            string `json:"status"`
-	TenantID          string `json:"tenantId"`
-	ApplicationID     string `json:"applicationId"`
-	SubscriptionID    string `json:"subscriptionId"`
-	SubscriptionName  string `json:"subscriptionName"`
-	CreatedDate       string `json:"createdDate"`
-	ModifiedDate      string `json:"modifiedDate"`
-	LastUsedDate      string `json:"lastUsedDate"`
-	CertificateExpiry string `json:"certificateExpiry"`
-	IsEnabled         bool   `json:"isEnabled"`
+	AccountID                         string   `json:"accountId"`
+	ApplicationID                     string   `json:"applicationId"`
+	Name                              string   `json:"name"`
+	Description                       string   `json:"description"`
+	Region                            string   `json:"region"`
+	TenantID                          string   `json:"tenantId"`
+	AccountOrigin                     string   `json:"accountOrigin"`
+	AccountState                      string   `json:"accountState"`
+	CloudState                        string   `json:"cloudState"`
+	Purposes                          []string `json:"purposes"`
+	SubscriptionIDs                   []string `json:"subscriptionIds"`
+	SelectedForWorkermanagement       bool     `json:"selectedForWorkermanagement"`
+	AzurePermissionsState             []string `json:"azurePermissionsState"`
+	AzurePermissionsStateCheckTimeUtc string   `json:"azurePermissionsStateCheckTimeUtc"`
+	SubscriptionIDForWorkerDeployment string   `json:"subscriptionIdForWorkerDeployment"`
+	LighthouseSubscriptionsCount      int      `json:"lighthouseSubscriptionsCount"`
 }
 
 // AzureServiceAccountsResponse represents the API response for Azure service accounts
 type AzureServiceAccountsResponse struct {
-	Data   []AzureServiceAccount `json:"data"`
-	Offset int                   `json:"offset"`
-	Limit  int                   `json:"limit"`
-	Total  int                   `json:"total"`
+	Results    []AzureServiceAccount `json:"results"`
+	Offset     int                   `json:"offset"`
+	Limit      int                   `json:"limit"`
+	TotalCount int                   `json:"totalCount"`
 }
 
 func dataSourceAzureServiceAccounts() *schema.Resource {
@@ -189,19 +191,19 @@ func dataSourceAzureServiceAccountsRead(ctx context.Context, d *schema.ResourceD
 	params := url.Values{}
 
 	if v, ok := d.GetOk("filter"); ok {
-		params.Set("Filter", v.(string))
+		params.Set("filter", v.(string))
 	}
 
 	if v, ok := d.GetOk("offset"); ok {
-		params.Set("Offset", strconv.Itoa(v.(int)))
+		params.Set("offset", strconv.Itoa(v.(int)))
 	}
 
 	if v, ok := d.GetOk("limit"); ok {
-		params.Set("Limit", strconv.Itoa(v.(int)))
+		params.Set("limit", strconv.Itoa(v.(int)))
 	}
 
 	if v, ok := d.GetOk("purpose"); ok {
-		params.Set("Purpose", v.(string))
+		params.Set("purpose", v.(string))
 	}
 
 	// Construct the API URL
@@ -233,31 +235,49 @@ func dataSourceAzureServiceAccountsRead(ctx context.Context, d *schema.ResourceD
 	}
 
 	// Convert service accounts to Terraform format
-	serviceAccounts := make([]interface{}, len(accountsResp.Data))
+	serviceAccounts := make([]interface{}, len(accountsResp.Results))
 	serviceAccountsByID := make(map[string]interface{})
 	serviceAccountsByName := make(map[string]interface{})
 
-	for i, account := range accountsResp.Data {
+	for i, account := range accountsResp.Results {
+		// Convert string slices to interface{} slices for Terraform
+		purposesInterface := make([]interface{}, len(account.Purposes))
+		for j, purpose := range account.Purposes {
+			purposesInterface[j] = purpose
+		}
+
+		subscriptionIDsInterface := make([]interface{}, len(account.SubscriptionIDs))
+		for j, subID := range account.SubscriptionIDs {
+			subscriptionIDsInterface[j] = subID
+		}
+
+		azurePermissionsStateInterface := make([]interface{}, len(account.AzurePermissionsState))
+		for j, state := range account.AzurePermissionsState {
+			azurePermissionsStateInterface[j] = state
+		}
+
 		serviceAccounts[i] = map[string]interface{}{
-			"id":                 account.ID,
-			"name":               account.Name,
-			"description":        account.Description,
-			"purpose":            account.Purpose,
-			"status":             account.Status,
-			"tenant_id":          account.TenantID,
-			"application_id":     account.ApplicationID,
-			"subscription_id":    account.SubscriptionID,
-			"subscription_name":  account.SubscriptionName,
-			"created_date":       account.CreatedDate,
-			"modified_date":      account.ModifiedDate,
-			"last_used_date":     account.LastUsedDate,
-			"certificate_expiry": account.CertificateExpiry,
-			"is_enabled":         account.IsEnabled,
+			"account_id":                              account.AccountID,
+			"application_id":                          account.ApplicationID,
+			"name":                                    account.Name,
+			"description":                             account.Description,
+			"region":                                  account.Region,
+			"tenant_id":                               account.TenantID,
+			"account_origin":                          account.AccountOrigin,
+			"account_state":                           account.AccountState,
+			"cloud_state":                             account.CloudState,
+			"purposes":                                purposesInterface,
+			"subscription_ids":                        subscriptionIDsInterface,
+			"selected_for_workermanagement":           account.SelectedForWorkermanagement,
+			"azure_permissions_state":                 azurePermissionsStateInterface,
+			"azure_permissions_state_check_time_utc": account.AzurePermissionsStateCheckTimeUtc,
+			"subscription_id_for_worker_deployment":   account.SubscriptionIDForWorkerDeployment,
+			"lighthouse_subscriptions_count":          account.LighthouseSubscriptionsCount,
 		}
 
 		// Build the lookup maps
-		serviceAccountsByID[account.ID] = account.Name
-		serviceAccountsByName[account.Name] = account.ID
+		serviceAccountsByID[account.AccountID] = account.Name
+		serviceAccountsByName[account.Name] = account.AccountID
 	}
 
 	// Set the data in the resource
@@ -273,7 +293,7 @@ func dataSourceAzureServiceAccountsRead(ctx context.Context, d *schema.ResourceD
 		return diag.FromErr(fmt.Errorf("failed to set service_accounts_by_name: %w", err))
 	}
 
-	if err := d.Set("total", accountsResp.Total); err != nil {
+	if err := d.Set("total", accountsResp.TotalCount); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to set total: %w", err))
 	}
 
