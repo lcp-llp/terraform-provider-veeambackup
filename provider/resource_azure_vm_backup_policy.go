@@ -237,11 +237,70 @@ func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
 		if len(snapshotList) > 0 {
 			snapshot := snapshotList[0].(map[string]interface{})
 			snapshotSettings := SnapshotSettings{
-				RetentionType:            snapshot["retention_type"].(string),
-				RetentionValue:           snapshot["retention_value"].(int),
 				CopyOriginalTags:         snapshot["copy_original_tags"].(bool),
 				ApplicationAwareSnapshot: snapshot["application_aware_snapshot"].(bool),
 			}
+
+			// Handle additional tags
+			if additionalTags, ok := snapshot["additional_tags"]; ok && additionalTags != nil {
+				tags := additionalTags.([]interface{})
+				for _, tagInterface := range tags {
+					tag := tagInterface.(map[string]interface{})
+					tagFromClient := TagFromClient{}
+					if name, ok := tag["name"]; ok && name != nil {
+						nameStr := name.(string)
+						tagFromClient.Name = &nameStr
+					}
+					if value, ok := tag["value"]; ok && value != nil {
+						valueStr := value.(string)
+						tagFromClient.Value = &valueStr
+					}
+					snapshotSettings.AdditionalTags = append(snapshotSettings.AdditionalTags, tagFromClient)
+				}
+			}
+
+			// Handle user scripts
+			if userScriptsData, ok := snapshot["user_scripts"]; ok && userScriptsData != nil {
+				userScriptsList := userScriptsData.([]interface{})
+				if len(userScriptsList) > 0 {
+					userScriptsMap := userScriptsList[0].(map[string]interface{})
+					userScripts := &UserScripts{}
+
+					if windowsData, ok := userScriptsMap["windows"]; ok && windowsData != nil {
+						windowsList := windowsData.([]interface{})
+						if len(windowsList) > 0 {
+							windowsMap := windowsList[0].(map[string]interface{})
+							windowsSettings := &UserScriptsSettings{
+								ScriptsEnabled:          windowsMap["scripts_enabled"].(bool),
+								RepositorySnapshotsOnly: windowsMap["repository_snapshots_only"].(bool),
+								IgnoreExitCodes:         windowsMap["ignore_exit_codes"].(bool),
+								IgnoreMissingScripts:    windowsMap["ignore_missing_scripts"].(bool),
+							}
+
+							if preScriptPath, ok := windowsMap["pre_script_path"]; ok && preScriptPath != nil && preScriptPath.(string) != "" {
+								pathStr := preScriptPath.(string)
+								windowsSettings.PreScriptPath = &pathStr
+							}
+							if preScriptArgs, ok := windowsMap["pre_script_arguments"]; ok && preScriptArgs != nil && preScriptArgs.(string) != "" {
+								argsStr := preScriptArgs.(string)
+								windowsSettings.PreScriptArguments = &argsStr
+							}
+							if postScriptPath, ok := windowsMap["post_script_path"]; ok && postScriptPath != nil && postScriptPath.(string) != "" {
+								pathStr := postScriptPath.(string)
+								windowsSettings.PostScriptPath = &pathStr
+							}
+							if postScriptArgs, ok := windowsMap["post_script_arguments"]; ok && postScriptArgs != nil && postScriptArgs.(string) != "" {
+								argsStr := postScriptArgs.(string)
+								windowsSettings.PostScriptArguments = &argsStr
+							}
+
+							userScripts.Windows = windowsSettings
+						}
+					}
+					snapshotSettings.UserScripts = userScripts
+				}
+			}
+
 			request.SnapshotSettings = &snapshotSettings
 		}
 	}

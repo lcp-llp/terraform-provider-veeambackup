@@ -731,12 +731,10 @@ type PolicyRegion struct {
 }
 
 type SnapshotSettings struct {
-	RetentionType             string       `json:"retentionType"`
-	RetentionValue            int          `json:"retentionValue"`
-	AdditionalTags            []TagFromClient `json:"additionalTags,omitempty"`
-	CopyOriginalTags          bool         `json:"copyOriginalTags"`
-	ApplicationAwareSnapshot  bool         `json:"applicationAwareSnapshot"`
-	UserScripts               *UserScripts `json:"userScripts,omitempty"`
+	AdditionalTags           []TagFromClient      `json:"additionalTags,omitempty"`
+	CopyOriginalTags         bool                 `json:"copyOriginalTags"`
+	ApplicationAwareSnapshot bool                 `json:"applicationAwareSnapshot"`
+	UserScripts              *UserScripts         `json:"userScripts,omitempty"`
 }
 
 type RetrySettings struct {
@@ -803,13 +801,18 @@ type TagFromClient struct {
 }
 
 type UserScripts struct {
-	PreScript  *Script `json:"preScript,omitempty"`
-	PostScript *Script `json:"postScript,omitempty"`
+	Windows *UserScriptsSettings `json:"windows,omitempty"`
 }
 
-type Script struct {
-	Path    string `json:"path"`
-	Timeout *int   `json:"timeout,omitempty"`
+type UserScriptsSettings struct {
+	ScriptsEnabled           bool    `json:"scriptsEnabled"`
+	PreScriptPath            *string `json:"preScriptPath,omitempty"`
+	PreScriptArguments       *string `json:"preScriptArguments,omitempty"`
+	PostScriptPath           *string `json:"postScriptPath,omitempty"`
+	PostScriptArguments      *string `json:"postScriptArguments,omitempty"`
+	RepositorySnapshotsOnly  bool    `json:"repositorySnapshotsOnly"`
+	IgnoreExitCodes          bool    `json:"ignoreExitCodes"`
+	IgnoreMissingScripts     bool    `json:"ignoreMissingScripts"`
 }
 
 // Schedule supporting structs

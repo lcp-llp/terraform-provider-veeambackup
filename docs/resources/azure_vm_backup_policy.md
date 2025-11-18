@@ -40,10 +40,31 @@ resource "veeambackup_azure_vm_backup_policy" "complete" {
   }
   
   snapshot_settings {
-    retention_type               = "Days"
-    retention_value              = 30
-    copy_original_tags           = true
-    application_aware_snapshot   = true
+    copy_original_tags         = true
+    application_aware_snapshot = true
+    
+    additional_tags {
+      name  = "Environment"
+      value = "Production"
+    }
+    
+    additional_tags {
+      name  = "CostCenter"
+      value = "IT-001"
+    }
+    
+    user_scripts {
+      windows {
+        scripts_enabled           = true
+        pre_script_path           = "C:\\Scripts\\pre-backup.ps1"
+        pre_script_arguments      = "-LogLevel Info"
+        post_script_path          = "C:\\Scripts\\post-backup.ps1"
+        post_script_arguments     = "-Cleanup true"
+        repository_snapshots_only = false
+        ignore_exit_codes         = false
+        ignore_missing_scripts    = true
+      }
+    }
   }
   
   selected_items {
@@ -137,7 +158,7 @@ The following arguments are supported:
 ### Optional Arguments
 
 * `description` - (Optional) Specifies a description for the backup policy.
-* `snapshot_settings` - (Optional) Specifies cloud-native snapshot settings for the backup policy. See [Snapshot Settings](#snapshot-settings) below.
+* `snapshot_settings` - (Required) Specifies cloud-native snapshot settings for the backup policy. See [Snapshot Settings](#snapshot-settings) below.
 * `selected_items` - (Optional) Specifies Azure resources to protect by the backup policy. Applies if the `SelectedItems` value is specified for the `backup_type` parameter. See [Selected Items](#selected-items) below.
 * `excluded_items` - (Optional) Specifies Azure tags to identify the resources that should be excluded from the backup scope. See [Excluded Items](#excluded-items) below.
 
@@ -151,10 +172,36 @@ The `regions` block supports:
 
 The `snapshot_settings` block supports:
 
-* `retention_type` - (Required) Retention type for snapshots.
-* `retention_value` - (Required) Retention value for snapshots.
-* `copy_original_tags` - (Optional) Defines whether to assign to the snapshots tags of virtual disks attached to processed Azure VMs.
-* `application_aware_snapshot` - (Optional) Defines whether to enable application-aware processing for Windows-based Azure VMs running VSS-aware applications.
+* `additional_tags` - (Optional) Specifies tags to be assigned to the snapshots. See [Additional Tags](#additional-tags) below.
+* `copy_original_tags` - (Optional) Defines whether to assign to the snapshots tags of virtual disks attached to processed Azure VMs. Defaults to `false`.
+* `application_aware_snapshot` - (Optional) Defines whether to enable application-aware processing for Windows-based Azure VMs running VSS-aware applications. Defaults to `false`.
+* `user_scripts` - (Optional) Specifies script settings to be applied before and after the snapshot creating operation. See [User Scripts](#user-scripts) below.
+
+#### Additional Tags
+
+The `additional_tags` block supports:
+
+* `name` - (Optional) Specifies the name of an Azure tag.
+* `value` - (Optional) Specifies the value of the Azure tag.
+
+#### User Scripts
+
+The `user_scripts` block supports:
+
+* `windows` - (Optional) Specifies guest scripting settings for Linux and Windows-based Azure VMs. See [Windows Scripts](#windows-scripts) below.
+
+##### Windows Scripts
+
+The `windows` block supports:
+
+* `scripts_enabled` - (Optional) Defines whether to run custom scripts on Azure VMs. Defaults to `false`.
+* `pre_script_path` - (Optional) Specifies a path to the directory on a protected Azure VM where the pre-snapshot script resides.
+* `pre_script_arguments` - (Optional) Specifies arguments to be passed to the pre-snapshot script when the script is executed.
+* `post_script_path` - (Optional) Specifies a path to the directory on a protected Azure VM where the post-snapshot script resides.
+* `post_script_arguments` - (Optional) Specifies arguments to be passed to the post-snapshot script when the script is executed.
+* `repository_snapshots_only` - (Optional) Defines whether to run scripts only when performing a snapshot for the image-level backup operation. Defaults to `false`.
+* `ignore_exit_codes` - (Optional) Defines whether to continue performing backup if script execution failed with errors. Defaults to `false`.
+* `ignore_missing_scripts` - (Optional) Defines whether to continue performing backup if scripts are missing on the Azure VM. Defaults to `false`.
 
 ### Selected Items
 
