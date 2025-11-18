@@ -104,7 +104,7 @@ func BackupPolicyCommonSchema() map[string]*schema.Schema {
 					"daily_type": {
 						Type:        schema.TypeString,
 						Optional:    true,
-						Description: "Type of daily schedule.",
+						Description: "Type of daily schedule (e.g. Everyday).",
 					},
 					"selected_days": {
 						Type:        schema.TypeList,
@@ -123,8 +123,17 @@ func BackupPolicyCommonSchema() map[string]*schema.Schema {
 						MaxItems:    1,
 						Elem: &schema.Resource{
 							Schema: map[string]*schema.Schema{
-								"start_time": {Type: schema.TypeInt, Optional: true, Description: "Snapshot start time."},
-								"enabled":    {Type: schema.TypeBool, Required: true, Description: "Snapshot enabled."},
+								"hours": {
+									Type:        schema.TypeList,
+									Optional:    true,
+									Elem: &schema.Schema{Type: schema.TypeInt},
+									Description: "List of hours for snapshots.",
+								},
+								"snapshots_to_keep": {
+									Type:        schema.TypeInt,
+									Optional:    true,
+									Description: "Number of snapshots to keep.",
+								},
 							},
 						},
 						Description: "Daily snapshot schedule.",
@@ -135,8 +144,37 @@ func BackupPolicyCommonSchema() map[string]*schema.Schema {
 						MaxItems:    1,
 						Elem: &schema.Resource{
 							Schema: map[string]*schema.Schema{
-								"start_time": {Type: schema.TypeInt, Optional: true, Description: "Backup start time."},
-								"enabled":    {Type: schema.TypeBool, Required: true, Description: "Backup enabled."},
+								"hours": {
+									Type:        schema.TypeList,
+									Optional:    true,
+									Elem: &schema.Schema{Type: schema.TypeInt},
+									Description: "List of hours for backups.",
+								},
+								"retention": {
+									Type:        schema.TypeList,
+									Optional:    true,
+									MaxItems:    1,
+									Elem: &schema.Resource{
+										Schema: map[string]*schema.Schema{
+											"time_retention_duration": {
+												Type:        schema.TypeInt,
+												Optional:    true,
+												Description: "Retention duration value.",
+											},
+											"retention_duration_type": {
+												Type:        schema.TypeString,
+												Optional:    true,
+												Description: "Retention duration type (e.g. Days).",
+											},
+										},
+									},
+									Description: "Backup retention settings.",
+								},
+								"target_repository_id": {
+									Type:        schema.TypeString,
+									Optional:    true,
+									Description: "Target repository ID for backups.",
+								},
 							},
 						},
 						Description: "Daily backup schedule.",
@@ -162,8 +200,17 @@ func BackupPolicyCommonSchema() map[string]*schema.Schema {
 						MaxItems:    1,
 						Elem: &schema.Resource{
 							Schema: map[string]*schema.Schema{
-								"start_time": {Type: schema.TypeInt, Optional: true, Description: "Snapshot start time."},
-								"enabled":    {Type: schema.TypeBool, Required: true, Description: "Snapshot enabled."},
+								"selected_days": {
+									Type:        schema.TypeList,
+									Optional:    true,
+									Elem: &schema.Schema{Type: schema.TypeString},
+									Description: "Days selected for weekly snapshot schedule.",
+								},
+								"snapshots_to_keep": {
+									Type:        schema.TypeInt,
+									Optional:    true,
+									Description: "Number of snapshots to keep.",
+								},
 							},
 						},
 						Description: "Weekly snapshot schedule.",
@@ -174,8 +221,37 @@ func BackupPolicyCommonSchema() map[string]*schema.Schema {
 						MaxItems:    1,
 						Elem: &schema.Resource{
 							Schema: map[string]*schema.Schema{
-								"start_time": {Type: schema.TypeInt, Optional: true, Description: "Backup start time."},
-								"enabled":    {Type: schema.TypeBool, Required: true, Description: "Backup enabled."},
+								"selected_days": {
+									Type:        schema.TypeList,
+									Optional:    true,
+									Elem: &schema.Schema{Type: schema.TypeString},
+									Description: "Days selected for weekly backup schedule.",
+								},
+								"retention": {
+									Type:        schema.TypeList,
+									Optional:    true,
+									MaxItems:    1,
+									Elem: &schema.Resource{
+										Schema: map[string]*schema.Schema{
+											"time_retention_duration": {
+												Type:        schema.TypeInt,
+												Optional:    true,
+												Description: "Retention duration value.",
+											},
+											"retention_duration_type": {
+												Type:        schema.TypeString,
+												Optional:    true,
+												Description: "Retention duration type (e.g. Days).",
+											},
+										},
+									},
+									Description: "Backup retention settings.",
+								},
+								"target_repository_id": {
+									Type:        schema.TypeString,
+									Optional:    true,
+									Description: "Target repository ID for backups.",
+								},
 							},
 						},
 						Description: "Weekly backup schedule.",
@@ -191,7 +267,7 @@ func BackupPolicyCommonSchema() map[string]*schema.Schema {
 			Elem: &schema.Resource{
 				Schema: map[string]*schema.Schema{
 					"start_time": {Type: schema.TypeInt, Optional: true, Description: "Monthly schedule start time."},
-					"type":       {Type: schema.TypeString, Optional: true, Description: "Monthly schedule type."},
+					"type":       {Type: schema.TypeString, Optional: true, Description: "Monthly schedule type (e.g. First)."},
 					"day_of_week": {Type: schema.TypeString, Optional: true, Description: "Day of week for monthly schedule."},
 					"day_of_month": {Type: schema.TypeInt, Optional: true, Description: "Day of month for monthly schedule."},
 					"monthly_last_day": {Type: schema.TypeBool, Optional: true, Description: "Is last day of month."},
@@ -201,8 +277,17 @@ func BackupPolicyCommonSchema() map[string]*schema.Schema {
 						MaxItems:    1,
 						Elem: &schema.Resource{
 							Schema: map[string]*schema.Schema{
-								"start_time": {Type: schema.TypeInt, Optional: true, Description: "Snapshot start time."},
-								"enabled":    {Type: schema.TypeBool, Required: true, Description: "Snapshot enabled."},
+								"selected_months": {
+									Type:        schema.TypeList,
+									Optional:    true,
+									Elem: &schema.Schema{Type: schema.TypeString},
+									Description: "Months selected for monthly snapshot schedule.",
+								},
+								"snapshots_to_keep": {
+									Type:        schema.TypeInt,
+									Optional:    true,
+									Description: "Number of snapshots to keep.",
+								},
 							},
 						},
 						Description: "Monthly snapshot schedule.",
@@ -213,8 +298,37 @@ func BackupPolicyCommonSchema() map[string]*schema.Schema {
 						MaxItems:    1,
 						Elem: &schema.Resource{
 							Schema: map[string]*schema.Schema{
-								"start_time": {Type: schema.TypeInt, Optional: true, Description: "Backup start time."},
-								"enabled":    {Type: schema.TypeBool, Required: true, Description: "Backup enabled."},
+								"selected_months": {
+									Type:        schema.TypeList,
+									Optional:    true,
+									Elem: &schema.Schema{Type: schema.TypeString},
+									Description: "Months selected for monthly backup schedule.",
+								},
+								"retention": {
+									Type:        schema.TypeList,
+									Optional:    true,
+									MaxItems:    1,
+									Elem: &schema.Resource{
+										Schema: map[string]*schema.Schema{
+											"time_retention_duration": {
+												Type:        schema.TypeInt,
+												Optional:    true,
+												Description: "Retention duration value.",
+											},
+											"retention_duration_type": {
+												Type:        schema.TypeString,
+												Optional:    true,
+												Description: "Retention duration type (e.g. Days).",
+											},
+										},
+									},
+									Description: "Backup retention settings.",
+								},
+								"target_repository_id": {
+									Type:        schema.TypeString,
+									Optional:    true,
+									Description: "Target repository ID for backups.",
+								},
 							},
 						},
 						Description: "Monthly backup schedule.",
@@ -231,12 +345,12 @@ func BackupPolicyCommonSchema() map[string]*schema.Schema {
 				Schema: map[string]*schema.Schema{
 					"start_time": {Type: schema.TypeInt, Optional: true, Description: "Yearly schedule start time."},
 					"month":      {Type: schema.TypeString, Optional: true, Description: "Month for yearly schedule."},
-					"type":       {Type: schema.TypeString, Optional: true, Description: "Yearly schedule type."},
+					"type":       {Type: schema.TypeString, Optional: true, Description: "Yearly schedule type (e.g. First)."},
 					"day_of_week": {Type: schema.TypeString, Optional: true, Description: "Day of week for yearly schedule."},
 					"day_of_month": {Type: schema.TypeInt, Optional: true, Description: "Day of month for yearly schedule."},
 					"yearly_last_day": {Type: schema.TypeBool, Optional: true, Description: "Is last day of year."},
 					"retention_years_count": {Type: schema.TypeInt, Optional: true, Description: "Retention years count."},
-					"target_repository_id": {Type: schema.TypeString, Optional: true, Description: "Target repository ID."},
+					"target_repository_id": {Type: schema.TypeString, Optional: true, Description: "Target repository ID for yearly backups."},
 				},
 			},
 		},

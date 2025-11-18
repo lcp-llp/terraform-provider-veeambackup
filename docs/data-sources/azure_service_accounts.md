@@ -37,7 +37,7 @@ output "production_sa_id" {
 
 # Use the ID-to-name lookup map
 output "sa_name_by_id" {
-  value = data.veeambackup_azure_service_accounts.all.service_accounts_by_id["sa-abc123-def456"]
+  value = data.veeambackup_azure_service_accounts.all.service_accounts_by_id["07287bf0-70ae-4c7f-a764-dcc97d8ca587"]
 }
 ```
 
@@ -53,20 +53,22 @@ output "sa_name_by_id" {
 ### Read-Only
 
 - `service_accounts` (List of Object) - List of Azure service accounts. Each service account contains:
-  - `id` (String) - Unique identifier of the service account.
+  - `account_id` (String) - Unique identifier of the service account.
+  - `application_id` (String) - Azure application ID of the service account.
   - `name` (String) - Name of the service account.
   - `description` (String) - Description of the service account.
-  - `purpose` (String) - Purpose of the service account.
-  - `status` (String) - Status of the service account.
+  - `region` (String) - Azure region for the service account.
   - `tenant_id` (String) - Azure tenant ID associated with the service account.
-  - `application_id` (String) - Azure application ID of the service account.
-  - `subscription_id` (String) - Azure subscription ID associated with the service account.
-  - `subscription_name` (String) - Azure subscription name associated with the service account.
-  - `created_date` (String) - Date when the service account was created.
-  - `modified_date` (String) - Date when the service account was last modified.
-  - `last_used_date` (String) - Date when the service account was last used.
-  - `certificate_expiry` (String) - Certificate expiry date for the service account.
-  - `is_enabled` (Boolean) - Whether the service account is enabled.
+  - `account_origin` (String) - Origin of the service account creation.
+  - `account_state` (String) - State of the service account.
+  - `cloud_state` (String) - Cloud state of the service account.
+  - `purposes` (List of String) - List of purposes for the service account (e.g., Repository, VirtualMachineBackup, VirtualMachineRestore).
+  - `subscription_ids` (List of String) - List of Azure subscription IDs associated with the service account.
+  - `selected_for_workermanagement` (Boolean) - Whether the service account is selected for worker management.
+  - `azure_permissions_state` (List of String) - Azure permissions state for the service account.
+  - `azure_permissions_state_check_time_utc` (String) - UTC time when Azure permissions state was last checked.
+  - `subscription_id_for_worker_deployment` (String) - Subscription ID used for worker deployment.
+  - `lighthouse_subscriptions_count` (Number) - Number of lighthouse subscriptions.
 
 - `service_accounts_by_id` (Map of String) - Map of service account IDs to their names for easy lookup.
 - `service_accounts_by_name` (Map of String) - Map of service account names to their IDs for easy lookup.
@@ -100,54 +102,64 @@ data "veeambackup_azure_backup_repository" "prod_repo" {
 ### Filtering by Purpose
 
 ```hcl
-data "veeambackup_azure_service_accounts" "backup_only" {
+data "veeambackup_azure_service_accounts" "backup_accounts" {
   purpose = "Backup"
 }
 
-data "veeambackup_azure_service_accounts" "replication_only" {
+data "veeambackup_azure_service_accounts" "replication_accounts" {
   purpose = "Replication"
 }
 
-data "veeambackup_azure_service_accounts" "both_purposes" {
+data "veeambackup_azure_service_accounts" "all_purposes" {
   purpose = "Both"
 }
 ```
 
-### Listing Enabled Service Accounts
+### Listing Service Accounts by State
 
 ```hcl
 data "veeambackup_azure_service_accounts" "all" {}
 
 locals {
-  enabled_accounts = [
+  valid_accounts = [
     for account in data.veeambackup_azure_service_accounts.all.service_accounts :
-    account if account.is_enabled
+    account if account.cloud_state == "Valid"
+  ]
+  
+  accounts_for_worker_management = [
+    for account in data.veeambackup_azure_service_accounts.all.service_accounts :
+    account if account.selected_for_workermanagement
   ]
 }
 
-output "enabled_service_accounts" {
-  value = [for account in local.enabled_accounts : account.name]
+output "valid_service_accounts" {
+  value = [for account in local.valid_accounts : account.name]
+}
+
+output "worker_management_accounts" {
+  value = [for account in local.accounts_for_worker_management : account.name]
 }
 ```
 
-### Checking Certificate Expiry
+### Checking Service Account Purposes
 
 ```hcl
 data "veeambackup_azure_service_accounts" "all" {}
 
 locals {
-  # Get accounts with certificates expiring soon (you would implement date logic)
-  accounts_expiring_soon = [
+  backup_capable_accounts = [
     for account in data.veeambackup_azure_service_accounts.all.service_accounts :
-    account if account.certificate_expiry != ""
+    account if contains(account.purposes, "VirtualMachineBackup")
+  ]
+  
+  repository_accounts = [
+    for account in data.veeambackup_azure_service_accounts.all.service_accounts :
+    account if contains(account.purposes, "Repository")
   ]
 }
 
-output "certificate_expiry_report" {
-  value = {
-    for account in local.accounts_expiring_soon :
-    account.name => account.certificate_expiry
-  }
+output "backup_capable_accounts" {
+  value = [for account in local.backup_capable_accounts : account.name]
 }
 ```
 
@@ -182,5 +194,31 @@ locals {
 
 output "repository_service_accounts" {
   value = local.repo_service_account_map
+}
+```
+
+### Checking Permissions State
+
+```hcl
+data "veeambackup_azure_service_accounts" "all" {}
+
+locals {
+  accounts_with_permissions = [
+    for account in data.veeambackup_azure_service_accounts.all.service_accounts :
+    account if contains(account.azure_permissions_state, "AllPermissionsAvailable")
+  ]
+  
+  accounts_missing_permissions = [
+    for account in data.veeambackup_azure_service_accounts.all.service_accounts :
+    account if contains(account.azure_permissions_state, "MissingPermissions")
+  ]
+}
+
+output "accounts_with_full_permissions" {
+  value = [for account in local.accounts_with_permissions : account.name]
+}
+
+output "accounts_missing_permissions" {
+  value = [for account in local.accounts_missing_permissions : account.name]
 }
 ```
