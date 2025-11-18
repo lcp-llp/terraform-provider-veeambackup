@@ -589,7 +589,7 @@ func findServiceAccountByName(client *AuthClient, name string) (string, error) {
 	for _, account := range response.Data {
 		accountNames = append(accountNames, account.Name)
 		if account.Name == name {
-			return account.ID, nil
+			return account.AccountID, nil
 		}
 	}
 
