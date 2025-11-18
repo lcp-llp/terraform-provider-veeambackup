@@ -66,30 +66,159 @@ func BackupPolicyCommonSchema() map[string]*schema.Schema {
 		},
 		"snapshot_settings": {
 			Type:        schema.TypeList,
-			Optional:    true,
+			Required:    true,
 			MaxItems:    1,
 			Description: "Specifies cloud-native snapshot settings for the backup policy.",
 			Elem: &schema.Resource{
 				Schema: map[string]*schema.Schema{
-					"retention_type": {
-						Type:        schema.TypeString,
-						Required:    true,
-						Description: "Retention type for snapshots.",
-					},
-					"retention_value": {
-						Type:        schema.TypeInt,
-						Required:    true,
-						Description: "Retention value for snapshots.",
+					"additional_tags": {
+						Type:        schema.TypeList,
+						Optional:    true,
+						Description: "Specifies tags to be assigned to the snapshots.",
+						Elem: &schema.Resource{
+							Schema: map[string]*schema.Schema{
+								"name": {
+									Type:        schema.TypeString,
+									Optional:    true,
+									Description: "Specifies the name of an Azure tag.",
+								},
+								"value": {
+									Type:        schema.TypeString,
+									Optional:    true,
+									Description: "Specifies the value of the Azure tag.",
+								},
+							},
+						},
 					},
 					"copy_original_tags": {
 						Type:        schema.TypeBool,
 						Optional:    true,
+						Default:     false,
 						Description: "Defines whether to assign to the snapshots tags of virtual disks attached to processed Azure VMs.",
 					},
 					"application_aware_snapshot": {
 						Type:        schema.TypeBool,
 						Optional:    true,
+						Default:     false,
 						Description: "Defines whether to enable application-aware processing for Windows-based Azure VMs running VSS-aware applications.",
+					},
+					"user_scripts": {
+						Type:        schema.TypeList,
+						Optional:    true,
+						MaxItems:    1,
+						Description: "Specifies script settings to be applied before and after the snapshot creating operation.",
+						Elem: &schema.Resource{
+							Schema: map[string]*schema.Schema{
+								"windows": {
+									Type:        schema.TypeList,
+									Optional:    true,
+									MaxItems:    1,
+									Description: "Specifies guest scripting settings for Linux and Windows-based Azure VMs.",
+									Elem: &schema.Resource{
+										Schema: map[string]*schema.Schema{
+											"scripts_enabled": {
+												Type:        schema.TypeBool,
+												Optional:    true,
+												Default:     false,
+												Description: "Defines whether to run custom scripts on Azure VMs.",
+											},
+											"pre_script_path": {
+												Type:        schema.TypeString,
+												Optional:    true,
+												Description: "Specifies a path to the directory on a protected Azure VM where the pre-snapshot script resides.",
+											},
+											"pre_script_arguments": {
+												Type:        schema.TypeString,
+												Optional:    true,
+												Description: "Specifies arguments to be passed to the pre-snapshot script when the script is executed.",
+											},
+											"post_script_path": {
+												Type:        schema.TypeString,
+												Optional:    true,
+												Description: "Specifies a path to the directory on a protected Azure VM where the post-snapshot script resides.",
+											},
+											"post_script_arguments": {
+												Type:        schema.TypeString,
+												Optional:    true,
+												Description: "Specifies arguments to be passed to the post-snapshot script when the script is executed.",
+											},
+											"repository_snapshots_only": {
+												Type:        schema.TypeBool,
+												Optional:    true,
+												Default:     false,
+												Description: "Defines whether to run scripts only when performing a snapshot for the image-level backup operation.",
+											},
+											"ignore_exit_codes": {
+												Type:        schema.TypeBool,
+												Optional:    true,
+												Default:     false,
+												Description: "Defines whether to continue performing backup if script execution failed with errors.",
+											},
+											"ignore_missing_scripts": {
+												Type:        schema.TypeBool,
+												Optional:    true,
+												Default:     false,
+												Description: "Defines whether to continue performing backup if scripts are missing on the Azure VM.",
+											},
+										},
+									},
+								},
+								"linux": {
+									Type:        schema.TypeList,
+									Optional:    true,
+									MaxItems:    1,
+									Description: "Specifies guest scripting settings for Linux and Windows-based Azure VMs.",
+									Elem: &schema.Resource{
+										Schema: map[string]*schema.Schema{
+											"scripts_enabled": {
+												Type:        schema.TypeBool,
+												Optional:    true,
+												Default:     false,
+												Description: "Defines whether to run custom scripts on Azure VMs.",
+											},
+											"pre_script_path": {
+												Type:        schema.TypeString,
+												Optional:    true,
+												Description: "Specifies a path to the directory on a protected Azure VM where the pre-snapshot script resides.",
+											},
+											"pre_script_arguments": {
+												Type:        schema.TypeString,
+												Optional:    true,
+												Description: "Specifies arguments to be passed to the pre-snapshot script when the script is executed.",
+											},
+											"post_script_path": {
+												Type:        schema.TypeString,
+												Optional:    true,
+												Description: "Specifies a path to the directory on a protected Azure VM where the post-snapshot script resides.",
+											},
+											"post_script_arguments": {
+												Type:        schema.TypeString,
+												Optional:    true,
+												Description: "Specifies arguments to be passed to the post-snapshot script when the script is executed.",
+											},
+											"repository_snapshots_only": {
+												Type:        schema.TypeBool,
+												Optional:    true,
+												Default:     false,
+												Description: "Defines whether to run scripts only when performing a snapshot for the image-level backup operation.",
+											},
+											"ignore_exit_codes": {
+												Type:        schema.TypeBool,
+												Optional:    true,
+												Default:     false,
+												Description: "Defines whether to continue performing backup if script execution failed with errors.",
+											},
+											"ignore_missing_scripts": {
+												Type:        schema.TypeBool,
+												Optional:    true,
+												Default:     false,
+												Description: "Defines whether to continue performing backup if scripts are missing on the Azure VM.",
+											},
+										},	
+									},
+								},
+							},
+						},
 					},
 				},
 			},
