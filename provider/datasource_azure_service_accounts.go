@@ -70,7 +70,7 @@ func dataSourceAzureServiceAccounts() *schema.Resource {
 				Description: "Purpose filter for the service accounts.",
 				ValidateFunc: func(val interface{}, key string) (warns []string, errs []error) {
 					v := val.(string)
-					validPurposes := []string{"None", "Backup", "Replication", "Both"}
+					validPurposes := []string{"None", "WorkerManagement", "Repository", "Unknown", "VirtualMachineBackup", "VirtualMachineRestore", "AzureSqlBackup", "AzureSqlRestore", "AzureFiles", "VnetBackup", "VnetRestore", "CosmosBackup", "CosmosRestore"}
 					for _, purpose := range validPurposes {
 						if v == purpose {
 							return
