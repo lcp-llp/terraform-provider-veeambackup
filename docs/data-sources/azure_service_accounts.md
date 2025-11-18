@@ -48,27 +48,33 @@ output "sa_name_by_id" {
 - `filter` (String) - Filter to apply to the service accounts list.
 - `offset` (Number) - Number of items to skip from the beginning of the result set. Default: `0`.
 - `limit` (Number) - Maximum number of items to return. Use `-1` for all items. Default: `-1`.
-- `purpose` (String) - Purpose filter for the service accounts. Valid values: `None`, `Backup`, `Replication`, `Both`. Default: `None`.
+- `purpose` (String) - Purpose filter for the service accounts. Valid values: `None`, `WorkerManagement`, `Repository`, `Unknown`, `VirtualMachineBackup`, `VirtualMachineRestore`, `AzureSqlBackup`, `AzureSqlRestore`, `AzureFiles`, `VnetBackup`, `VnetRestore`, `CosmosBackup`, `CosmosRestore`. Default: `None`.
 
 ### Read-Only
 
 - `service_accounts` (List of Object) - List of Azure service accounts. Each service account contains:
   - `account_id` (String) - Unique identifier of the service account.
   - `application_id` (String) - Azure application ID of the service account.
+  - `application_certificate_name` (String) - Name of the application certificate.
   - `name` (String) - Name of the service account.
   - `description` (String) - Description of the service account.
   - `region` (String) - Azure region for the service account.
   - `tenant_id` (String) - Azure tenant ID associated with the service account.
+  - `tenant_name` (String) - Azure tenant name associated with the service account.
   - `account_origin` (String) - Origin of the service account creation.
+  - `expiration_date` (String) - Date of the account expiration.
   - `account_state` (String) - State of the service account.
+  - `ad_group_id` (String) - Microsoft Azure ID assigned to a Microsoft Entra group to which the account belongs.
   - `cloud_state` (String) - Cloud state of the service account.
-  - `purposes` (List of String) - List of purposes for the service account (e.g., Repository, VirtualMachineBackup, VirtualMachineRestore).
-  - `subscription_ids` (List of String) - List of Azure subscription IDs associated with the service account.
+  - `ad_group_name` (String) - Name of the Microsoft Entra group.
+  - `purposes` (Set of String) - Set of purposes for the service account (e.g., Repository, VirtualMachineBackup, VirtualMachineRestore).
+  - `management_group_id` (String) - Microsoft Azure ID assigned to a management group.
+  - `management_group_name` (String) - Name of the management group.
+  - `subscription_ids` (Set of String) - Set of Azure subscription IDs associated with the service account.
   - `selected_for_workermanagement` (Boolean) - Whether the service account is selected for worker management.
-  - `azure_permissions_state` (List of String) - Azure permissions state for the service account.
+  - `azure_permissions_state` (Set of String) - Azure permissions state for the service account.
   - `azure_permissions_state_check_time_utc` (String) - UTC time when Azure permissions state was last checked.
   - `subscription_id_for_worker_deployment` (String) - Subscription ID used for worker deployment.
-  - `lighthouse_subscriptions_count` (Number) - Number of lighthouse subscriptions.
 
 - `service_accounts_by_id` (Map of String) - Map of service account IDs to their names for easy lookup.
 - `service_accounts_by_name` (Map of String) - Map of service account names to their IDs for easy lookup.
@@ -103,15 +109,15 @@ data "veeambackup_azure_backup_repository" "prod_repo" {
 
 ```hcl
 data "veeambackup_azure_service_accounts" "backup_accounts" {
-  purpose = "Backup"
+  purpose = "VirtualMachineBackup"
 }
 
-data "veeambackup_azure_service_accounts" "replication_accounts" {
-  purpose = "Replication"
+data "veeambackup_azure_service_accounts" "repository_accounts" {
+  purpose = "Repository"
 }
 
-data "veeambackup_azure_service_accounts" "all_purposes" {
-  purpose = "Both"
+data "veeambackup_azure_service_accounts" "worker_management_accounts" {
+  purpose = "WorkerManagement"
 }
 ```
 
@@ -160,6 +166,72 @@ locals {
 
 output "backup_capable_accounts" {
   value = [for account in local.backup_capable_accounts : account.name]
+}
+```
+
+### Checking Service Account Details
+
+```hcl
+data "veeambackup_azure_service_accounts" "all" {}
+
+# Get accounts with expiration dates
+locals {
+  accounts_with_expiration = [
+    for account in data.veeambackup_azure_service_accounts.all.service_accounts :
+    account if account.expiration_date != ""
+  ]
+  
+  # Get accounts by tenant
+  accounts_by_tenant = {
+    for account in data.veeambackup_azure_service_accounts.all.service_accounts :
+    account.tenant_name => account.name...
+    if account.tenant_name != ""
+  }
+  
+  # Get accounts with management groups
+  managed_accounts = [
+    for account in data.veeambackup_azure_service_accounts.all.service_accounts :
+    account if account.management_group_name != ""
+  ]
+}
+
+output "expiring_accounts" {
+  value = {
+    for account in local.accounts_with_expiration :
+    account.name => account.expiration_date
+  }
+}
+
+output "accounts_by_tenant" {
+  value = local.accounts_by_tenant
+}
+```
+
+### Certificate and Authentication Information
+
+```hcl
+data "veeambackup_azure_service_accounts" "all" {}
+
+locals {
+  certificate_accounts = [
+    for account in data.veeambackup_azure_service_accounts.all.service_accounts :
+    account if account.application_certificate_name != "" && account.account_origin == "Imported Certificate"
+  ]
+  
+  secret_accounts = [
+    for account in data.veeambackup_azure_service_accounts.all.service_accounts :
+    account if account.account_origin == "Imported Secret"
+  ]
+}
+
+output "certificate_based_accounts" {
+  value = {
+    for account in local.certificate_accounts :
+    account.name => {
+      certificate_name = account.application_certificate_name
+      account_state = account.account_state
+    }
+  }
 }
 ```
 

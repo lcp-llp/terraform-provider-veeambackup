@@ -16,20 +16,26 @@ import (
 type AzureServiceAccount struct {
 	AccountID                         string   `json:"accountId"`
 	ApplicationID                     string   `json:"applicationId"`
+	ApplicationCertificateName        string   `json:"applicationCertificateName"`
 	Name                              string   `json:"name"`
 	Description                       string   `json:"description"`
 	Region                            string   `json:"region"`
 	TenantID                          string   `json:"tenantId"`
+	TenantName                        string   `json:"tenantName"`
 	AccountOrigin                     string   `json:"accountOrigin"`
+	ExpirationDate                    string   `json:"expirationDate"`
 	AccountState                      string   `json:"accountState"`
+	AdGroupID                         string   `json:"adGroupId"`
 	CloudState                        string   `json:"cloudState"`
+	AdGroupName                       string   `json:"adGroupName"`
 	Purposes                          []string `json:"purposes"`
+	ManagementGroupID                 string   `json:"managementGroupId"`
+	ManagementGroupName               string   `json:"managementGroupName"`
 	SubscriptionIDs                   []string `json:"subscriptionIds"`
 	SelectedForWorkermanagement       bool     `json:"selectedForWorkermanagement"`
 	AzurePermissionsState             []string `json:"azurePermissionsState"`
 	AzurePermissionsStateCheckTimeUtc string   `json:"azurePermissionsStateCheckTimeUtc"`
 	SubscriptionIDForWorkerDeployment string   `json:"subscriptionIdForWorkerDeployment"`
-	LighthouseSubscriptionsCount      int      `json:"lighthouseSubscriptionsCount"`
 }
 
 // AzureServiceAccountsResponse represents the API response for Azure service accounts
@@ -86,10 +92,20 @@ func dataSourceAzureServiceAccounts() *schema.Resource {
 				Description: "List of Azure service accounts.",
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						"id": {
+						"account_id": {
 							Type:        schema.TypeString,
 							Computed:    true,
 							Description: "Unique identifier of the service account.",
+						},
+						"application_id": {
+							Type:        schema.TypeString,
+							Computed:    true,
+							Description: "Azure application ID of the service account.",
+						},
+						"application_certificate_name": {
+							Type:        schema.TypeString,
+							Computed:    true,
+							Description: "Name of the application certificate.",
 						},
 						"name": {
 							Type:        schema.TypeString,
@@ -101,60 +117,99 @@ func dataSourceAzureServiceAccounts() *schema.Resource {
 							Computed:    true,
 							Description: "Description of the service account.",
 						},
-						"purpose": {
+						"region": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Purpose of the service account.",
-						},
-						"status": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Status of the service account.",
+							Description: "Azure region for the service account.",
 						},
 						"tenant_id": {
 							Type:        schema.TypeString,
 							Computed:    true,
 							Description: "Azure tenant ID associated with the service account.",
 						},
-						"application_id": {
+						"tenant_name": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Azure application ID of the service account.",
+							Description: "Azure tenant name associated with the service account.",
 						},
-						"subscription_id": {
+						"account_origin": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Azure subscription ID associated with the service account.",
+							Description: "Origin of the service account creation.",
 						},
-						"subscription_name": {
+						"expiration_date": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Azure subscription name associated with the service account.",
+							Description: "Date of the account expiration.",
 						},
-						"created_date": {
+						"account_state": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Date when the service account was created.",
+							Description: "State of the service account.",
 						},
-						"modified_date": {
+						"ad_group_id": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Date when the service account was last modified.",
+							Description: "Microsoft Azure ID assigned to a Microsoft Entra group to which the account belongs.",
 						},
-						"last_used_date": {
+						"cloud_state": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Date when the service account was last used.",
+							Description: "Cloud state of the service account.",
 						},
-						"certificate_expiry": {
+						"ad_group_name": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Certificate expiry date for the service account.",
+							Description: "Name of the Microsoft Entra group.",
 						},
-						"is_enabled": {
+						"purposes": {
+							Type:        schema.TypeSet,
+							Computed:    true,
+							Description: "List of purposes for the service account.",
+							Elem: &schema.Schema{
+								Type: schema.TypeString,
+							},
+						},
+						"management_group_id": {
+							Type:        schema.TypeString,
+							Computed:    true,
+							Description: "Microsoft Azure ID assigned to a management group.",
+						},
+						"management_group_name": {
+							Type:        schema.TypeString,
+							Computed:    true,
+							Description: "Name of the management group.",
+						},
+						"subscription_ids": {
+							Type:        schema.TypeSet,
+							Computed:    true,
+							Description: "List of Azure subscription IDs associated with the service account.",
+							Elem: &schema.Schema{
+								Type: schema.TypeString,
+							},
+						},
+						"selected_for_workermanagement": {
 							Type:        schema.TypeBool,
 							Computed:    true,
-							Description: "Whether the service account is enabled.",
+							Description: "Whether the service account is selected for worker management.",
+						},
+						"azure_permissions_state": {
+							Type:        schema.TypeSet,
+							Computed:    true,
+							Description: "Azure permissions state for the service account.",
+							Elem: &schema.Schema{
+								Type: schema.TypeString,
+							},
+						},
+						"azure_permissions_state_check_time_utc": {
+							Type:        schema.TypeString,
+							Computed:    true,
+							Description: "UTC time when Azure permissions state was last checked.",
+						},
+						"subscription_id_for_worker_deployment": {
+							Type:        schema.TypeString,
+							Computed:    true,
+							Description: "Subscription ID used for worker deployment.",
 						},
 					},
 				},
@@ -240,39 +295,29 @@ func dataSourceAzureServiceAccountsRead(ctx context.Context, d *schema.ResourceD
 	serviceAccountsByName := make(map[string]interface{})
 
 	for i, account := range accountsResp.Results {
-		// Convert string slices to interface{} slices for Terraform
-		purposesInterface := make([]interface{}, len(account.Purposes))
-		for j, purpose := range account.Purposes {
-			purposesInterface[j] = purpose
-		}
-
-		subscriptionIDsInterface := make([]interface{}, len(account.SubscriptionIDs))
-		for j, subID := range account.SubscriptionIDs {
-			subscriptionIDsInterface[j] = subID
-		}
-
-		azurePermissionsStateInterface := make([]interface{}, len(account.AzurePermissionsState))
-		for j, state := range account.AzurePermissionsState {
-			azurePermissionsStateInterface[j] = state
-		}
-
 		serviceAccounts[i] = map[string]interface{}{
 			"account_id":                              account.AccountID,
 			"application_id":                          account.ApplicationID,
+			"application_certificate_name":            account.ApplicationCertificateName,
 			"name":                                    account.Name,
 			"description":                             account.Description,
 			"region":                                  account.Region,
 			"tenant_id":                               account.TenantID,
+			"tenant_name":                             account.TenantName,
 			"account_origin":                          account.AccountOrigin,
+			"expiration_date":                         account.ExpirationDate,
 			"account_state":                           account.AccountState,
+			"ad_group_id":                             account.AdGroupID,
 			"cloud_state":                             account.CloudState,
-			"purposes":                                purposesInterface,
-			"subscription_ids":                        subscriptionIDsInterface,
+			"ad_group_name":                           account.AdGroupName,
+			"purposes":                                account.Purposes,
+			"management_group_id":                     account.ManagementGroupID,
+			"management_group_name":                   account.ManagementGroupName,
+			"subscription_ids":                        account.SubscriptionIDs,
 			"selected_for_workermanagement":           account.SelectedForWorkermanagement,
-			"azure_permissions_state":                 azurePermissionsStateInterface,
-			"azure_permissions_state_check_time_utc": account.AzurePermissionsStateCheckTimeUtc,
+			"azure_permissions_state":                 account.AzurePermissionsState,
+			"azure_permissions_state_check_time_utc":  account.AzurePermissionsStateCheckTimeUtc,
 			"subscription_id_for_worker_deployment":   account.SubscriptionIDForWorkerDeployment,
-			"lighthouse_subscriptions_count":          account.LighthouseSubscriptionsCount,
 		}
 
 		// Build the lookup maps
