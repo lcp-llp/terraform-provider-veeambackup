@@ -38,6 +38,7 @@ func Provider() *schema.Provider {
 			"veeambackup_azure_backup_repository":   dataSourceAzureBackupRepository(),
 			"veeambackup_azure_service_accounts":    dataSourceAzureServiceAccounts(),
 			"veeambackup_azure_service_account":     dataSourceAzureServiceAccount(),
+			"veeambackup_azure_vms":                 dataSourceAzureVMs(),
 		},
 		ConfigureFunc: providerConfigure,
 	}
