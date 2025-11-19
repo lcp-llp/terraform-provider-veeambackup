@@ -58,7 +58,9 @@ type AzureVMDetail struct {
 	HasEphemeralOSDisk     bool   `json:"hasEphemeralOsDisk"`
 	IsController           bool   `json:"isController"`
 	IsDeleted              bool   `json:"isDeleted"`
-}type PagingInfo struct {
+}
+
+type PagingInfo struct {
     Offset int `json:"offset"`
     Limit  int `json:"limit"`
     Total  int `json:"total"`
