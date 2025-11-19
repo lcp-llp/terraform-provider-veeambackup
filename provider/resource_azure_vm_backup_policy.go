@@ -230,7 +230,7 @@ func resourceAzureVMBackupPolicy() *schema.Resource {
 							Description: "Specifies a list of Azure subscription IDs to include in the backup scope.",
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
-									"subscriptionId": {
+									"subscription_id": {
 										Type:        schema.TypeString,
 										Required:    true,
 										Description: "Azure subscription ID.",
@@ -302,7 +302,7 @@ func resourceAzureVMBackupPolicy() *schema.Resource {
 										Description: "Specifies a list of Azure subscription IDs to include in the tag group.",
 										Elem: &schema.Resource{
 											Schema: map[string]*schema.Schema{
-												"subscriptionId": {
+												"subscription_id": {
 													Type:        schema.TypeString,
 													Required:    true,
 													Description: "Azure subscription ID.",
