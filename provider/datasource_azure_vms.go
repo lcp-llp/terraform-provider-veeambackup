@@ -65,7 +65,7 @@ type PagingInfo struct {
     Total  int `json:"total"`
 }
 
-func dataSourceAzureVM() *schema.Resource {
+func dataSourceAzureVMs() *schema.Resource {
 	return &schema.Resource{
 		ReadContext: dataSourceAzureVMRead,
 		Schema: map[string]*schema.Schema{
