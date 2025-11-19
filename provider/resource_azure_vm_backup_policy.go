@@ -44,6 +44,7 @@ func resourceAzureVMBackupPolicy() *schema.Resource {
 
 // VMBackupPolicyRequest represents the complete VM backup policy request
 type VMBackupPolicyRequest struct {
+	ID *string `json:"id,omitempty"`
 	BackupPolicyCommonRequest
 	SelectedItems *PolicyBackupItemsFromClient  `json:"selectedItems,omitempty"`
 	ExcludedItems *PolicyExcludedItemsFromClient `json:"excludedItems,omitempty"`
@@ -140,6 +141,10 @@ func resourceVMBackupPolicyRead(ctx context.Context, d *schema.ResourceData, met
 		return diag.FromErr(fmt.Errorf("failed to decode policy response: %w", err))
 	}
 
+	// Debug logging to understand what's being read
+	fmt.Printf("DEBUG: Read policy %s - IsEnabled from API: %v\n", d.Id(), policyResponse.IsEnabled)
+	fmt.Printf("DEBUG: Current state IsEnabled: %v\n", d.Get("is_enabled"))
+
 	// Set common fields
 	d.Set("is_enabled", policyResponse.IsEnabled)
 	d.Set("name", policyResponse.Name)
@@ -147,6 +152,19 @@ func resourceVMBackupPolicyRead(ctx context.Context, d *schema.ResourceData, met
 	d.Set("service_account_id", policyResponse.ServiceAccountID)
 	d.Set("description", policyResponse.Description)
 	d.Set("backup_type", policyResponse.BackupType)
+
+	fmt.Printf("DEBUG: After setting - IsEnabled state: %v\n", d.Get("is_enabled"))
+
+	// Set regions
+	if len(policyResponse.Regions) > 0 {
+		regions := make([]map[string]interface{}, len(policyResponse.Regions))
+		for i, region := range policyResponse.Regions {
+			regions[i] = map[string]interface{}{
+				"name": region.RegionID,
+			}
+		}
+		d.Set("regions", regions)
+	}
 
 	// Set additional fields as needed...
 
@@ -163,6 +181,11 @@ func resourceVMBackupPolicyUpdate(ctx context.Context, d *schema.ResourceData, m
 		return diag.FromErr(fmt.Errorf("failed to marshal policy request: %w", err))
 	}
 
+	// Log the request for debugging
+	fmt.Printf("DEBUG: Updating policy ID: %s\n", d.Id())
+	fmt.Printf("DEBUG: Request URL: %s/api/v8.1/policies/virtualMachines/%s\n", client.hostname, d.Id())
+	fmt.Printf("DEBUG: Request payload: %s\n", string(jsonData))
+
 	url := fmt.Sprintf("%s/api/v8.1/policies/virtualMachines/%s", client.hostname, d.Id())
 	resp, err := client.MakeAuthenticatedRequest("PUT", url, strings.NewReader(string(jsonData)))
 	if err != nil {
@@ -172,7 +195,7 @@ func resourceVMBackupPolicyUpdate(ctx context.Context, d *schema.ResourceData, m
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to update VM backup policy: %s", string(body)))
+		return diag.FromErr(fmt.Errorf("failed to update VM backup policy (status %d): %s", resp.StatusCode, string(body)))
 	}
 
 	return resourceVMBackupPolicyRead(ctx, d, meta)
@@ -207,6 +230,12 @@ func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
 			TenantID:         d.Get("tenant_id").(string),
 			ServiceAccountID: d.Get("service_account_id").(string),
 		},
+	}
+
+	// For updates, include the ID in the request body
+	if d.Id() != "" {
+		id := d.Id()
+		request.ID = &id
 	}
 
 	if desc, ok := d.GetOk("description"); ok {
