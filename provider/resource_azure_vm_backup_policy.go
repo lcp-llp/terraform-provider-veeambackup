@@ -231,11 +231,11 @@ func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
 		selectedItemsList := selectedItemsData.([]interface{})
 		if len(selectedItemsList) > 0 {
 			selectedItemsMap := selectedItemsList[0].(map[string]interface{})
-			selectedItems := SelectedItems{
-				VirtualMachines: []VirtualMachine{},
-				Subscriptions:   []string{},
-				ResourceGroups:  []string{},
-				Tags:            []string{},
+			selectedItems := PolicyBackupItemsFromClient{
+				VirtualMachines: []PolicyVirtualMachineFromClient{},
+				Subscriptions:   []PolicySubscriptionFromClient{},
+				ResourceGroups:  []PolicyResourceGroupFromClient{},
+				Tags:            []TagFromClient{},
 			}
 
 			// Handle virtual machines
@@ -243,8 +243,8 @@ func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
 				vmsList := vms.([]interface{})
 				for _, vm := range vmsList {
 					vmMap := vm.(map[string]interface{})
-					virtualMachine := VirtualMachine{
-						ID: vmMap["id"].(string),
+					virtualMachine := PolicyVirtualMachineFromClient{
+						ID: stringPtr(vmMap["id"].(string)),
 					}
 					selectedItems.VirtualMachines = append(selectedItems.VirtualMachines, virtualMachine)
 				}
@@ -254,7 +254,11 @@ func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
 			if subs, ok := selectedItemsMap["subscriptions"]; ok && subs != nil {
 				subsList := subs.([]interface{})
 				for _, sub := range subsList {
-					selectedItems.Subscriptions = append(selectedItems.Subscriptions, sub.(string))
+					subMap := sub.(map[string]interface{})
+					subscription := PolicySubscriptionFromClient{
+						SubscriptionID: stringPtr(subMap["subscription_id"].(string)),
+					}
+					selectedItems.Subscriptions = append(selectedItems.Subscriptions, subscription)
 				}
 			}
 
@@ -262,7 +266,11 @@ func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
 			if rgs, ok := selectedItemsMap["resource_groups"]; ok && rgs != nil {
 				rgsList := rgs.([]interface{})
 				for _, rg := range rgsList {
-					selectedItems.ResourceGroups = append(selectedItems.ResourceGroups, rg.(string))
+					rgMap := rg.(map[string]interface{})
+					resourceGroup := PolicyResourceGroupFromClient{
+						ID: stringPtr(rgMap["id"].(string)),
+					}
+					selectedItems.ResourceGroups = append(selectedItems.ResourceGroups, resourceGroup)
 				}
 			}
 
@@ -270,11 +278,55 @@ func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
 			if tags, ok := selectedItemsMap["tags"]; ok && tags != nil {
 				tagsList := tags.([]interface{})
 				for _, tag := range tagsList {
-					selectedItems.Tags = append(selectedItems.Tags, tag.(string))
+					tagMap := tag.(map[string]interface{})
+					tagItem := TagFromClient{
+						Name:  stringPtr(tagMap["name"].(string)),
+						Value: stringPtr(tagMap["value"].(string)),
+					}
+					selectedItems.Tags = append(selectedItems.Tags, tagItem)
 				}
 			}
 
 			request.SelectedItems = &selectedItems
+		}
+	}
+
+	// Build excluded items
+	if excludedItemsData, ok := d.GetOk("excluded_items"); ok {
+		excludedItemsList := excludedItemsData.([]interface{})
+		if len(excludedItemsList) > 0 {
+			excludedItemsMap := excludedItemsList[0].(map[string]interface{})
+			excludedItems := PolicyExcludedItemsFromClient{
+				VirtualMachines: []PolicyVirtualMachineFromClient{},
+				Tags:            []TagFromClient{},
+			}
+
+			// Handle virtual machines
+			if vms, ok := excludedItemsMap["virtual_machines"]; ok && vms != nil {
+				vmsList := vms.([]interface{})
+				for _, vm := range vmsList {
+					vmMap := vm.(map[string]interface{})
+					virtualMachine := PolicyVirtualMachineFromClient{
+						ID: stringPtr(vmMap["id"].(string)),
+					}
+					excludedItems.VirtualMachines = append(excludedItems.VirtualMachines, virtualMachine)
+				}
+			}
+
+			// Handle tags
+			if tags, ok := excludedItemsMap["tags"]; ok && tags != nil {
+				tagsList := tags.([]interface{})
+				for _, tag := range tagsList {
+					tagMap := tag.(map[string]interface{})
+					tagItem := TagFromClient{
+						Name:  stringPtr(tagMap["name"].(string)),
+						Value: stringPtr(tagMap["value"].(string)),
+					}
+					excludedItems.Tags = append(excludedItems.Tags, tagItem)
+				}
+			}
+
+			request.ExcludedItems = &excludedItems
 		}
 	}
 
@@ -441,4 +493,9 @@ func vmExcludedItemsSchema() *schema.Schema {
 			Schema: baseSchema,
 		},
 	}
+}
+
+// stringPtr is a helper function to convert string to *string
+func stringPtr(s string) *string {
+	return &s
 }
