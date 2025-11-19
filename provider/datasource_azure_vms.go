@@ -31,35 +31,34 @@ type AzureVMDataSourceModel struct {
 
 
 type AzureVMResponse struct {
-    Data   map[string]AzureVMDetail `json:"data"`
-    Paging PagingInfo              `json:"paging,omitempty"`
+    Results    []AzureVMDetail `json:"results"`
+    TotalCount int            `json:"totalCount"`
+    Paging     PagingInfo     `json:"paging,omitempty"`
 }
 
 type AzureVMDetail struct {
-    VeeamID                string `json:"veeam_id"`
-    AzureID                string `json:"azure_id"`
-    Name                   string `json:"name"`
-    AzureEnvironment       string `json:"azure_environment"`
-    OSType                 string `json:"os_type"`
-    RegionName             string `json:"region_name"`
-    RegionDisplayName      string `json:"region_display_name"`
-    TotalSizeGB            int    `json:"total_size_gb"`
-    VMSize                 string `json:"vm_size"`
-    VirtualNetwork         string `json:"virtual_network"`
-    Subnet                 string `json:"subnet"`
-    PrivateIP              string `json:"private_ip"`
-    PublicIP               string `json:"public_ip"`
-    SubscriptionID         string `json:"subscription_id"`
-    SubscriptionName       string `json:"subscription_name"`
-    TenantID               string `json:"tenant_id"`
-    ResourceGroupName      string `json:"resource_group_name"`
-    AvailabilityZone       string `json:"availability_zone"`
-    HasEphemeralOSDisk     bool   `json:"has_ephemeral_os_disk"`
-    IsController           bool   `json:"is_controller"`
-    IsDeleted              bool   `json:"is_deleted"`
-}
-
-type PagingInfo struct {
+	VeeamID                string `json:"id"`
+	AzureID                string `json:"azureId"`
+	Name                   string `json:"name"`
+	AzureEnvironment       string `json:"azureEnvironment"`
+	OSType                 string `json:"osType"`
+	RegionName             string `json:"regionName"`
+	RegionDisplayName      string `json:"regionDisplayName"`
+	TotalSizeGB            int    `json:"totalSizeInGB"`
+	VMSize                 string `json:"vmSize"`
+	VirtualNetwork         string `json:"virtualNetwork"`
+	Subnet                 string `json:"subnet"`
+	PrivateIP              string `json:"privateIP"`
+	PublicIP               string `json:"publicIP"`
+	SubscriptionID         string `json:"subscriptionId"`
+	SubscriptionName       string `json:"subscriptionName"`
+	TenantID               string `json:"tenantId"`
+	ResourceGroupName      string `json:"resourceGroupName"`
+	AvailabilityZone       string `json:"availabilityZone"`
+	HasEphemeralOSDisk     bool   `json:"hasEphemeralOsDisk"`
+	IsController           bool   `json:"isController"`
+	IsDeleted              bool   `json:"isDeleted"`
+}type PagingInfo struct {
     Offset int `json:"offset"`
     Limit  int `json:"limit"`
     Total  int `json:"total"`
@@ -314,10 +313,10 @@ func dataSourceAzureVMRead(ctx context.Context, d *schema.ResourceData, meta int
     }
 
     // Create both a rich map and detailed list
-    vmMap := make(map[string]interface{}, len(vmResponse.Data))
-    vmDetailsList := make([]interface{}, 0, len(vmResponse.Data))
+    vmMap := make(map[string]interface{}, len(vmResponse.Results))
+    vmDetailsList := make([]interface{}, 0, len(vmResponse.Results))
     
-    for _, vm := range vmResponse.Data {
+    for _, vm := range vmResponse.Results {
         // Create detailed VM object
         vmDetails := map[string]interface{}{
             "veeam_id":                     vm.VeeamID,
