@@ -226,6 +226,58 @@ func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
 		}
 	}
 
+	// Build selected items
+	if selectedItemsData, ok := d.GetOk("selected_items"); ok {
+		selectedItemsList := selectedItemsData.([]interface{})
+		if len(selectedItemsList) > 0 {
+			selectedItemsMap := selectedItemsList[0].(map[string]interface{})
+			selectedItems := SelectedItems{
+				VirtualMachines: []VirtualMachine{},
+				Subscriptions:   []string{},
+				ResourceGroups:  []string{},
+				Tags:            []string{},
+			}
+
+			// Handle virtual machines
+			if vms, ok := selectedItemsMap["virtual_machines"]; ok && vms != nil {
+				vmsList := vms.([]interface{})
+				for _, vm := range vmsList {
+					vmMap := vm.(map[string]interface{})
+					virtualMachine := VirtualMachine{
+						ID: vmMap["id"].(string),
+					}
+					selectedItems.VirtualMachines = append(selectedItems.VirtualMachines, virtualMachine)
+				}
+			}
+
+			// Handle subscriptions
+			if subs, ok := selectedItemsMap["subscriptions"]; ok && subs != nil {
+				subsList := subs.([]interface{})
+				for _, sub := range subsList {
+					selectedItems.Subscriptions = append(selectedItems.Subscriptions, sub.(string))
+				}
+			}
+
+			// Handle resource groups
+			if rgs, ok := selectedItemsMap["resource_groups"]; ok && rgs != nil {
+				rgsList := rgs.([]interface{})
+				for _, rg := range rgsList {
+					selectedItems.ResourceGroups = append(selectedItems.ResourceGroups, rg.(string))
+				}
+			}
+
+			// Handle tags
+			if tags, ok := selectedItemsMap["tags"]; ok && tags != nil {
+				tagsList := tags.([]interface{})
+				for _, tag := range tagsList {
+					selectedItems.Tags = append(selectedItems.Tags, tag.(string))
+				}
+			}
+
+			request.SelectedItems = &selectedItems
+		}
+	}
+
 	// Build snapshot settings
 	if snapshotData, ok := d.GetOk("snapshot_settings"); ok {
 		snapshotList := snapshotData.([]interface{})

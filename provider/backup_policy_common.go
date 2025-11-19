@@ -721,6 +721,17 @@ type PolicyRegion struct {
 	RegionID string `json:"regionId"`
 }
 
+type SelectedItems struct {
+	VirtualMachines []VirtualMachine `json:"virtualMachines"`
+	Subscriptions   []string         `json:"subscriptions"`
+	ResourceGroups  []string         `json:"resourceGroups"`
+	Tags            []string         `json:"tags"`
+}
+
+type VirtualMachine struct {
+	ID string `json:"id"`
+}
+
 type SnapshotSettings struct {
 	AdditionalTags           []TagFromClient      `json:"additionalTags,omitempty"`
 	CopyOriginalTags         bool                 `json:"copyOriginalTags"`
