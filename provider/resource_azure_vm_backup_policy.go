@@ -11,19 +11,144 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
+
+type VMBackupPolicyRequest struct {
+    ID               *string                  `json:"id,omitempty"`
+    BackupType       string                   `json:"backupType"`
+    IsEnabled        bool                     `json:"isEnabled"`
+    Name             string                   `json:"name"`
+    TenantID         string                   `json:"tenantId"`
+    ServiceAccountID string                   `json:"serviceAccountId"`
+    Description      *string                  `json:"description,omitempty"`
+    Regions          []VMPolicyRegion         `json:"regions"`
+    SelectedItems    *VMPolicySelectedItems   `json:"selectedItems,omitempty"`
+    ExcludedItems    *VMPolicySelectedItems   `json:"excludedItems,omitempty"`
+	RetrySettings    *RetrySettings          `json:"retrySettings,omitempty"`
+	DailySchedule    *DailySchedule          `json:"dailySchedule,omitempty"`
+	WeeklySchedule   *WeeklySchedule         `json:"weeklySchedule,omitempty"`
+	MonthlySchedule  *MonthlySchedule        `json:"monthlySchedule,omitempty"`
+	YearlySchedule   *YearlySchedule         `json:"yearlySchedule,omitempty"`
+	SnapshotSettings *VMSnapshotSettings      `json:"snapshotSettings,omitempty"`
+	PolicyNotificationSettings *[]PolicyNotificationSettings `json:"policyNotificationSettings,omitempty"`
+	HealthCheckSchedule *HealthCheckSchedule    `json:"healthCheckSchedule,omitempty"`
+
+}
+
+type VMBackupPolicyResponse struct {
+    ID               string                   `json:"id"`
+    BackupType       string                   `json:"backupType"`
+    IsEnabled        bool                     `json:"isEnabled"`
+    Name             string                   `json:"name"`
+    TenantID         string                   `json:"tenantId"`
+    ServiceAccountID string                   `json:"serviceAccountId"`
+    Description      *string                   `json:"description"`
+    Regions          []VMPolicyRegion         `json:"regions"`
+	DailySchedule    *DailySchedule          `json:"dailySchedule,omitempty"`
+	WeeklySchedule   *WeeklySchedule         `json:"weeklySchedule,omitempty"`
+	MonthlySchedule  *MonthlySchedule        `json:"monthlySchedule,omitempty"`
+	YearlySchedule   *YearlySchedule         `json:"yearlySchedule,omitempty"`
+	SnapshotSettings *VMSnapshotSettings      `json:"snapshotSettings,omitempty"`
+	PolicyNotificationSettings *[]PolicyNotificationSettings `json:"policyNotificationSettings,omitempty"`
+	HealthCheckSchedule *HealthCheckSchedule    `json:"healthCheckSchedule,omitempty"`
+}
+
+type VMPolicyRegion struct {
+    RegionID string `json:"regionId"`
+}
+
+type VMPolicySelectedItems struct {
+    VirtualMachines []VMPolicyVirtualMachine `json:"virtualMachines"`
+}
+
+type VMPolicyVirtualMachine struct {
+    ID *string `json:"id"`
+}
+
+type VMSnapshotSettings struct {
+    CopyOriginalTags         bool `json:"copyOriginalTags"`
+    ApplicationAwareSnapshot bool `json:"applicationAwareSnapshot"`
+}
+
+// Schedule and settings structs
+type RetrySettings struct {
+    RetryCount int `json:"retryCount,omitempty"`
+}
+
+type DailySchedule struct {
+    DailyType        *string             `json:"dailyType,omitempty"`
+    SelectedDays     []string            `json:"selectedDays,omitempty"`
+    RunsPerHour      *int                `json:"runsPerHour,omitempty"`
+    SnapshotSchedule *SnapshotSchedule   `json:"snapshotSchedule,omitempty"`
+    BackupSchedule   *BackupSchedule     `json:"backupSchedule,omitempty"`
+}
+
+type WeeklySchedule struct {
+    StartTime        *int              `json:"startTime,omitempty"`
+    SnapshotSchedule *SnapshotSchedule `json:"snapshotSchedule,omitempty"`
+    BackupSchedule   *BackupSchedule   `json:"backupSchedule,omitempty"`
+}
+
+type MonthlySchedule struct {
+    StartTime        *int              `json:"startTime,omitempty"`
+    Type             *string           `json:"type,omitempty"`
+    DayOfWeek        *string           `json:"dayOfWeek,omitempty"`
+    DayOfMonth       *int              `json:"dayOfMonth,omitempty"`
+    MonthlyLastDay   *bool             `json:"monthlyLastDay,omitempty"`
+    SnapshotSchedule *SnapshotSchedule `json:"snapshotSchedule,omitempty"`
+    BackupSchedule   *BackupSchedule   `json:"backupSchedule,omitempty"`
+}
+
+type YearlySchedule struct {
+    StartTime            *int    `json:"startTime,omitempty"`
+    Month                *string `json:"month,omitempty"`
+    DayOfWeek            *string `json:"dayOfWeek,omitempty"`
+    DayOfMonth           *int    `json:"dayOfMonth,omitempty"`
+    YearlyLastDay        *bool   `json:"yearlyLastDay,omitempty"`
+    RetentionYearsCount  *int    `json:"retentionYearsCount,omitempty"`
+    TargetRepositoryID   *string `json:"targetRepositoryId,omitempty"`
+}
+
+type SnapshotSchedule struct {
+    Hours            []int    `json:"hours,omitempty"`
+    SelectedDays     []string `json:"selectedDays,omitempty"`
+    SelectedMonths   []string `json:"selectedMonths,omitempty"`
+    SnapshotsToKeep  *int     `json:"snapshotsToKeep,omitempty"`
+}
+
+type BackupSchedule struct {
+    Hours              []int       `json:"hours,omitempty"`
+    SelectedDays       []string    `json:"selectedDays,omitempty"`
+    SelectedMonths     []string    `json:"selectedMonths,omitempty"`
+    Retention          *Retention  `json:"retention,omitempty"`
+    TargetRepositoryID *string     `json:"targetRepositoryId,omitempty"`
+}
+
+type Retention struct {
+    TimeRetentionDuration   *int    `json:"timeRetentionDuration,omitempty"`
+    RetentionDurationType   *string `json:"retentionDurationType,omitempty"`
+}
+
+type PolicyNotificationSettings struct {
+    Recipient        *string `json:"recipient,omitempty"`
+    NotifyOnSuccess  *bool   `json:"notifyOnSuccess,omitempty"`
+    NotifyOnWarning  *bool   `json:"notifyOnWarning,omitempty"`
+    NotifyOnFailure  *bool   `json:"notifyOnFailure,omitempty"`
+}
+
+type HealthCheckSchedule struct {
+    HealthCheckEnabled  *bool    `json:"healthCheckEnabled,omitempty"`
+    LocalTime          *string  `json:"localTime,omitempty"`
+    DayNumberInMonth   *string  `json:"dayNumberInMonth,omitempty"`
+    DayOfWeek          *string  `json:"dayOfWeek,omitempty"`
+    DayOfMonth         *int     `json:"dayOfMonth,omitempty"`
+    Months             []string `json:"months,omitempty"`
+}
+
 
 // resourceAzureVMBackupPolicy returns the resource for Azure VM backup policies
 func resourceAzureVMBackupPolicy() *schema.Resource {
-	// Get the common schema fields
-	commonSchema := BackupPolicyCommonSchema()
-	
-	// Add VM-specific selected_items schema
-	commonSchema["selected_items"] = vmSelectedItemsSchema()
-	
-	// Add VM-specific excluded_items schema
-	commonSchema["excluded_items"] = vmExcludedItemsSchema()
-
 	return &schema.Resource{
 		CreateContext: resourceVMBackupPolicyCreate,
 		ReadContext:   resourceVMBackupPolicyRead,
@@ -32,7 +157,663 @@ func resourceAzureVMBackupPolicy() *schema.Resource {
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},
-		Schema: commonSchema,
+		Schema: map[string]*schema.Schema{
+			"is_enabled": {
+				Type:        schema.TypeBool,
+				Required:    true,
+				Description: "Defines whether the policy is enabled.",
+			},
+			"name": {
+				Type:         schema.TypeString,
+				Required:     true,
+				Description:  "Specifies a name for the backup policy.",
+				ValidateFunc: validation.StringLenBetween(1, 255),
+			},
+			"regions": {
+				Type:        schema.TypeList,
+				Required:    true,
+				MinItems:    1,
+				Description: "Specifies Azure regions where the resources that will be backed up reside.",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"name": {
+							Type:        schema.TypeString,
+							Required:    true,
+							Description: "Azure region name.",
+						},
+					},
+				},
+			},
+			"snapshot_settings": {
+				Type:        schema.TypeList,
+				Required:    true,
+				MaxItems:    1,
+				Description: "Specifies cloud-native snapshot settings for the backup policy.",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"copy_original_tags": {
+							Type:        schema.TypeBool,
+							Optional:    true,
+							Default:     false,
+							Description: "Defines whether to assign to the snapshots tags of virtual disks.",
+						},
+						"application_aware_snapshot": {
+							Type:        schema.TypeBool,
+							Optional:    true,
+							Default:     false,
+							Description: "Defines whether to enable application-aware processing.",
+						},
+					},
+				},
+			},
+			"tenant_id": {
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Specifies a Microsoft Azure ID assigned to a tenant.",
+			},
+			"service_account_id": {
+				Type:         schema.TypeString,
+				Required:     true,
+				Description:  "Specifies the system ID assigned to the service account.",
+				ValidateFunc: validation.IsUUID,
+			},
+			"selected_items": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				MaxItems:    1,
+				Description: "Specifies Azure resources to protect by the backup policy.",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"subscriptions": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: "Specifies a list of Azure subscription IDs to include in the backup scope.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"subscriptionId": {
+										Type:        schema.TypeString,
+										Required:    true,
+										Description: "Azure subscription ID.",
+									},
+								},
+							},
+						},
+						"tags": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: "Specifies a list of tags assigned to Azure resources to include in the backup scope.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"name": {
+										Type:        schema.TypeString,
+										Required:    true,
+										Description: "Tag name.",
+									},
+									"value": {
+										Type:        schema.TypeString,
+										Required:    true,
+										Description: "Tag value.",
+									},
+								},
+							},
+						},
+						"resource_groups": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: "Specifies a list of Azure resource groups to include in the backup scope.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"id": {
+										Type:        schema.TypeString,
+										Required:    true,
+										Description: "Resource group system ID.",
+									},
+								},
+							},
+						},
+						"virtual_machines": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: "Specifies a list of protected Azure VMs.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"id": {
+										Type:        schema.TypeString,
+										Required:    true,
+										Description: "VM system ID.",
+									},
+								},
+							},
+						},
+						"tag_groups": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: "Specifies a list of tag groups assigned to Azure resources to include in the backup scope.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"name": {
+										Type:        schema.TypeString,
+										Required:    true,
+										Description: "Tag group name.",
+									},
+									"subsciption": {
+										Type:        schema.TypeList,
+										Optional:    true,
+										Description: "Specifies a list of Azure subscription IDs to include in the tag group.",
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"subscriptionId": {
+													Type:        schema.TypeString,
+													Required:    true,
+													Description: "Azure subscription ID.",
+												},
+											},
+										},
+									},
+									"resource_groups": {
+										Type:        schema.TypeList,
+										Optional:    true,
+										Description: "Specifies a list of Azure resource groups to include in the tag group.",
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"id": {
+													Type:        schema.TypeString,
+													Required:    true,
+													Description: "Resource group system ID.",
+												},
+											},
+										},
+									},
+									"tags": {
+										Type:        schema.TypeList,
+										Optional:    true,
+										Description: "Specifies a list of tags assigned to Azure resources to include in the tag group.",
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"name": {
+													Type:        schema.TypeString,
+													Required:    true,
+													Description: "Tag name.",
+												},
+												"value": {
+													Type:        schema.TypeString,
+													Required:    true,
+													Description: "Tag value.",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			"excluded_items": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: "Specifies Azure resources to exclude from the backup policy.",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"virtual_machines": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: "Specifies a list of protected Azure VMs to exclude from the backup policy.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"id": {
+										Type:        schema.TypeString,
+										Required:    true,
+										Description: "VM system ID.",
+									},
+								},
+							},
+						},
+						"tags": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: "Specifies a list of tags assigned to Azure resources to exclude from the backup policy.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"name": {
+										Type:        schema.TypeString,
+										Required:    true,
+										Description: "Tag name.",
+									},
+									"value": {
+										Type:        schema.TypeString,
+										Required:    true,
+										Description: "Tag value.",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			"description": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Specifies a description for the backup policy.",
+			},
+			"retry_settings": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: "Specifies retry settings for the backup policy.",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"retry_count": {
+							Type:        schema.TypeInt,
+							Optional:    true,
+							Default:     3,
+							Description: "Specifies the number of retry attempts for failed backup tasks.",
+						},
+					},
+				},
+			},
+			"policy_notification_settings": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: "Specifies notification settings for the backup policy.",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"recipient": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Specifies the email address of the notification recipient.",
+						},
+						"notify_on_success": {
+							Type:        schema.TypeBool,
+							Optional:    true,
+							Default:     false,
+							Description: "Defines whether to send notifications on successful backup jobs.",
+						},
+						"notify_on_warning": {
+							Type:        schema.TypeBool,
+							Optional:    true,
+							Default:     true,
+							Description: "Defines whether to send notifications on backup jobs with warnings.",
+						},
+						"notify_on_failure": {
+							Type:        schema.TypeBool,
+							Optional:    true,
+							Default:     true,
+							Description: "Defines whether to send notifications on failed backup jobs.",
+						},
+					},
+				},
+			},
+			"backup_type": {
+				Type:         schema.TypeString,
+				Required:     true,
+				Description:  "Defines whether you want to include to the backup scope all resources residing in the specified Azure regions.",
+				ValidateFunc: validation.StringInSlice([]string{"AllSubscriptions", "SelectedItems", "Unknown"}, false),
+			},
+			"daily_schedule": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: "Specifies daily backup schedule settings for the backup policy.",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"daily_type": {
+							Type:         schema.TypeString,
+							Optional:     true,
+							Description:  "Specifies the type of daily backup schedule.",
+							ValidateFunc: validation.StringInSlice([]string{"EveryDay", "Weekdays", "SelectedDays", "Unknown"}, false),
+						},
+						"selected_days": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: "Specifies the days of the week when backups should be performed if the daily type is SelectedDays.",
+							Elem: &schema.Schema{
+								Type:         schema.TypeString,
+								ValidateFunc: validation.StringInSlice([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}, false),
+							},
+						},
+						"runs_per_hour": {
+							Type:         schema.TypeInt,
+							Optional:     true,
+							Description:  "Specifies the number of backup runs per hour.",
+							ValidateFunc: validation.IntBetween(1, 24),
+						},
+						"snapshot_schedule": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: "Specifies snapshot schedule settings for daily backups.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"hours": {
+										Type:        schema.TypeList,
+										Optional:    true,
+										Description: "Specifies the hours when snapshots should be taken.",
+										Elem: &schema.Schema{
+											Type:         schema.TypeInt,
+											ValidateFunc: validation.IntBetween(0, 23),
+										},
+									},
+									"snapshots_to_keep": {
+										Type:        schema.TypeInt,
+										Optional:    true,
+										Description: "Specifies the number of snapshots to retain.",
+									},
+								},
+							},
+						},
+						"backup_schedule": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: "Specifies backup schedule settings for daily backups.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"hours": {
+										Type:        schema.TypeList,
+										Optional:    true,
+										Description: "Specifies the hours when backups should be performed.",
+										Elem: &schema.Schema{
+											Type:         schema.TypeInt,
+											ValidateFunc: validation.IntBetween(0, 23),
+										},
+									},
+									"retention": {
+										Type:        schema.TypeList,
+										Optional:    true,
+										Description: "Specifies retention settings for daily backups.",
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"time_retention_duration": {
+													Type:        schema.TypeInt,
+													Optional:    true,
+													Description: "Specifies the duration (in days) to retain daily backups.",
+												},
+											},
+										},
+									},
+									"target_repository_id": {
+										Type:        schema.TypeString,
+										Optional:    true,
+										Description: "Specifies the system ID of the target repository for daily backups.",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			"weekly_schedule": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: "Specifies weekly backup schedule settings for the backup policy.",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"start_time": {
+							Type:        schema.TypeInt,
+							Optional:    true,
+							Description: "Specifies the start time for weekly backups.",
+						},
+						"snapshot_schedule": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: "Specifies snapshot schedule settings for weekly backups.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"selected_days": {
+										Type:        schema.TypeList,
+										Optional:    true,
+										Description: "Specifies the days of the week when snapshots should be taken.",
+										Elem: &schema.Schema{
+											Type:         schema.TypeString,
+											ValidateFunc: validation.StringInSlice([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}, false),
+										},
+									},
+									"snapshots_to_keep": {
+										Type:        schema.TypeInt,
+										Optional:    true,
+										Description: "Specifies the number of snapshots to retain.",
+									},
+								},
+							},
+						},
+						"backup_schedule": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: "Specifies backup schedule settings for weekly backups.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"selected_days": {
+										Type:        schema.TypeList,
+										Optional:    true,
+										Description: "Specifies the days of the week when backups should be performed.",
+										Elem: &schema.Schema{
+											Type:         schema.TypeString,
+											ValidateFunc: validation.StringInSlice([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}, false),
+										},
+									},
+									"retention": {
+										Type:        schema.TypeList,
+										Optional:    true,
+										Description: "Specifies retention settings for weekly backups.",
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"time_retention_duration": {
+													Type:        schema.TypeInt,
+													Optional:    true,
+													Description: "Specifies the duration (in days) to retain weekly backups.",
+												},
+												"retention_duration_type": {
+													Type:         schema.TypeString,
+													Optional:     true,
+													Description:  "Specifies the type of retention duration.",
+													ValidateFunc: validation.StringInSlice([]string{"Days", "Months", "Years", "Unknown"}, false),
+												},
+											},
+										},
+									},
+									"target_repository_id": {
+										Type:        schema.TypeString,
+										Optional:    true,
+										Description: "Specifies the system ID of the target repository for weekly backups.",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			"monthly_schedule": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: "Specifies monthly backup schedule settings for the backup policy.",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"start_time": {
+							Type:        schema.TypeInt,
+							Optional:    true,
+							Description: "Specifies the start time for monthly backups.",
+						},
+						"type": {
+							Type:         schema.TypeString,
+							Optional:     true,
+							Description:  "Specifies the day of the month when the backup policy will run.",
+							ValidateFunc: validation.StringInSlice([]string{"First", "Second", "Third", "Fourth", "Last", "SelectedDay", "Unknown"}, false),
+						},
+						"day_of_week": {
+							Type:         schema.TypeString,
+							Optional:     true,
+							Description:  "Applies if one of the First, Second, Third, Fourth or Last values is specified for the type parameter Specifies the days of the week when the backup policy will run.",
+							ValidateFunc: validation.StringInSlice([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}, false),
+						},
+						"day_of_month": {
+							Type:        schema.TypeInt,
+							Optional:    true,
+							Description: "Applies if SelectedDay is specified for the type parameter. Specifies the day of the month when the backup policy will run.",
+						},
+						"monthly_last_day": {
+							Type:        schema.TypeBool,
+							Optional:    true,
+							Description: "Defines whether the backup policy will run on the last day of the month.",
+						},
+						"snapshot_schedule": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: "Specifies snapshot schedule settings for monthly backups.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"selected_months": {
+										Type:        schema.TypeList,
+										Optional:    true,
+										Description: "Specifies the months when snapshots should be taken.",
+										Elem: &schema.Schema{
+											Type:         schema.TypeString,
+											ValidateFunc: validation.StringInSlice([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}, false),
+										},
+									},
+									"snapshots_to_keep": {
+										Type:        schema.TypeInt,
+										Optional:    true,
+										Description: "Specifies the number of snapshots to retain.",
+									},
+								},
+							},
+						},
+						"backup_schedule": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: "Specifies backup schedule settings for monthly backups.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"selected_months": {
+										Type:        schema.TypeList,
+										Optional:    true,
+										Description: "Specifies the months when backups should be performed.",
+										Elem: &schema.Schema{
+											Type:         schema.TypeString,
+											ValidateFunc: validation.StringInSlice([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}, false),
+										},
+									},
+									"retention": {
+										Type:        schema.TypeList,
+										Optional:    true,
+										Description: "Specifies retention settings for monthly backups.",
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"time_retention_duration": {
+													Type:        schema.TypeInt,
+													Optional:    true,
+													Description: "Specifies the duration (in days) to retain monthly backups.",
+												},
+												"retention_duration_type": {
+													Type:         schema.TypeString,
+													Optional:     true,
+													Description:  "Specifies the type of retention duration.",
+													ValidateFunc: validation.StringInSlice([]string{"Days", "Months", "Years", "Unknown"}, false),
+												},
+											},
+										},
+									},
+									"target_repository_id": {
+										Type:        schema.TypeString,
+										Optional:    true,
+										Description: "Specifies the system ID of the target repository for monthly backups.",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			"yearly_schedule": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: "Specifies yearly backup schedule settings for the backup policy.",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"start_time": {
+							Type:        schema.TypeInt,
+							Optional:    true,
+							Description: "Specifies the start time for yearly backups.",
+						},
+						"month": {
+							Type:         schema.TypeString,
+							Optional:     true,
+							Description:  "Specifies the month when the backup policy will run.",
+							ValidateFunc: validation.StringInSlice([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}, false),
+						},
+						"day_of_week": {
+							Type:         schema.TypeString,
+							Optional:     true,
+							Description:  "Specifies the day of the week when the backup policy will run.",
+							ValidateFunc: validation.StringInSlice([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Unknown"}, false),
+						},
+						"day_of_month": {
+							Type:        schema.TypeInt,
+							Optional:    true,
+							Description: "Specifies the day of the month when the backup policy will run.",
+						},
+						"yearly_last_day": {
+							Type:        schema.TypeBool,
+							Optional:    true,
+							Description: "Defines whether the backup policy will run on the last day of the month.",
+						},
+						"retention_years_count": {
+							Type:        schema.TypeInt,
+							Optional:    true,
+							Description: "Specifies the number of years to retain yearly backups.",
+						},
+						"target_repository_id": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Specifies the system ID of the target repository for yearly backups.",
+						},
+					},
+				},
+			},
+			"health_check_settings": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: "Specifies health check settings for the backup policy.",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"health_check_enabled": {
+							Type:        schema.TypeBool,
+							Optional:    true,
+							Default:     false,
+							Description: "Defines whether health checks are enabled for the backup policy.",
+						},
+							"local_time": {
+								Type:        schema.TypeString,
+								Optional:    true,
+								Description: "Specifies the date and time when the health check will run.",
+							},
+						"day_number_in_month": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Specifies the day number in the month when the health check will run.",
+							ValidateFunc: validation.StringInSlice([]string{"First", "Second", "Third", "Fourth", "Last", "OnDay", "EveryDay", "EverySelectedDay", "Unknown"}, false),
+						},
+						"day_of_week": {
+							Type:         schema.TypeString,
+							Optional:     true,
+							Description:  "Specifies the day of the week when the health check will run.",
+							ValidateFunc: validation.StringInSlice([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}, false),
+						},
+						"day_of_month": {
+							Type:        schema.TypeInt,
+							Optional:    true,
+							Description: "Specifies the day of the month when the health check will run.",
+						},
+						"months": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: "Specifies the months when the health check will run.",
+							Elem: &schema.Schema{
+								Type:         schema.TypeString,
+								ValidateFunc: validation.StringInSlice([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}, false),
+							},
+						},
+					},
+				},
+			},
+		},
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(10 * time.Minute),
 			Read:   schema.DefaultTimeout(5 * time.Minute),
@@ -42,48 +823,6 @@ func resourceAzureVMBackupPolicy() *schema.Resource {
 	}
 }
 
-// VMBackupPolicyRequest represents the complete VM backup policy request
-type VMBackupPolicyRequest struct {
-	ID *string `json:"id,omitempty"`
-	BackupPolicyCommonRequest
-	SelectedItems *PolicyBackupItemsFromClient  `json:"selectedItems,omitempty"`
-	ExcludedItems *PolicyExcludedItemsFromClient `json:"excludedItems,omitempty"`
-}
-
-// VM-specific structs
-type PolicyBackupItemsFromClient struct {
-	Subscriptions    []PolicySubscriptionFromClient   `json:"subscriptions,omitempty"`
-	Tags             []TagFromClient                  `json:"tags,omitempty"`
-	ResourceGroups   []PolicyResourceGroupFromClient `json:"resourceGroups,omitempty"`
-	VirtualMachines  []PolicyVirtualMachineFromClient `json:"virtualMachines,omitempty"`
-	TagGroups        []PolicyTagGroupFromClient       `json:"tagGroups,omitempty"`
-}
-
-type PolicyExcludedItemsFromClient struct {
-	VirtualMachines []PolicyVirtualMachineFromClient `json:"virtualMachines,omitempty"`
-	Tags            []TagFromClient                  `json:"tags,omitempty"`
-}
-
-type PolicySubscriptionFromClient struct {
-	SubscriptionID *string `json:"subscriptionId,omitempty"`
-}
-
-type PolicyResourceGroupFromClient struct {
-	ID *string `json:"id,omitempty"`
-}
-
-type PolicyVirtualMachineFromClient struct {
-	ID *string `json:"id,omitempty"`
-}
-
-type PolicyTagGroupFromClient struct {
-	Name          string                        `json:"name"`
-	Subscription  *PolicySubscriptionFromClient `json:"subscription,omitempty"`
-	ResourceGroup *PolicyResourceGroupFromClient `json:"resourceGroup,omitempty"`
-	Tags          []TagFromClient               `json:"tags"`
-}
-
-// CRUD operations
 func resourceVMBackupPolicyCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*AuthClient)
 
@@ -101,9 +840,9 @@ func resourceVMBackupPolicyCreate(ctx context.Context, d *schema.ResourceData, m
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to create VM backup policy: %s", string(body)))
+		return diag.FromErr(fmt.Errorf("failed to create VM backup policy (status %d): %s", resp.StatusCode, string(body)))
 	}
 
 	var policyResponse VMBackupPolicyResponse
@@ -112,7 +851,6 @@ func resourceVMBackupPolicyCreate(ctx context.Context, d *schema.ResourceData, m
 	}
 
 	d.SetId(policyResponse.ID)
-
 	return resourceVMBackupPolicyRead(ctx, d, meta)
 }
 
@@ -141,19 +879,13 @@ func resourceVMBackupPolicyRead(ctx context.Context, d *schema.ResourceData, met
 		return diag.FromErr(fmt.Errorf("failed to decode policy response: %w", err))
 	}
 
-	// Debug logging to understand what's being read
-	fmt.Printf("DEBUG: Read policy %s - IsEnabled from API: %v\n", d.Id(), policyResponse.IsEnabled)
-	fmt.Printf("DEBUG: Current state IsEnabled: %v\n", d.Get("is_enabled"))
-
-	// Set common fields
+	// Set fields directly
 	d.Set("is_enabled", policyResponse.IsEnabled)
 	d.Set("name", policyResponse.Name)
 	d.Set("tenant_id", policyResponse.TenantID)
 	d.Set("service_account_id", policyResponse.ServiceAccountID)
 	d.Set("description", policyResponse.Description)
 	d.Set("backup_type", policyResponse.BackupType)
-
-	fmt.Printf("DEBUG: After setting - IsEnabled state: %v\n", d.Get("is_enabled"))
 
 	// Set regions
 	if len(policyResponse.Regions) > 0 {
@@ -165,8 +897,6 @@ func resourceVMBackupPolicyRead(ctx context.Context, d *schema.ResourceData, met
 		}
 		d.Set("regions", regions)
 	}
-
-	// Set additional fields as needed...
 
 	return nil
 }
@@ -181,11 +911,6 @@ func resourceVMBackupPolicyUpdate(ctx context.Context, d *schema.ResourceData, m
 		return diag.FromErr(fmt.Errorf("failed to marshal policy request: %w", err))
 	}
 
-	// Log the request for debugging
-	fmt.Printf("DEBUG: Updating policy ID: %s\n", d.Id())
-	fmt.Printf("DEBUG: Request URL: %s/api/v8.1/policies/virtualMachines/%s\n", client.hostname, d.Id())
-	fmt.Printf("DEBUG: Request payload: %s\n", string(jsonData))
-
 	url := fmt.Sprintf("%s/api/v8.1/policies/virtualMachines/%s", client.hostname, d.Id())
 	resp, err := client.MakeAuthenticatedRequest("PUT", url, strings.NewReader(string(jsonData)))
 	if err != nil {
@@ -193,7 +918,7 @@ func resourceVMBackupPolicyUpdate(ctx context.Context, d *schema.ResourceData, m
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(resp.Body)
 		return diag.FromErr(fmt.Errorf("failed to update VM backup policy (status %d): %s", resp.StatusCode, string(body)))
 	}
@@ -223,13 +948,11 @@ func resourceVMBackupPolicyDelete(ctx context.Context, d *schema.ResourceData, m
 // Helper functions
 func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
 	request := VMBackupPolicyRequest{
-		BackupPolicyCommonRequest: BackupPolicyCommonRequest{
-			BackupType:       d.Get("backup_type").(string),
-			IsEnabled:        d.Get("is_enabled").(bool),
-			Name:             d.Get("name").(string),
-			TenantID:         d.Get("tenant_id").(string),
-			ServiceAccountID: d.Get("service_account_id").(string),
-		},
+		BackupType:       d.Get("backup_type").(string),
+		IsEnabled:        d.Get("is_enabled").(bool),
+		Name:             d.Get("name").(string),
+		TenantID:         d.Get("tenant_id").(string),
+		ServiceAccountID: d.Get("service_account_id").(string),
 	}
 
 	// For updates, include the ID in the request body
@@ -248,7 +971,7 @@ func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
 		regions := regionsData.([]interface{})
 		for _, r := range regions {
 			region := r.(map[string]interface{})
-			policyRegion := PolicyRegion{
+			policyRegion := VMPolicyRegion{
 				RegionID: region["name"].(string),
 			}
 			request.Regions = append(request.Regions, policyRegion)
@@ -260,11 +983,8 @@ func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
 		selectedItemsList := selectedItemsData.([]interface{})
 		if len(selectedItemsList) > 0 {
 			selectedItemsMap := selectedItemsList[0].(map[string]interface{})
-			selectedItems := PolicyBackupItemsFromClient{
-				VirtualMachines: []PolicyVirtualMachineFromClient{},
-				Subscriptions:   []PolicySubscriptionFromClient{},
-				ResourceGroups:  []PolicyResourceGroupFromClient{},
-				Tags:            []TagFromClient{},
+			selectedItems := VMPolicySelectedItems{
+				VirtualMachines: []VMPolicyVirtualMachine{},
 			}
 
 			// Handle virtual machines
@@ -272,90 +992,14 @@ func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
 				vmsList := vms.([]interface{})
 				for _, vm := range vmsList {
 					vmMap := vm.(map[string]interface{})
-					virtualMachine := PolicyVirtualMachineFromClient{
+					virtualMachine := VMPolicyVirtualMachine{
 						ID: stringPtr(vmMap["id"].(string)),
 					}
 					selectedItems.VirtualMachines = append(selectedItems.VirtualMachines, virtualMachine)
 				}
 			}
 
-			// Handle subscriptions
-			if subs, ok := selectedItemsMap["subscriptions"]; ok && subs != nil {
-				subsList := subs.([]interface{})
-				for _, sub := range subsList {
-					subMap := sub.(map[string]interface{})
-					subscription := PolicySubscriptionFromClient{
-						SubscriptionID: stringPtr(subMap["subscription_id"].(string)),
-					}
-					selectedItems.Subscriptions = append(selectedItems.Subscriptions, subscription)
-				}
-			}
-
-			// Handle resource groups
-			if rgs, ok := selectedItemsMap["resource_groups"]; ok && rgs != nil {
-				rgsList := rgs.([]interface{})
-				for _, rg := range rgsList {
-					rgMap := rg.(map[string]interface{})
-					resourceGroup := PolicyResourceGroupFromClient{
-						ID: stringPtr(rgMap["id"].(string)),
-					}
-					selectedItems.ResourceGroups = append(selectedItems.ResourceGroups, resourceGroup)
-				}
-			}
-
-			// Handle tags
-			if tags, ok := selectedItemsMap["tags"]; ok && tags != nil {
-				tagsList := tags.([]interface{})
-				for _, tag := range tagsList {
-					tagMap := tag.(map[string]interface{})
-					tagItem := TagFromClient{
-						Name:  stringPtr(tagMap["name"].(string)),
-						Value: stringPtr(tagMap["value"].(string)),
-					}
-					selectedItems.Tags = append(selectedItems.Tags, tagItem)
-				}
-			}
-
 			request.SelectedItems = &selectedItems
-		}
-	}
-
-	// Build excluded items
-	if excludedItemsData, ok := d.GetOk("excluded_items"); ok {
-		excludedItemsList := excludedItemsData.([]interface{})
-		if len(excludedItemsList) > 0 {
-			excludedItemsMap := excludedItemsList[0].(map[string]interface{})
-			excludedItems := PolicyExcludedItemsFromClient{
-				VirtualMachines: []PolicyVirtualMachineFromClient{},
-				Tags:            []TagFromClient{},
-			}
-
-			// Handle virtual machines
-			if vms, ok := excludedItemsMap["virtual_machines"]; ok && vms != nil {
-				vmsList := vms.([]interface{})
-				for _, vm := range vmsList {
-					vmMap := vm.(map[string]interface{})
-					virtualMachine := PolicyVirtualMachineFromClient{
-						ID: stringPtr(vmMap["id"].(string)),
-					}
-					excludedItems.VirtualMachines = append(excludedItems.VirtualMachines, virtualMachine)
-				}
-			}
-
-			// Handle tags
-			if tags, ok := excludedItemsMap["tags"]; ok && tags != nil {
-				tagsList := tags.([]interface{})
-				for _, tag := range tagsList {
-					tagMap := tag.(map[string]interface{})
-					tagItem := TagFromClient{
-						Name:  stringPtr(tagMap["name"].(string)),
-						Value: stringPtr(tagMap["value"].(string)),
-					}
-					excludedItems.Tags = append(excludedItems.Tags, tagItem)
-				}
-			}
-
-			request.ExcludedItems = &excludedItems
 		}
 	}
 
@@ -364,164 +1008,16 @@ func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
 		snapshotList := snapshotData.([]interface{})
 		if len(snapshotList) > 0 {
 			snapshot := snapshotList[0].(map[string]interface{})
-			snapshotSettings := SnapshotSettings{
+			snapshotSettings := VMSnapshotSettings{
 				CopyOriginalTags:         snapshot["copy_original_tags"].(bool),
 				ApplicationAwareSnapshot: snapshot["application_aware_snapshot"].(bool),
-			}
-
-			// Handle additional tags
-			if additionalTags, ok := snapshot["additional_tags"]; ok && additionalTags != nil {
-				tags := additionalTags.([]interface{})
-				for _, tagInterface := range tags {
-					tag := tagInterface.(map[string]interface{})
-					tagFromClient := TagFromClient{}
-					if name, ok := tag["name"]; ok && name != nil {
-						nameStr := name.(string)
-						tagFromClient.Name = &nameStr
-					}
-					if value, ok := tag["value"]; ok && value != nil {
-						valueStr := value.(string)
-						tagFromClient.Value = &valueStr
-					}
-					snapshotSettings.AdditionalTags = append(snapshotSettings.AdditionalTags, tagFromClient)
-				}
-			}
-
-			// Handle user scripts
-			if userScriptsData, ok := snapshot["user_scripts"]; ok && userScriptsData != nil {
-				userScriptsList := userScriptsData.([]interface{})
-				if len(userScriptsList) > 0 {
-					userScriptsMap := userScriptsList[0].(map[string]interface{})
-					userScripts := &UserScripts{}
-
-					if windowsData, ok := userScriptsMap["windows"]; ok && windowsData != nil {
-						windowsList := windowsData.([]interface{})
-						if len(windowsList) > 0 {
-							windowsMap := windowsList[0].(map[string]interface{})
-							windowsSettings := &UserScriptsSettings{
-								ScriptsEnabled:          windowsMap["scripts_enabled"].(bool),
-								RepositorySnapshotsOnly: windowsMap["repository_snapshots_only"].(bool),
-								IgnoreExitCodes:         windowsMap["ignore_exit_codes"].(bool),
-								IgnoreMissingScripts:    windowsMap["ignore_missing_scripts"].(bool),
-							}
-
-							if preScriptPath, ok := windowsMap["pre_script_path"]; ok && preScriptPath != nil && preScriptPath.(string) != "" {
-								pathStr := preScriptPath.(string)
-								windowsSettings.PreScriptPath = &pathStr
-							}
-							if preScriptArgs, ok := windowsMap["pre_script_arguments"]; ok && preScriptArgs != nil && preScriptArgs.(string) != "" {
-								argsStr := preScriptArgs.(string)
-								windowsSettings.PreScriptArguments = &argsStr
-							}
-							if postScriptPath, ok := windowsMap["post_script_path"]; ok && postScriptPath != nil && postScriptPath.(string) != "" {
-								pathStr := postScriptPath.(string)
-								windowsSettings.PostScriptPath = &pathStr
-							}
-							if postScriptArgs, ok := windowsMap["post_script_arguments"]; ok && postScriptArgs != nil && postScriptArgs.(string) != "" {
-								argsStr := postScriptArgs.(string)
-								windowsSettings.PostScriptArguments = &argsStr
-							}
-
-							userScripts.Windows = windowsSettings
-						}
-					}
-					snapshotSettings.UserScripts = userScripts
-				}
 			}
 
 			request.SnapshotSettings = &snapshotSettings
 		}
 	}
 
-	// Add VM-specific selected items and excluded items as needed...
-
 	return request
-}
-
-// VMBackupPolicyResponse represents the API response
-type VMBackupPolicyResponse struct {
-	ID                          string                         `json:"id"`
-	IsEnabled                   bool                           `json:"isEnabled"`
-	Name                        string                         `json:"name"`
-	TenantID                    string                         `json:"tenantId"`
-	ServiceAccountID            string                         `json:"serviceAccountId"`
-	Description                 *string                        `json:"description"`
-	BackupType                  *string                        `json:"backupType"`
-	Regions                     []PolicyRegion                 `json:"regions"`
-	SnapshotSettings            SnapshotSettings               `json:"snapshotSettings"`
-	SelectedItems               *PolicyBackupItemsFromClient   `json:"selectedItems"`
-	ExcludedItems               *PolicyExcludedItemsFromClient `json:"excludedItems"`
-	RetrySettings               *RetrySettings                 `json:"retrySettings"`
-	PolicyNotificationSettings *PolicyNotificationSettings    `json:"policyNotificationSettings"`
-	DailySchedule               *DailySchedule                 `json:"dailySchedule"`
-	WeeklySchedule              *WeeklySchedule                `json:"weeklySchedule"`
-	MonthlySchedule             *MonthlySchedule               `json:"monthlySchedule"`
-	YearlySchedule              *YearlySchedule                `json:"yearlySchedule"`
-	HealthCheckSchedule         *HealthCheckSchedule           `json:"healthCheckSchedule"`
-	CreatedAt                   *string                        `json:"createdAt"`
-	UpdatedAt                   *string                        `json:"updatedAt"`
-}
-
-// vmSelectedItemsSchema returns the VM-specific selected items schema
-func vmSelectedItemsSchema() *schema.Schema {
-	baseSchema := BaseSelectedItemsSchema()
-	
-	// Add VM-specific virtual_machines field
-	baseSchema["virtual_machines"] = &schema.Schema{
-		Type:        schema.TypeList,
-		Optional:    true,
-		Description: "Specifies a list of protected Azure VMs.",
-		Elem: &schema.Resource{
-			Schema: map[string]*schema.Schema{
-				"id": {
-					Type:        schema.TypeString,
-					Optional:    true,
-					Description: "Specifies the system ID assigned in the Veeam Backup for Microsoft Azure to the protected Azure VM.",
-				},
-			},
-		},
-	}
-	
-	return &schema.Schema{
-		Type:        schema.TypeList,
-		Optional:    true,
-		MaxItems:    1,
-		Description: "Specifies Azure resources to protect by the backup policy. Applies if the SelectedItems value is specified for the backup_type parameter.",
-		Elem: &schema.Resource{
-			Schema: baseSchema,
-		},
-	}
-}
-
-// vmExcludedItemsSchema returns the VM-specific excluded items schema
-func vmExcludedItemsSchema() *schema.Schema {
-	baseSchema := BaseExcludedItemsSchema()
-	
-	// Add VM-specific virtual_machines field
-	baseSchema["virtual_machines"] = &schema.Schema{
-		Type:        schema.TypeList,
-		Optional:    true,
-		Description: "Specifies the Azure VMs that will be excluded from the backup policy.",
-		Elem: &schema.Resource{
-			Schema: map[string]*schema.Schema{
-				"id": {
-					Type:        schema.TypeString,
-					Optional:    true,
-					Description: "Specifies the system ID assigned in the Veeam Backup for Microsoft Azure to the protected Azure VM.",
-				},
-			},
-		},
-	}
-	
-	return &schema.Schema{
-		Type:        schema.TypeList,
-		Optional:    true,
-		MaxItems:    1,
-		Description: "Specifies Azure tags to identify the resources that should be excluded from the backup scope.",
-		Elem: &schema.Resource{
-			Schema: baseSchema,
-		},
-	}
 }
 
 // stringPtr is a helper function to convert string to *string
