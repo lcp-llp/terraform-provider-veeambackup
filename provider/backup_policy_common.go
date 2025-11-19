@@ -37,14 +37,6 @@ func BackupPolicyCommonSchema() map[string]*schema.Schema {
 						Required:    true,
 						Description: "Azure region name.",
 					},
-					"subscriptions": {
-						Type:        schema.TypeList,
-						Optional:    true,
-						Description: "List of subscription IDs for this region.",
-						Elem: &schema.Schema{
-							Type: schema.TypeString,
-						},
-					},
 				},
 			},
 		},
@@ -726,8 +718,7 @@ type BackupPolicyCommonRequest struct {
 
 // Supporting structs for backup policy
 type PolicyRegion struct {
-	Name          string   `json:"name"`
-	Subscriptions []string `json:"subscriptions,omitempty"`
+	RegionID string `json:"regionId"`
 }
 
 type SnapshotSettings struct {

@@ -220,12 +220,7 @@ func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
 		for _, r := range regions {
 			region := r.(map[string]interface{})
 			policyRegion := PolicyRegion{
-				Name: region["name"].(string),
-			}
-			if subs, ok := region["subscriptions"]; ok {
-				for _, sub := range subs.([]interface{}) {
-					policyRegion.Subscriptions = append(policyRegion.Subscriptions, sub.(string))
-				}
+				RegionID: region["name"].(string),
 			}
 			request.Regions = append(request.Regions, policyRegion)
 		}
