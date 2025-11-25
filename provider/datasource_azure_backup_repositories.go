@@ -253,7 +253,7 @@ func dataSourceAzureBackupRepositories() *schema.Resource {
 }
 
 func dataSourceAzureBackupRepositoriesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AuthClient)
+	client := meta.(*AzureBackupClient)
 
 	// Build query parameters
 	params := url.Values{}
@@ -315,7 +315,7 @@ func dataSourceAzureBackupRepositoriesRead(ctx context.Context, d *schema.Resour
 	}
 
 	// Make the API request
-	resp, err := client.MakeAuthenticatedRequest("GET", apiURL, nil)
+	resp, err := client.MakeAuthenticatedRequestWithVersion("GET", apiURL, nil)
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to retrieve backup repositories: %w", err))
 	}

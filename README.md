@@ -1,14 +1,22 @@
-# Terraform Provider for Veeam Backup for Microsoft Azure
+# Terraform Provider for Veeam
 
-This Terraform provider enables you to manage and query Veeam Backup for Microsoft Azure infrastructure using Terraform.
+This unified Terraform provider enables you to manage and query multiple Veeam services including Veeam Backup for Microsoft Azure and Veeam Backup & Replication using Terraform.
+
+## Supported Services
+
+- **Veeam Backup for Microsoft Azure**: Manage Azure backup policies, service accounts, and repositories
+- **Veeam Backup & Replication** (Coming Soon): Manage VBR backup jobs, repositories, and infrastructure
+- **Future AWS Support**: Planned support for Veeam backup services on AWS
 
 ## Features
 
-- **Authentication**: OAuth2 authentication with API key and username/password
-- **Data Sources**: Query backup repositories and Azure service accounts
-- **Filtering**: Advanced filtering options for all data sources
+- **Multi-Service Support**: Single provider for all Veeam services
+- **Service-Specific Authentication**: Each service uses its appropriate authentication method
+- **Backward Compatibility**: Existing Azure configurations continue to work unchanged
+- **Smart Resource Routing**: Resources automatically use the correct service client
+- **OAuth2 Authentication**: Secure token-based authentication with refresh support
+- **Advanced Filtering**: Comprehensive filtering options for all data sources
 - **Lookup Maps**: Convenient name-to-ID and ID-to-name mappings
-- **Pagination**: Support for paginated API responses
 - **Error Handling**: Comprehensive error handling and validation
 
 ## Quick Start
@@ -18,37 +26,112 @@ This Terraform provider enables you to manage and query Veeam Backup for Microso
 ```hcl
 terraform {
   required_providers {
-    veeam = {
-      source = "lcp-llp/veeam"
+    veeambackup = {
+      source = "lcp-llp/veeambackup"
+      version = "~> 1.0"
     }
   }
 }
 
-provider "veeam" {
-  hostname = "https://your-veeam-server.com"
-  username = "your-username"
-  password = "your-password"
+# Configure Veeam services
+provider "veeambackup" {
+  # Veeam Backup for Azure
+  azure {
+    hostname = "https://azure-backup.example.com"
+    username = "admin@example.com"
+    password = "your-azure-password"
+  }
+  
+  # Veeam Backup & Replication
+  vbr {
+    hostname    = "vbr-server.example.com"
+    port        = "9419"
+    username    = "administrator"
+    password    = "your-vbr-password"
+    api_version = "1.3-rev1"
+  }
 }
 ```
 
-### 2. Query Backup Repositories
+### Environment Variables
+
+```bash
+# Azure Backup for Azure
+export VEEAM_AZURE_HOSTNAME="https://azure-backup.example.com"
+export VEEAM_AZURE_USERNAME="admin@example.com"
+export VEEAM_AZURE_PASSWORD="your-password"
+
+# Veeam Backup & Replication
+export VEEAM_VBR_HOSTNAME="vbr-server.example.com"
+export VEEAM_VBR_PORT="9419"
+export VEEAM_VBR_USERNAME="administrator"
+export VEEAM_VBR_PASSWORD="your-password"
+export VEEAM_VBR_API_VERSION="1.3-rev1"
+```
+
+### 2. Use Azure Backup Resources
 
 ```hcl
-# Get all backup repositories
-data "veeam_azure_backup_repositories" "all" {}
-
-# Get a specific repository
-data "veeam_azure_backup_repository" "production" {
-  repository_id = data.veeambackup_azure_backup_repositories.all.repositories_by_name["production-repo"]
+# Create Azure service account
+resource "veeambackup_azure_service_account" "production" {
+  name          = "Production Backup SA"
+  tenant_id     = "12345678-1234-1234-1234-123456789abc"
+  client_id     = "87654321-4321-4321-4321-cba987654321"
+  client_secret = "your-client-secret"
+  description   = "Service account for production backups"
 }
 
-output "repository_info" {
-  value = {
-    name   = data.veeambackup_azure_backup_repository.production.name
-    status = data.veeambackup_azure_backup_repository.production.status
-    tier   = data.veeambackup_azure_backup_repository.production.tier
+# Create Azure VM backup policy
+resource "veeambackup_azure_vm_backup_policy" "daily" {
+  name             = "Daily VM Backup"
+  service_account_id = veeambackup_azure_service_account.production.id
+  tenant_id        = "12345678-1234-1234-1234-123456789abc"
+  backup_type      = "Snapshot"
+  is_enabled       = true
+  description      = "Daily backup policy for production VMs"
+  
+  regions {
+    region_id = "eastus"
   }
 }
+
+# Query backup repositories
+data "veeambackup_azure_backup_repositories" "all" {}
+
+data "veeambackup_azure_backup_repository" "production" {
+  repository_id = data.veeambackup_azure_backup_repositories.all.repositories_by_name["production-repo"]
+}
+```
+
+### 3. Future VBR Resources (Coming Soon)
+
+```hcl
+# VBR Backup Job (Future)
+# resource "veeambackup_vbr_job" "daily_backup" {
+#   name          = "Daily VM Backup"
+#   description   = "Daily backup of critical VMs"
+#   repository_id = "12345"
+#   
+#   schedule {
+#     type       = "daily"
+#     start_time = "22:00"
+#     timezone   = "UTC"
+#   }
+#   
+#   virtual_machines = [
+#     "vm-web-01",
+#     "vm-db-01"
+#   ]
+# }
+
+# VBR Repository (Future)
+# resource "veeambackup_vbr_repository" "local_repo" {
+#   name        = "Local Repository"
+#   path        = "D:\\VeeamBackup"
+#   description = "Local backup repository"
+#   max_concurrent_tasks = 4
+# }
+```
 ```
 
 ### 3. Query Service Accounts
@@ -141,20 +224,40 @@ locals {
 }
 ```
 
-## API Compatibility
+## Service Compatibility
 
-This provider is designed for Veeam Backup for Microsoft Azure version 8.1 REST API.
+### Veeam Backup for Microsoft Azure
+- **API Version**: 8.1+
+- **Protocol**: HTTPS
+- **Authentication**: OAuth2 with username/password
+- **Default Port**: 443
+
+### Veeam Backup & Replication
+- **API Version**: 1.3-rev1 (VBR 13+)
+- **Protocol**: HTTPS
+- **Authentication**: OAuth2 with username/password + x-api-version header
+- **Default Port**: 9419
+
+## Resource Naming Convention
+
+The provider uses a consistent naming convention to identify which service each resource belongs to:
+
+- `veeambackup_azure_*` - Veeam Backup for Azure resources
+- `veeambackup_vbr_*` - Veeam Backup & Replication resources  
+- `veeambackup_aws_*` - Future AWS backup resources
 
 ## Documentation
 
 - [Provider Configuration](./docs/index.md)
-- [Data Sources](./docs/data-sources/)
+- [Azure Data Sources](./docs/data-sources/)
+- [Azure Resources](./docs/resources/)
 
 ## Requirements
 
 - Terraform 0.13+
-- Veeam Backup for Microsoft Azure 8.1+
-- Valid API credentials and network access to Veeam server
+- **For Azure**: Veeam Backup for Microsoft Azure 8.1+
+- **For VBR**: Veeam Backup & Replication 13+ with REST API enabled
+- Valid credentials and network access to respective Veeam servers
 
 ## Development
 

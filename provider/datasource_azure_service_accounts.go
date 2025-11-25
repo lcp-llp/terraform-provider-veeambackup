@@ -240,7 +240,7 @@ func dataSourceAzureServiceAccounts() *schema.Resource {
 }
 
 func dataSourceAzureServiceAccountsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AuthClient)
+	client := meta.(*AzureBackupClient)
 
 	// Build query parameters
 	params := url.Values{}
@@ -268,7 +268,7 @@ func dataSourceAzureServiceAccountsRead(ctx context.Context, d *schema.ResourceD
 	}
 
 	// Make the API request
-	resp, err := client.MakeAuthenticatedRequest("GET", apiURL, nil)
+	resp, err := client.MakeAuthenticatedRequestWithVersion("GET", apiURL, nil)
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to retrieve Azure service accounts: %w", err))
 	}

@@ -173,7 +173,7 @@ func dataSourceAzureServiceAccount() *schema.Resource {
 }
 
 func dataSourceAzureServiceAccountRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AuthClient)
+	client := meta.(*AzureBackupClient)
 
 	accountID := d.Get("account_id").(string)
 
@@ -181,7 +181,7 @@ func dataSourceAzureServiceAccountRead(ctx context.Context, d *schema.ResourceDa
 	apiURL := fmt.Sprintf("%s/api/v8.1/accounts/azure/service/%s", client.hostname, accountID)
 
 	// Make the API request
-	resp, err := client.MakeAuthenticatedRequest("GET", apiURL, nil)
+	resp, err := client.MakeAuthenticatedRequestWithVersion("GET", apiURL, nil)
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to retrieve Azure service account: %w", err))
 	}
