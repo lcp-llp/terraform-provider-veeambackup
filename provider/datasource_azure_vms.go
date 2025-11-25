@@ -260,9 +260,7 @@ func dataSourceAzureVMs() *schema.Resource {
 }
 
 func dataSourceAzureVMRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-    client := meta.(*AuthClient)
-
-	// Build request from schema inputs
+	client := meta.(*AzureBackupClient)	// Build request from schema inputs
 	request := AzureVMDataSourceModel{
 		Offset:           d.Get("offset").(int),
 		Limit:            d.Get("limit").(int),
@@ -293,7 +291,7 @@ func dataSourceAzureVMRead(ctx context.Context, d *schema.ResourceData, meta int
 	// Build query parameters
 	params := buildQueryParams(request)
 	apiURL := fmt.Sprintf("%s/api/v8.1/virtualMachines?%s", client.hostname, params)    // Make API request
-    resp, err := client.MakeAuthenticatedRequest("GET", apiURL, nil)
+    resp, err := client.MakeAuthenticatedRequestWithVersion("GET", apiURL, nil)
     if err != nil {
         return diag.FromErr(fmt.Errorf("failed to retrieve Azure VMs: %w", err))
     }

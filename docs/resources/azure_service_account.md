@@ -2,6 +2,20 @@
 
 Creates and manages an Azure service account in Veeam Backup for Microsoft Azure using an existing Entra ID application.
 
+## Provider Configuration
+
+This resource requires Azure Backup for Azure configuration:
+
+```hcl
+provider "veeambackup" {
+  azure {
+    hostname = "https://azure-backup.example.com"
+    username = "admin@example.com"  
+    password = "your-password"
+  }
+}
+```
+
 ## Example Usage
 
 ```hcl
@@ -20,7 +34,7 @@ resource "veeambackup_azure_service_account" "production" {
     
     azure_account_purposes = [
       "VirtualMachineBackup",
-      "VirtualMachineRestore",
+      "VirtualMachineRestore", 
       "Repository"
     ]
     

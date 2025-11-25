@@ -9,24 +9,86 @@ import (
 func Provider() *schema.Provider {
 	return &schema.Provider{
 		Schema: map[string]*schema.Schema{
-			"hostname": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "Hostname or IP address of the Veeam Backup for Microsoft Azure server.",
-				DefaultFunc: schema.EnvDefaultFunc("VEEAM_HOSTNAME", nil),
+			// Azure Backup for Azure configuration
+			"azure": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				MaxItems:    1,
+				Description: "Configuration for Veeam Backup for Azure",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"hostname": {
+							Type:        schema.TypeString,
+							Required:    true,
+							Description: "Hostname or IP address of the Veeam Backup for Azure server",
+							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AZURE_HOSTNAME", nil),
+						},
+						"username": {
+							Type:        schema.TypeString,
+							Required:    true,
+							Description: "Username for Veeam Backup for Azure authentication",
+							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AZURE_USERNAME", nil),
+						},
+						"password": {
+							Type:        schema.TypeString,
+							Required:    true,
+							Sensitive:   true,
+							Description: "Password for Veeam Backup for Azure authentication",
+							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AZURE_PASSWORD", nil),
+						},
+						"api_version": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Default:     "8.1",
+							Description: "Azure Backup REST API version (default: 8.1)",
+							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AZURE_API_VERSION", "8.1"),
+						},
+					},
+				},
 			},
-			"username": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "Username for authenticating with the Veeam Backup for Microsoft Azure server.",
-				DefaultFunc: schema.EnvDefaultFunc("VEEAMBACKUP_USERNAME", nil),
-			},
-			"password": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Sensitive:   true,
-				Description: "Password for authenticating with the Veeam Backup for Microsoft Azure server.",
-				DefaultFunc: schema.EnvDefaultFunc("VEEAMBACKUP_PASSWORD", nil),
+			// Veeam Backup & Replication configuration
+			"vbr": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				MaxItems:    1,
+				Description: "Configuration for Veeam Backup & Replication REST API",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"hostname": {
+							Type:        schema.TypeString,
+							Required:    true,
+							Description: "Hostname or IP address of the VBR server",
+							DefaultFunc: schema.EnvDefaultFunc("VEEAM_VBR_HOSTNAME", nil),
+						},
+						"port": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Default:     "9419",
+							Description: "Port for VBR REST API (default: 9419)",
+							DefaultFunc: schema.EnvDefaultFunc("VEEAM_VBR_PORT", "9419"),
+						},
+						"username": {
+							Type:        schema.TypeString,
+							Required:    true,
+							Description: "Username for VBR authentication",
+							DefaultFunc: schema.EnvDefaultFunc("VEEAM_VBR_USERNAME", nil),
+						},
+						"password": {
+							Type:        schema.TypeString,
+							Required:    true,
+							Sensitive:   true,
+							Description: "Password for VBR authentication",
+							DefaultFunc: schema.EnvDefaultFunc("VEEAM_VBR_PASSWORD", nil),
+						},
+						"api_version": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Default:     "1.3-rev1",
+							Description: "VBR REST API version (default: 1.3-rev1)",
+							DefaultFunc: schema.EnvDefaultFunc("VEEAM_VBR_API_VERSION", "1.3-rev1"),
+						},
+					},
+				},
 			},
 		},
 		ResourcesMap: map[string]*schema.Resource{
@@ -46,27 +108,52 @@ func Provider() *schema.Provider {
 
 // providerConfigure configures the provider and returns a client
 func providerConfigure(d *schema.ResourceData) (interface{}, error) {
-	hostname := d.Get("hostname").(string)
-	username := d.Get("username").(string)
-	password := d.Get("password").(string)
-
-	if hostname == "" {
-		return nil, fmt.Errorf("hostname must be provided")
+	// Check for service-specific configurations
+	azureConfig := d.Get("azure").([]interface{})
+	vbrConfig := d.Get("vbr").([]interface{})
+	
+	config := ClientConfig{}
+	
+	// Handle Azure configuration
+	if len(azureConfig) > 0 {
+		azureMap := azureConfig[0].(map[string]interface{})
+		config.Azure = &AzureConfig{
+			Hostname:   azureMap["hostname"].(string),
+			Username:   azureMap["username"].(string),
+			Password:   azureMap["password"].(string),
+			APIVersion: azureMap["api_version"].(string),
+		}
 	}
-	if username == "" {
-		return nil, fmt.Errorf("username must be provided")
+	
+	// Handle VBR configuration
+	if len(vbrConfig) > 0 {
+		vbrMap := vbrConfig[0].(map[string]interface{})
+		config.VBR = &VBRConfig{
+			Hostname:   vbrMap["hostname"].(string),
+			Port:       vbrMap["port"].(string),
+			Username:   vbrMap["username"].(string),
+			Password:   vbrMap["password"].(string),
+			APIVersion: vbrMap["api_version"].(string),
+		}
 	}
-	if password == "" {
-		return nil, fmt.Errorf("password must be provided")
+	
+	// Validate that at least one service is configured
+	if config.Azure == nil && config.VBR == nil {
+		return nil, fmt.Errorf("at least one service configuration (azure, vbr) must be provided")
 	}
-
-	// Create the authentication client
-	authClient := NewAuthClient(hostname, username, password)
-
-	// Test authentication
-	if err := authClient.Authenticate(); err != nil {
-		return nil, fmt.Errorf("failed to authenticate with Veeam server: %w", err)
+	
+	// Create the unified client
+	veeamClient, err := NewVeeamClient(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Veeam client: %w", err)
 	}
-
-	return authClient, nil
+	
+	// If only Azure is configured, return Azure client for resource compatibility
+	// This maintains the existing resource interface expectations
+	if veeamClient.AzureClient != nil && veeamClient.VBRClient == nil && veeamClient.AWSClient == nil {
+		return veeamClient.AzureClient, nil
+	}
+	
+	// Return unified client for multi-service scenarios
+	return veeamClient, nil
 }
