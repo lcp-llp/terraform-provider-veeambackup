@@ -309,13 +309,13 @@ func dataSourceAzureBackupRepositoriesRead(ctx context.Context, d *schema.Resour
 	}
 
 	// Construct the API URL
-	apiURL := fmt.Sprintf("%s/api/v8.1/repositories", client.hostname)
+	apiURL := client.BuildAPIURL("/repositories")
 	if len(params) > 0 {
 		apiURL += "?" + params.Encode()
 	}
 
 	// Make the API request
-	resp, err := client.MakeAuthenticatedRequestWithVersion("GET", apiURL, nil)
+	resp, err := client.MakeAuthenticatedRequest("GET", apiURL, nil)
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to retrieve backup repositories: %w", err))
 	}

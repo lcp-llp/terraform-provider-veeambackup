@@ -833,8 +833,8 @@ func resourceVMBackupPolicyCreate(ctx context.Context, d *schema.ResourceData, m
 		return diag.FromErr(fmt.Errorf("failed to marshal policy request: %w", err))
 	}
 
-	url := fmt.Sprintf("%s/api/v8.1/policies/virtualMachines", client.hostname)
-	resp, err := client.MakeAuthenticatedRequestWithVersion("POST", url, strings.NewReader(string(jsonData)))
+	url := client.BuildAPIURL("/policies/virtualMachines")
+	resp, err := client.MakeAuthenticatedRequest("POST", url, strings.NewReader(string(jsonData)))
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to create VM backup policy: %w", err))
 	}
@@ -857,8 +857,8 @@ func resourceVMBackupPolicyCreate(ctx context.Context, d *schema.ResourceData, m
 func resourceVMBackupPolicyRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*AzureBackupClient)
 
-	url := fmt.Sprintf("%s/api/v8.1/policies/virtualMachines/%s", client.hostname, d.Id())
-	resp, err := client.MakeAuthenticatedRequestWithVersion("GET", url, nil)
+	url := client.BuildAPIURL(fmt.Sprintf("/policies/virtualMachines/%s", d.Id()))
+	resp, err := client.MakeAuthenticatedRequest("GET", url, nil)
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to read VM backup policy: %w", err))
 	}
@@ -911,8 +911,8 @@ func resourceVMBackupPolicyUpdate(ctx context.Context, d *schema.ResourceData, m
 		return diag.FromErr(fmt.Errorf("failed to marshal policy request: %w", err))
 	}
 
-	url := fmt.Sprintf("%s/api/v8.1/policies/virtualMachines/%s", client.hostname, d.Id())
-	resp, err := client.MakeAuthenticatedRequestWithVersion("PUT", url, strings.NewReader(string(jsonData)))
+	url := client.BuildAPIURL(fmt.Sprintf("/policies/virtualMachines/%s", d.Id()))
+	resp, err := client.MakeAuthenticatedRequest("PUT", url, strings.NewReader(string(jsonData)))
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to update VM backup policy: %w", err))
 	}
@@ -929,8 +929,8 @@ func resourceVMBackupPolicyUpdate(ctx context.Context, d *schema.ResourceData, m
 func resourceVMBackupPolicyDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*AzureBackupClient)
 
-	url := fmt.Sprintf("%s/api/v8.1/policies/virtualMachines/%s", client.hostname, d.Id())
-	resp, err := client.MakeAuthenticatedRequestWithVersion("DELETE", url, nil)
+	url := client.BuildAPIURL(fmt.Sprintf("/policies/virtualMachines/%s", d.Id()))
+	resp, err := client.MakeAuthenticatedRequest("DELETE", url, nil)
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to delete VM backup policy: %w", err))
 	}

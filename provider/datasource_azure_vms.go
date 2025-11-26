@@ -290,8 +290,9 @@ func dataSourceAzureVMRead(ctx context.Context, d *schema.ResourceData, meta int
 
 	// Build query parameters
 	params := buildQueryParams(request)
-	apiURL := fmt.Sprintf("%s/api/v8.1/virtualMachines?%s", client.hostname, params)    // Make API request
-    resp, err := client.MakeAuthenticatedRequestWithVersion("GET", apiURL, nil)
+	apiURL := client.BuildAPIURL(fmt.Sprintf("/virtualMachines?%s", params))
+    // Make API request
+    resp, err := client.MakeAuthenticatedRequest("GET", apiURL, nil)
     if err != nil {
         return diag.FromErr(fmt.Errorf("failed to retrieve Azure VMs: %w", err))
     }

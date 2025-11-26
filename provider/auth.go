@@ -539,6 +539,7 @@ func (c *AzureBackupClient) MakeAuthenticatedRequest(method, url string, body io
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-API-Version", c.apiVersion)
 
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -550,4 +551,9 @@ func (c *AzureBackupClient) MakeAuthenticatedRequest(method, url string, body io
 // IsAuthenticated checks if the client has a valid authentication state
 func (c *AzureBackupClient) IsAuthenticated() bool {
 	return c.accessToken != "" && time.Now().Before(c.tokenExpiry)
+}
+
+// BuildAPIURL constructs a versioned API URL
+func (c *AzureBackupClient) BuildAPIURL(endpoint string) string {
+	return fmt.Sprintf("%s/api/v%s%s", c.hostname, c.apiVersion, endpoint)
 }

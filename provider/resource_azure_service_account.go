@@ -234,10 +234,10 @@ func resourceAzureServiceAccountCreate(ctx context.Context, d *schema.ResourceDa
 	}
 
 	// Construct the API URL
-	apiURL := fmt.Sprintf("%s/api/v8.1/accounts/azure/service/saveByApp", client.hostname)
+	apiURL := client.BuildAPIURL("/accounts/azure/service/saveByApp")
 
 	// Make the API request
-	resp, err := client.MakeAuthenticatedRequestWithVersion("POST", apiURL, bytes.NewBuffer(jsonData))
+	resp, err := client.MakeAuthenticatedRequest("POST", apiURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to create Azure service account: %w", err))
 	}
@@ -295,10 +295,10 @@ func resourceAzureServiceAccountRead(ctx context.Context, d *schema.ResourceData
 	accountID := d.Id()
 
 	// Construct the API URL for reading the service account
-	apiURL := fmt.Sprintf("%s/api/v8.1/accounts/azure/service/%s", client.hostname, accountID)
+	apiURL := client.BuildAPIURL(fmt.Sprintf("/accounts/azure/service/%s", accountID))
 
 	// Make the API request
-	resp, err := client.MakeAuthenticatedRequestWithVersion("GET", apiURL, nil)
+	resp, err := client.MakeAuthenticatedRequest("GET", apiURL, nil)
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to read Azure service account: %w", err))
 	}
@@ -408,10 +408,10 @@ func resourceAzureServiceAccountUpdate(ctx context.Context, d *schema.ResourceDa
     }
 
     // Construct the API URL for update
-    apiURL := fmt.Sprintf("%s/api/v8.1/accounts/azure/service/updateByApp/%s", client.hostname, accountID)
+    apiURL := client.BuildAPIURL(fmt.Sprintf("/accounts/azure/service/updateByApp/%s", accountID))
 
     // Make the PUT API request
-    resp, err := client.MakeAuthenticatedRequestWithVersion("PUT", apiURL, bytes.NewBuffer(jsonData))
+    resp, err := client.MakeAuthenticatedRequest("PUT", apiURL, bytes.NewBuffer(jsonData))
     if err != nil {
         return diag.FromErr(fmt.Errorf("failed to update Azure service account: %w", err))
     }
@@ -459,10 +459,10 @@ func resourceAzureServiceAccountDelete(ctx context.Context, d *schema.ResourceDa
 	accountID := d.Id()
 
 	// Construct the API URL for deleting the service account
-	apiURL := fmt.Sprintf("%s/api/v8.1/accounts/azure/service/%s", client.hostname, accountID)
+	apiURL := client.BuildAPIURL(fmt.Sprintf("/accounts/azure/service/%s", accountID))
 
 	// Make the API request
-	resp, err := client.MakeAuthenticatedRequestWithVersion("DELETE", apiURL, nil)
+	resp, err := client.MakeAuthenticatedRequest("DELETE", apiURL, nil)
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to delete Azure service account: %w", err))
 	}
@@ -493,7 +493,7 @@ type OperationResult struct {
 
 // waitForOperation waits for an async operation to complete and returns the account ID
 func waitForOperation(ctx context.Context, client *AzureBackupClient, operationID string) (string, error) {
-	apiURL := fmt.Sprintf("%s/api/v8.1/operations/%s", client.hostname, operationID)
+	apiURL := client.BuildAPIURL(fmt.Sprintf("/operations/%s", operationID))
 	
 	for {
 		select {
@@ -503,7 +503,7 @@ func waitForOperation(ctx context.Context, client *AzureBackupClient, operationI
 			// Continue polling
 		}
 
-		resp, err := client.MakeAuthenticatedRequestWithVersion("GET", apiURL, nil)
+		resp, err := client.MakeAuthenticatedRequest("GET", apiURL, nil)
 		if err != nil {
 			return "", fmt.Errorf("failed to check operation status: %w", err)
 		}
@@ -557,9 +557,9 @@ func waitForOperation(ctx context.Context, client *AzureBackupClient, operationI
 // findServiceAccountByName searches for a service account by name and returns its ID
 func findServiceAccountByName(client *AzureBackupClient, name string) (string, error) {
 	// Use the existing datasource logic to find the service account
-	apiURL := fmt.Sprintf("%s/api/v8.1/accounts/azure/service", client.hostname)
+	apiURL := client.BuildAPIURL("/accounts/azure/service")
 	
-	resp, err := client.MakeAuthenticatedRequestWithVersion("GET", apiURL, nil)
+	resp, err := client.MakeAuthenticatedRequest("GET", apiURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to list service accounts: %w", err)
 	}
@@ -598,7 +598,7 @@ func findServiceAccountByName(client *AzureBackupClient, name string) (string, e
 
 // waitForOperationCompletion waits for an async operation to complete (doesn't return result data)
 func waitForOperationCompletion(ctx context.Context, client *AzureBackupClient, operationID string) error {
-	apiURL := fmt.Sprintf("%s/api/v8.1/operations/%s", client.hostname, operationID)
+	apiURL := client.BuildAPIURL(fmt.Sprintf("/operations/%s", operationID))
 	
 	for {
 		select {
@@ -608,7 +608,7 @@ func waitForOperationCompletion(ctx context.Context, client *AzureBackupClient, 
 			// Continue polling
 		}
 
-		resp, err := client.MakeAuthenticatedRequestWithVersion("GET", apiURL, nil)
+		resp, err := client.MakeAuthenticatedRequest("GET", apiURL, nil)
 		if err != nil {
 			return fmt.Errorf("failed to check operation status: %w", err)
 		}
