@@ -73,40 +73,35 @@ func dataSourceAzureBackupRepository() *schema.Resource {
 				Computed:    true,
 				Description: "Whether immutability is enabled for the backup repository.",
 			},
-			"created_date": {
+			"azure_storage_account_id": {
 				Type:        schema.TypeString,
 				Computed:    true,
-				Description: "Date when the backup repository was created.",
+				Description: "Azure storage account ID.",
 			},
-			"modified_date": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Date when the backup repository was last modified.",
-			},
-			"storage_account_name": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Azure storage account name.",
-			},
-			"container_name": {
+			"azure_storage_container": {
 				Type:        schema.TypeString,
 				Computed:    true,
 				Description: "Azure storage container name.",
 			},
-			"region": {
+			"azure_storage_folder": {
 				Type:        schema.TypeString,
 				Computed:    true,
-				Description: "Azure region where the repository is located.",
+				Description: "Azure storage folder path.",
 			},
-			"subscription_id": {
+			"region_id": {
 				Type:        schema.TypeString,
 				Computed:    true,
-				Description: "Azure subscription ID.",
+				Description: "Azure region ID.",
 			},
-			"resource_group_name": {
+			"region_name": {
 				Type:        schema.TypeString,
 				Computed:    true,
-				Description: "Azure resource group name.",
+				Description: "Azure region name.",
+			},
+			"azure_account_id": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Azure account ID.",
 			},
 		},
 	}
@@ -155,7 +150,7 @@ func dataSourceAzureBackupRepositoryRead(ctx context.Context, d *schema.Resource
 	}
 
 	// Parse the response
-	var repo BackupRepository
+	var repo BackupRepositoryDetail
 	if err := json.Unmarshal(body, &repo); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to parse response: %w", err))
 	}
@@ -173,38 +168,35 @@ func dataSourceAzureBackupRepositoryRead(ctx context.Context, d *schema.Resource
 	if err := d.Set("status", repo.Status); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to set status: %w", err))
 	}
-	if err := d.Set("type", repo.Type); err != nil {
+	if err := d.Set("type", repo.RepositoryType); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to set type: %w", err))
 	}
-	if err := d.Set("tier", repo.Tier); err != nil {
+	if err := d.Set("tier", repo.StorageTier); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to set tier: %w", err))
 	}
-	if err := d.Set("is_encrypted", repo.IsEncrypted); err != nil {
+	if err := d.Set("is_encrypted", repo.EncryptionEnabled); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to set is_encrypted: %w", err))
 	}
 	if err := d.Set("immutability_enabled", repo.ImmutabilityEnabled); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to set immutability_enabled: %w", err))
 	}
-	if err := d.Set("created_date", repo.CreatedDate); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set created_date: %w", err))
+	if err := d.Set("azure_storage_account_id", repo.AzureStorageAccountId); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to set azure_storage_account_id: %w", err))
 	}
-	if err := d.Set("modified_date", repo.ModifiedDate); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set modified_date: %w", err))
+	if err := d.Set("azure_storage_container", repo.AzureStorageContainer); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to set azure_storage_container: %w", err))
 	}
-	if err := d.Set("storage_account_name", repo.StorageAccountName); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set storage_account_name: %w", err))
+	if err := d.Set("azure_storage_folder", repo.AzureStorageFolder); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to set azure_storage_folder: %w", err))
 	}
-	if err := d.Set("container_name", repo.ContainerName); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set container_name: %w", err))
+	if err := d.Set("region_id", repo.RegionId); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to set region_id: %w", err))
 	}
-	if err := d.Set("region", repo.Region); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set region: %w", err))
+	if err := d.Set("region_name", repo.RegionName); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to set region_name: %w", err))
 	}
-	if err := d.Set("subscription_id", repo.SubscriptionID); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set subscription_id: %w", err))
-	}
-	if err := d.Set("resource_group_name", repo.ResourceGroupName); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set resource_group_name: %w", err))
+	if err := d.Set("azure_account_id", repo.AzureAccountId); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to set azure_account_id: %w", err))
 	}
 
 	// Set the ID (use the repository ID as the Terraform resource ID)

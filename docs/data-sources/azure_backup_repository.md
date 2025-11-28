@@ -6,34 +6,40 @@ Retrieves information about a specific Azure backup repository from Veeam Backup
 
 ```hcl
 # Get a specific repository by ID
-data "veeam_azure_backup_repository" "production" {
+data "veeambackup_azure_backup_repository" "production" {
   repository_id = "abc123-def456-ghi789"
 }
 
 # Get a repository by ID with tenant and service account filters
-data "veeam_azure_backup_repository" "production_filtered" {
+data "veeambackup_azure_backup_repository" "production_filtered" {
   repository_id      = "abc123-def456-ghi789"
   tenant_id          = "497f6eca-6276-4993-bfeb-53cbbbba6f08"
   service_account_id = "service-account-123"
 }
 
 # Use repository ID from the repositories list datasource
-data "veeam_azure_backup_repositories" "all" {}
+data "veeambackup_azure_backup_repositories" "all" {}
 
-data "veeam_azure_backup_repository" "production" {
-  repository_id = data.veeam_azure_backup_repositories.all.repositories_by_name["production-backup-repo"]
+# Extract repository ID from the JSON data
+locals {
+  production_repo = jsondecode(data.veeambackup_azure_backup_repositories.all.repositories["production-backup-repo"])
+}
+
+data "veeambackup_azure_backup_repository" "production" {
+  repository_id = local.production_repo.id
 }
 
 # Use the repository data in other configurations
 output "repository_info" {
   value = {
-    name            = data.veeam_azure_backup_repository.production.name
-    status          = data.veeam_azure_backup_repository.production.status
-    type            = data.veeam_azure_backup_repository.production.type
-    tier            = data.veeam_azure_backup_repository.production.tier
-    encrypted       = data.veeam_azure_backup_repository.production.is_encrypted
-    region          = data.veeam_azure_backup_repository.production.region
-    storage_account = data.veeam_azure_backup_repository.production.storage_account_name
+    name               = data.veeambackup_azure_backup_repository.production.name
+    status             = data.veeambackup_azure_backup_repository.production.status
+    type               = data.veeambackup_azure_backup_repository.production.type
+    tier               = data.veeambackup_azure_backup_repository.production.tier
+    encrypted          = data.veeambackup_azure_backup_repository.production.is_encrypted
+    region_name        = data.veeambackup_azure_backup_repository.production.region_name
+    storage_account_id = data.veeambackup_azure_backup_repository.production.azure_storage_account_id
+    container          = data.veeambackup_azure_backup_repository.production.azure_storage_container
   }
 }
 ```
@@ -59,53 +65,54 @@ output "repository_info" {
 - `tier` (String) - Storage tier of the backup repository.
 - `is_encrypted` (Boolean) - Whether the backup repository is encrypted.
 - `immutability_enabled` (Boolean) - Whether immutability is enabled for the backup repository.
-- `created_date` (String) - Date when the backup repository was created.
-- `modified_date` (String) - Date when the backup repository was last modified.
-- `storage_account_name` (String) - Azure storage account name.
-- `container_name` (String) - Azure storage container name.
-- `region` (String) - Azure region where the repository is located.
-- `subscription_id` (String) - Azure subscription ID.
-- `resource_group_name` (String) - Azure resource group name.
+- `azure_storage_account_id` (String) - Azure storage account ID.
+- `azure_storage_container` (String) - Azure storage container name.
+- `azure_storage_folder` (String) - Azure storage folder path.
+- `region_id` (String) - Azure region ID.
+- `region_name` (String) - Azure region name.
+- `azure_account_id` (String) - Azure account ID.
 
 ## API Endpoint
 
 This data source calls the Veeam Backup for Microsoft Azure REST API endpoint:
 ```
-GET /api/v8.1/repositories/{repositoryId}
+GET /api/v{version}/repositories/{repositoryId}
 ```
+
+Where `{version}` is the API version configured in the provider (default: 8.1).
 
 ## Common Use Cases
 
 ### Getting Repository Details for Backup Jobs
 
 ```hcl
-data "veeam_azure_backup_repository" "target" {
+data "veeambackup_azure_backup_repository" "target" {
   repository_id = var.repository_id
 }
 
 # Use repository information in backup job configuration
 resource "some_backup_job" "example" {
-  repository_id   = data.veeam_azure_backup_repository.target.id
-  repository_name = data.veeam_azure_backup_repository.target.name
+  repository_id   = data.veeambackup_azure_backup_repository.target.id
+  repository_name = data.veeambackup_azure_backup_repository.target.name
   
   # Conditional logic based on repository properties
-  encryption_enabled = data.veeam_azure_backup_repository.target.is_encrypted
+  encryption_enabled = data.veeambackup_azure_backup_repository.target.is_encrypted
   
   # Ensure repository is ready before creating backup job
-  depends_on = [data.veeam_azure_backup_repository.target]
+  depends_on = [data.veeambackup_azure_backup_repository.target]
 }
 ```
 
 ### Validating Repository State
 
 ```hcl
-data "veeam_azure_backup_repository" "check" {
+data "veeambackup_azure_backup_repository" "check" {
   repository_id = var.repository_id
 }
 
 # Validate repository is in ready state
 locals {
-  repository_ready = data.veeam_azure_backup_repository.check.status == "Ready"
+  repository_ready = data.veeambackup_azure_backup_repository.check.status == "Ready"
 }
 
 # Use in conditional logic
@@ -116,14 +123,32 @@ resource "null_resource" "backup_job" {
 }
 ```
 
-### Combining with Service Account Data
+### Combining with Repositories List Data Source
 
 ```hcl
-data "veeam_azure_service_accounts" "all" {}
+data "veeambackup_azure_backup_repositories" "all" {
+  status = ["Ready"]
+}
 
-data "veeam_azure_backup_repository" "production" {
-  repository_id      = var.repository_id
-  service_account_id = data.veeam_azure_service_accounts.all.service_accounts_by_name["production-sa"]
+# Get details for a specific repository found in the list
+locals {
+  target_repo = jsondecode(data.veeambackup_azure_backup_repositories.all.repositories["production-backup-repo"])
+}
+
+data "veeambackup_azure_backup_repository" "production" {
+  repository_id = local.target_repo.id
+}
+
+# Now you have full details for the specific repository
+output "production_repository_details" {
+  value = {
+    id                = data.veeambackup_azure_backup_repository.production.id
+    name              = data.veeambackup_azure_backup_repository.production.name
+    status            = data.veeambackup_azure_backup_repository.production.status
+    region            = data.veeambackup_azure_backup_repository.production.region_name
+    storage_container = data.veeambackup_azure_backup_repository.production.azure_storage_container
+    immutable         = data.veeambackup_azure_backup_repository.production.immutability_enabled
+  }
 }
 ```
 
