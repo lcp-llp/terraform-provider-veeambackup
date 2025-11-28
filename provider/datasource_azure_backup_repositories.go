@@ -14,31 +14,55 @@ import (
 
 // BackupRepository represents a backup repository from the Veeam API
 type BackupRepository struct {
-	ID                  string `json:"id"`
-	Name                string `json:"name"`
-	Description         string `json:"description"`
-	Status              string `json:"status"`
-	Type                string `json:"type"`
-	Tier                string `json:"tier"`
-	IsEncrypted         bool   `json:"isEncrypted"`
-	ImmutabilityEnabled bool   `json:"immutabilityEnabled"`
-	TenantID            string `json:"tenantId"`
-	ServiceAccountID    string `json:"serviceAccountId"`
-	CreatedDate         string `json:"createdDate"`
-	ModifiedDate        string `json:"modifiedDate"`
-	StorageAccountName  string `json:"storageAccountName"`
-	ContainerName       string `json:"containerName"`
-	Region              string `json:"region"`
-	SubscriptionID      string `json:"subscriptionId"`
-	ResourceGroupName   string `json:"resourceGroupName"`
+	Status              string `json:"status,omitempty"`
+	Type                string `json:"type,omitempty"`
+	Tier                string `json:"tier,omitempty"`
+	SearchPattern	    string `json:"searchPattern,omitempty"`
+	IsEncrypted         bool   `json:"isEncrypted,omitempty"`
+	Offset			    int    `json:"offset,omitempty"`
+	Limit			    int    `json:"limit,omitempty"`
+	TenantID            string `json:"tenantId,omitempty"`
+	ServiceAccountID    string `json:"serviceAccountId,omitempty"`
+	ImmutabilityEnabled bool   `json:"immutabilityEnabled,omitempty"`
 }
 
 // BackupRepositoriesResponse represents the API response for backup repositories
 type BackupRepositoriesResponse struct {
-	Data   []BackupRepository `json:"data"`
-	Offset int                `json:"offset"`
-	Limit  int                `json:"limit"`
-	Total  int                `json:"total"`
+    Results    []BackupRepositoryDetail `json:"results"`
+    TotalCount int            `json:"totalCount"`
+}
+
+type BackupRepositoryDetail struct {
+	EncryptionEnabled    	bool   `json:"enabledEncryption"`
+	StorageTier		     	string `json:"storageTier"`
+	ID                   	string `json:"id"`
+	Name                 	string `json:"name"`
+	Description          	string `json:"description"`
+	AzureStorageAccountId   string `json:"azureStorageAccountId"`
+	AzureStorageFolder    	string `json:"azureStorageFolder"`
+	AzureStorageContainer 	string `json:"azureStorageContainer"`
+	RegionId				string `json:"regionId"`
+	RegionName				string `json:"regionName"`
+	AzureAccountId 			string `json:"azureAccountId"`
+	RepositoryType       	string `json:"repositoryType"`
+	Status               	string `json:"status"`
+	IsStorageTierInferred  	bool   					  `json:"isStorageTierInferred"`
+	ImmutabilityEnabled  	bool   				      `json:"immutabilityEnabled"`
+	RepositoryOwnership   	[]RepositoryOwnership     `json:"repositoryOwnership"`
+	ConcurrencyLimit       	int    				  	  `json:"concurrencyLimit"`
+	StorageConsumptionLimit []StorageConsumptionLimit `json:"storageConsumptionLimit"`
+	VeeamVaultId            int  					  `json:"veeamVaultId"`
+}
+
+type RepositoryOwnership struct {
+	HasAnotherOwner 	   bool   `json:"hasAnotherOwner"`
+	CurrentOwnerIdentifier string `json:"currentOwnerIdentifier"`
+	CurrentOwnerName       string `json:"currentOwnerName"`
+}
+
+type StorageConsumptionLimit struct {
+	LimitType  string `json:"limitType"`
+	LimitValue int    `json:"limitValue"`
 }
 
 func dataSourceAzureBackupRepositories() *schema.Resource {
@@ -142,111 +166,94 @@ func dataSourceAzureBackupRepositories() *schema.Resource {
 				Description: "Filter repositories by immutability status.",
 			},
 			"repositories": {
+				Type:        schema.TypeMap,
+				Computed:    true,
+				Description: "Map of repository names to their complete details as JSON strings.",
+				Elem:        &schema.Schema{Type: schema.TypeString},
+			},
+			"repository_details": {
 				Type:        schema.TypeList,
 				Computed:    true,
-				Description: "List of backup repositories.",
+				Description: "Detailed list of backup repositories matching the specified criteria.",
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"id": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Unique identifier of the backup repository.",
+							Description: "Repository ID.",
 						},
 						"name": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Name of the backup repository.",
+							Description: "Repository name.",
 						},
 						"description": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Description of the backup repository.",
+							Description: "Repository description.",
 						},
 						"status": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Status of the backup repository.",
+							Description: "Repository status.",
 						},
-						"type": {
+						"repository_type": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Type of the backup repository.",
+							Description: "Repository type.",
 						},
-						"tier": {
+						"storage_tier": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Storage tier of the backup repository.",
+							Description: "Storage tier.",
 						},
-						"is_encrypted": {
+						"encryption_enabled": {
 							Type:        schema.TypeBool,
 							Computed:    true,
-							Description: "Whether the backup repository is encrypted.",
+							Description: "Whether encryption is enabled.",
 						},
 						"immutability_enabled": {
 							Type:        schema.TypeBool,
 							Computed:    true,
-							Description: "Whether immutability is enabled for the backup repository.",
+							Description: "Whether immutability is enabled.",
 						},
-						"tenant_id": {
+						"azure_storage_account_id": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Tenant ID associated with the backup repository.",
+							Description: "Azure storage account ID.",
 						},
-						"service_account_id": {
+						"azure_storage_container": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Service account ID associated with the backup repository.",
+							Description: "Azure storage container.",
 						},
-						"created_date": {
+						"azure_storage_folder": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Date when the backup repository was created.",
+							Description: "Azure storage folder.",
 						},
-						"modified_date": {
+						"region_id": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Date when the backup repository was last modified.",
+							Description: "Region ID.",
 						},
-						"storage_account_name": {
+						"region_name": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Azure storage account name.",
+							Description: "Region name.",
 						},
-						"container_name": {
+						"azure_account_id": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: "Azure storage container name.",
-						},
-						"region": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Azure region where the repository is located.",
-						},
-						"subscription_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Azure subscription ID.",
-						},
-						"resource_group_name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Azure resource group name.",
+							Description: "Azure account ID.",
 						},
 					},
 				},
 			},
-			"total": {
+			"total_count": {
 				Type:        schema.TypeInt,
 				Computed:    true,
-				Description: "Total number of repositories available (before pagination).",
-			},
-			"repositories_by_name": {
-				Type:        schema.TypeMap,
-				Computed:    true,
-				Description: "Map of repository names to their IDs for easy lookup.",
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
+				Description: "Total number of repositories matching the criteria.",
 			},
 		},
 	}
@@ -337,32 +344,34 @@ func dataSourceAzureBackupRepositoriesRead(ctx context.Context, d *schema.Resour
 	}
 
 	// Convert repositories to Terraform format
-	repositories := make([]interface{}, len(repositoriesResp.Data))
-	repositoriesByName := make(map[string]interface{})
+	repositories := make(map[string]string)
+	repositoryDetails := make([]interface{}, len(repositoriesResp.Results))
 
-	for i, repo := range repositoriesResp.Data {
-		repositories[i] = map[string]interface{}{
-			"id":                   repo.ID,
-			"name":                 repo.Name,
-			"description":          repo.Description,
-			"status":               repo.Status,
-			"type":                 repo.Type,
-			"tier":                 repo.Tier,
-			"is_encrypted":         repo.IsEncrypted,
-			"immutability_enabled": repo.ImmutabilityEnabled,
-			"tenant_id":            repo.TenantID,
-			"service_account_id":   repo.ServiceAccountID,
-			"created_date":         repo.CreatedDate,
-			"modified_date":        repo.ModifiedDate,
-			"storage_account_name": repo.StorageAccountName,
-			"container_name":       repo.ContainerName,
-			"region":               repo.Region,
-			"subscription_id":      repo.SubscriptionID,
-			"resource_group_name":  repo.ResourceGroupName,
+	for i, repo := range repositoriesResp.Results {
+		// Create detailed repository info
+		repositoryDetails[i] = map[string]interface{}{
+			"id":                        repo.ID,
+			"name":                      repo.Name,
+			"description":               repo.Description,
+			"status":                    repo.Status,
+			"repository_type":           repo.RepositoryType,
+			"storage_tier":              repo.StorageTier,
+			"encryption_enabled":        repo.EncryptionEnabled,
+			"immutability_enabled":      repo.ImmutabilityEnabled,
+			"azure_storage_account_id":  repo.AzureStorageAccountId,
+			"azure_storage_container":   repo.AzureStorageContainer,
+			"azure_storage_folder":      repo.AzureStorageFolder,
+			"region_id":                 repo.RegionId,
+			"region_name":               repo.RegionName,
+			"azure_account_id":          repo.AzureAccountId,
 		}
 
-		// Build the name-to-ID map
-		repositoriesByName[repo.Name] = repo.ID
+		// Create JSON string for the repositories map (like VMs data source)
+		detailJSON, err := json.Marshal(repositoryDetails[i])
+		if err != nil {
+			return diag.FromErr(fmt.Errorf("failed to marshal repository details: %w", err))
+		}
+		repositories[repo.Name] = string(detailJSON)
 	}
 
 	// Set the data in the resource
@@ -370,12 +379,12 @@ func dataSourceAzureBackupRepositoriesRead(ctx context.Context, d *schema.Resour
 		return diag.FromErr(fmt.Errorf("failed to set repositories: %w", err))
 	}
 
-	if err := d.Set("repositories_by_name", repositoriesByName); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set repositories_by_name: %w", err))
+	if err := d.Set("repository_details", repositoryDetails); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to set repository_details: %w", err))
 	}
 
-	if err := d.Set("total", repositoriesResp.Total); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set total: %w", err))
+	if err := d.Set("total_count", repositoriesResp.TotalCount); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to set total_count: %w", err))
 	}
 
 	// Set the ID (use a combination of hostname and parameters for uniqueness)
