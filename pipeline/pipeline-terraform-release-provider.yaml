@@ -10,16 +10,17 @@ pool:
   vmImage: 'ubuntu-latest'
 
 variables:
-  - group: 'terraform'
+  - group: 'Automation.TerraformProviders'
   - name: terraformVersion 
-    value: '1.12.2'
+    value: '1.14.0'
   - name: providerName
     value: 'veeambackup'
   - name: gnupgVersion
     value: '2.4.3'
   - name: repoName
     value: 'lcp-llp/terraform-provider-veeambackup'  # Replace with your actual GitHub org/user and repo name
-
+  - name: secureFileName
+    value: 'terra_key_private.asc'
 jobs:
   - job: build_provider
     displayName: 'Build Terraform Provider'
@@ -27,14 +28,14 @@ jobs:
     - task: DownloadSecureFile@1
       name: gpgKey
       inputs:
-        secureFile: 'private-key2.gpg'
+        secureFile: '$(secureFileName)'
 
     - script: |
         echo "Checking the GPG key file..."
         ls -lh $(gpgKey.secureFilePath)
         sha256sum $(gpgKey.secureFilePath)
       displayName: 'Check GPG Key File'
-    #
+
     - script: |
         sudo apt-get update
         sudo apt-get install -y wget build-essential libbz2-dev zlib1g-dev libsqlite3-dev libssl-dev libreadline-dev libffi-dev
@@ -178,7 +179,7 @@ jobs:
 
     - script: |
         echo "Creating GitHub release..."
-        export GITHUB_TOKEN=$(GitHubPAT)
+        export GITHUB_TOKEN=$(GITHUB_PAT)
         export repoName=$(repoName)
         gh release create "$(releaseVersion)" ./artifacts/* \
           --repo "$repoName" \
@@ -186,4 +187,4 @@ jobs:
           --notes "Release notes for $(releaseVersion)"
       displayName: 'Create GitHub Release'
       env:
-        GITHUB_TOKEN: $(GitHubPAT)
+        GITHUB_TOKEN: $(GITHUB_PAT)
