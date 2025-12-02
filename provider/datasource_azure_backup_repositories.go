@@ -35,7 +35,7 @@ type BackupRepositoriesResponse struct {
 type BackupRepositoryDetail struct {
 	EncryptionEnabled    	bool   `json:"enabledEncryption"`
 	StorageTier		     	string `json:"storageTier"`
-	VeeamID                   	string `json:"id"`
+	VeeamID                 string `json:"id"`
 	Name                 	string `json:"name"`
 	Description          	string `json:"description"`
 	AzureStorageAccountId   string `json:"azureStorageAccountId"`
