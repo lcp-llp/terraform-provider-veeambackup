@@ -35,12 +35,12 @@ type BackupRepositoriesResponse struct {
 type BackupRepositoryDetail struct {
 	EncryptionEnabled    	bool   `json:"enabledEncryption"`
 	StorageTier		     	string `json:"storageTier"`
-	ID                   	string `json:"id"`
+	VeeamID                   	string `json:"id"`
 	Name                 	string `json:"name"`
 	Description          	string `json:"description"`
 	AzureStorageAccountId   string `json:"azureStorageAccountId"`
-	AzureStorageFolder    	string `json:"azureStorageFolder"`
-	AzureStorageContainer 	string `json:"azureStorageContainer"`
+	AzureStorageFolder    	[]AzureStorageFolder `json:"azureStorageFolder"`
+	AzureStorageContainer 	[]AzureStorageContainer `json:"azureStorageContainer"`
 	RegionId				string `json:"regionId"`
 	RegionName				string `json:"regionName"`
 	AzureAccountId 			string `json:"azureAccountId"`
@@ -53,6 +53,19 @@ type BackupRepositoryDetail struct {
 	StorageConsumptionLimit []StorageConsumptionLimit `json:"storageConsumptionLimit"`
 	VeeamVaultId            int  					  `json:"veeamVaultId"`
 }
+
+type AzureStorageFolder struct {
+	Name 					string 	`json:"name"`
+	SupportsVersioning 		bool 	`json:"supportsVersioning"`
+	ImmutabilityPolicyState string 	`json:"immutabilityPolicyState"`
+}
+
+type AzureStorageContainer struct {
+	Name 					string 	`json:"name"`
+	SupportsVersioning 		bool 	`json:"supportsVersioning"`
+	ImmutabilityPolicyState string 	`json:"immutabilityPolicyState"`
+}
+
 
 type RepositoryOwnership struct {
 	HasAnotherOwner 	   bool   `json:"hasAnotherOwner"`
@@ -177,7 +190,7 @@ func dataSourceAzureBackupRepositories() *schema.Resource {
 				Description: "Detailed list of backup repositories matching the specified criteria.",
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						"id": {
+						"veeam_id": {
 							Type:        schema.TypeString,
 							Computed:    true,
 							Description: "Repository ID.",
@@ -223,14 +236,16 @@ func dataSourceAzureBackupRepositories() *schema.Resource {
 							Description: "Azure storage account ID.",
 						},
 						"azure_storage_container": {
-							Type:        schema.TypeString,
+							Type:        schema.TypeList, // <-- updated to TypeList
 							Computed:    true,
-							Description: "Azure storage container.",
+							Description: "List of Azure storage containers.",
+							Elem: &schema.Schema{Type: schema.TypeString},
 						},
 						"azure_storage_folder": {
-							Type:        schema.TypeString,
+							Type:        schema.TypeList, // <-- updated to TypeList
 							Computed:    true,
-							Description: "Azure storage folder.",
+							Description: "List of Azure storage folders.",
+							Elem: &schema.Schema{Type: schema.TypeString},
 						},
 						"region_id": {
 							Type:        schema.TypeString,
@@ -347,10 +362,18 @@ func dataSourceAzureBackupRepositoriesRead(ctx context.Context, d *schema.Resour
 	repositories := make(map[string]string)
 	repositoryDetails := make([]interface{}, len(repositoriesResp.Results))
 
-	for i, repo := range repositoriesResp.Results {
-		// Create detailed repository info
+for i, repo := range repositoriesResp.Results {
+    // Convert containers and folders to []string
+    containers := make([]string, len(repo.AzureStorageContainer))
+    for j, c := range repo.AzureStorageContainer {
+        containers[j] = c.Name
+    }
+    folders := make([]string, len(repo.AzureStorageFolder))
+    for j, f := range repo.AzureStorageFolder {
+        folders[j] = f.Name
+    }
 		repositoryDetails[i] = map[string]interface{}{
-			"id":                        repo.ID,
+			"veeam_id":                  repo.VeeamID,
 			"name":                      repo.Name,
 			"description":               repo.Description,
 			"status":                    repo.Status,
@@ -359,8 +382,8 @@ func dataSourceAzureBackupRepositoriesRead(ctx context.Context, d *schema.Resour
 			"encryption_enabled":        repo.EncryptionEnabled,
 			"immutability_enabled":      repo.ImmutabilityEnabled,
 			"azure_storage_account_id":  repo.AzureStorageAccountId,
-			"azure_storage_container":   repo.AzureStorageContainer,
-			"azure_storage_folder":      repo.AzureStorageFolder,
+			"azure_storage_container":   containers,
+			"azure_storage_folder":      folders,
 			"region_id":                 repo.RegionId,
 			"region_name":               repo.RegionName,
 			"azure_account_id":          repo.AzureAccountId,

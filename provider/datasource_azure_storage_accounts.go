@@ -27,14 +27,14 @@ type AzureStorageAccountsDataSourceModel struct {
 }
 
 type AzureStorageAccountsResponse struct {
-    Results    []AzureStorageAccountDetail `json:"results"`
+    Results    []AzureStorageAccountDetail  `json:"results"`
     TotalCount int            				`json:"totalCount"`
 	Offset     int            				`json:"offset"`
 	Limit      int            				`json:"limit"`
 }
 
 type AzureStorageAccountDetail struct {
-	ID               				string `json:"id"`
+	VeeamID               			string `json:"id"`
 	ResourceID       				string `json:"resourceId"`
 	Name             				string `json:"name"`
 	SkuName		 					string `json:"skuName"`
@@ -304,7 +304,7 @@ for _, account := range storageAccountsResp.Results {
 
     // Create structured data for list
     accountMap := map[string]interface{}{
-        "veeam_id":                            account.ID,
+        "veeam_id":                            account.VeeamID,
         "azure_id":                            account.ResourceID,
         "name":                                account.Name,
         "sku_name":                            account.SkuName,
