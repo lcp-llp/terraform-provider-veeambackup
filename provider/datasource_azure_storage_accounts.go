@@ -274,7 +274,7 @@ if err != nil {
 }
 defer resp.Body.Close()
 
-if resp.StatusCode != 200 {
+if resp.StatusCode != 200 && resp.StatusCode != 202 {
     body, _ := io.ReadAll(resp.Body)
     return diag.FromErr(fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body)))
 }

@@ -39,8 +39,8 @@ type BackupRepositoryDetail struct {
 	Name                 	string `json:"name"`
 	Description          	string `json:"description"`
 	AzureStorageAccountId   string `json:"azureStorageAccountId"`
-	AzureStorageFolder    	[]AzureStorageFolder `json:"azureStorageFolder"`
-	AzureStorageContainer 	[]AzureStorageContainer `json:"azureStorageContainer"`
+	AzureStorageFolder    	AzureStorageFolder `json:"azureStorageFolder"`
+	AzureStorageContainer 	AzureStorageContainer `json:"azureStorageContainer"`
 	RegionId				string `json:"regionId"`
 	RegionName				string `json:"regionName"`
 	AzureAccountId 			string `json:"azureAccountId"`
@@ -363,14 +363,14 @@ func dataSourceAzureBackupRepositoriesRead(ctx context.Context, d *schema.Resour
 	repositoryDetails := make([]interface{}, len(repositoriesResp.Results))
 
 for i, repo := range repositoriesResp.Results {
-    // Convert containers and folders to []string
-    containers := make([]string, len(repo.AzureStorageContainer))
-    for j, c := range repo.AzureStorageContainer {
-        containers[j] = c.Name
+    // Convert containers and folders to []string (single object to array with one item)
+    containers := []string{}
+    if repo.AzureStorageContainer.Name != "" {
+        containers = append(containers, repo.AzureStorageContainer.Name)
     }
-    folders := make([]string, len(repo.AzureStorageFolder))
-    for j, f := range repo.AzureStorageFolder {
-        folders[j] = f.Name
+    folders := []string{}
+    if repo.AzureStorageFolder.Name != "" {
+        folders = append(folders, repo.AzureStorageFolder.Name)
     }
 		repositoryDetails[i] = map[string]interface{}{
 			"veeam_id":                  repo.VeeamID,
