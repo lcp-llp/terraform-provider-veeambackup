@@ -48,9 +48,9 @@ type BackupRepositoryDetail struct {
 	Status               	string `json:"status"`
 	IsStorageTierInferred  	bool   					  `json:"isStorageTierInferred"`
 	ImmutabilityEnabled  	bool   				      `json:"immutabilityEnabled"`
-	RepositoryOwnership   	[]RepositoryOwnership     `json:"repositoryOwnership"`
+	RepositoryOwnership   	RepositoryOwnership     `json:"repositoryOwnership"`
 	ConcurrencyLimit       	int    				  	  `json:"concurrencyLimit"`
-	StorageConsumptionLimit []StorageConsumptionLimit `json:"storageConsumptionLimit"`
+	StorageConsumptionLimit StorageConsumptionLimit `json:"storageConsumptionLimit"`
 	VeeamVaultId            int  					  `json:"veeamVaultId"`
 }
 
@@ -236,16 +236,52 @@ func dataSourceAzureBackupRepositories() *schema.Resource {
 							Description: "Azure storage account ID.",
 						},
 						"azure_storage_container": {
-							Type:        schema.TypeList, // <-- updated to TypeList
+							Type:        schema.TypeList,
 							Computed:    true,
-							Description: "List of Azure storage containers.",
-							Elem: &schema.Schema{Type: schema.TypeString},
+							Description: "Azure storage container information.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"name": {
+										Type:        schema.TypeString,
+										Computed:    true,
+										Description: "Name of the Azure storage container.",
+									},
+									"supports_versioning": {
+										Type:        schema.TypeBool,
+										Computed:    true,
+										Description: "Whether the container supports versioning.",
+									},
+									"immutability_policy_state": {
+										Type:        schema.TypeString,
+										Computed:    true,
+										Description: "State of the immutability policy (NotPresent, Unlocked, Locked).",
+									},
+								},
+							},
 						},
 						"azure_storage_folder": {
-							Type:        schema.TypeList, // <-- updated to TypeList
+							Type:        schema.TypeList,
 							Computed:    true,
-							Description: "List of Azure storage folders.",
-							Elem: &schema.Schema{Type: schema.TypeString},
+							Description: "Azure storage folder information.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"name": {
+										Type:        schema.TypeString,
+										Computed:    true,
+										Description: "Name of the Azure storage folder.",
+									},
+									"supports_versioning": {
+										Type:        schema.TypeBool,
+										Computed:    true,
+										Description: "Whether the folder supports versioning.",
+									},
+									"immutability_policy_state": {
+										Type:        schema.TypeString,
+										Computed:    true,
+										Description: "State of the immutability policy (NotPresent, Unlocked, Locked).",
+									},
+								},
+							},
 						},
 						"region_id": {
 							Type:        schema.TypeString,
@@ -261,6 +297,49 @@ func dataSourceAzureBackupRepositories() *schema.Resource {
 							Type:        schema.TypeString,
 							Computed:    true,
 							Description: "Azure account ID.",
+						},
+						"repository_ownership": {
+							Type:        schema.TypeList,
+							Computed:    true,
+							Description: "Repository ownership information.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"has_another_owner": {
+										Type:        schema.TypeBool,
+										Computed:    true,
+										Description: "Whether another owner exists.",
+									},
+									"current_owner_identifier": {
+										Type:        schema.TypeString,
+										Computed:    true,
+										Description: "Current owner identifier.",
+									},
+									"current_owner_name": {
+										Type:        schema.TypeString,
+										Computed:    true,
+										Description: "Current owner name.",
+									},
+								},
+							},
+						},
+						"storage_consumption_limit": {
+							Type:        schema.TypeList,
+							Computed:    true,
+							Description: "Storage consumption limit information.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"limit_type": {
+										Type:        schema.TypeString,
+										Computed:    true,
+										Description: "Type of limit.",
+									},
+									"limit_value": {
+										Type:        schema.TypeInt,
+										Computed:    true,
+										Description: "Limit value.",
+									},
+								},
+							},
 						},
 					},
 				},
@@ -362,16 +441,7 @@ func dataSourceAzureBackupRepositoriesRead(ctx context.Context, d *schema.Resour
 	repositories := make(map[string]string)
 	repositoryDetails := make([]interface{}, len(repositoriesResp.Results))
 
-for i, repo := range repositoriesResp.Results {
-    // Convert containers and folders to []string (single object to array with one item)
-    containers := []string{}
-    if repo.AzureStorageContainer.Name != "" {
-        containers = append(containers, repo.AzureStorageContainer.Name)
-    }
-    folders := []string{}
-    if repo.AzureStorageFolder.Name != "" {
-        folders = append(folders, repo.AzureStorageFolder.Name)
-    }
+	for i, repo := range repositoriesResp.Results {
 		repositoryDetails[i] = map[string]interface{}{
 			"veeam_id":                  repo.VeeamID,
 			"name":                      repo.Name,
@@ -382,20 +452,45 @@ for i, repo := range repositoriesResp.Results {
 			"encryption_enabled":        repo.EncryptionEnabled,
 			"immutability_enabled":      repo.ImmutabilityEnabled,
 			"azure_storage_account_id":  repo.AzureStorageAccountId,
-			"azure_storage_container":   containers,
-			"azure_storage_folder":      folders,
 			"region_id":                 repo.RegionId,
 			"region_name":               repo.RegionName,
 			"azure_account_id":          repo.AzureAccountId,
+			"azure_storage_container": []interface{}{
+				map[string]interface{}{
+					"name":                     repo.AzureStorageContainer.Name,
+					"supports_versioning":      repo.AzureStorageContainer.SupportsVersioning,
+					"immutability_policy_state": repo.AzureStorageContainer.ImmutabilityPolicyState,
+				},
+			},
+			"azure_storage_folder": []interface{}{
+				map[string]interface{}{
+					"name":                      repo.AzureStorageFolder.Name,
+					"supports_versioning":       repo.AzureStorageFolder.SupportsVersioning,
+					"immutability_policy_state": repo.AzureStorageFolder.ImmutabilityPolicyState,
+				},
+			},
+			"repository_ownership": []interface{}{
+				map[string]interface{}{
+					"has_another_owner":         repo.RepositoryOwnership.HasAnotherOwner,
+					"current_owner_identifier":  repo.RepositoryOwnership.CurrentOwnerIdentifier,
+					"current_owner_name":        repo.RepositoryOwnership.CurrentOwnerName,
+				},
+        	},
+			"storage_consumption_limit": []interface{}{
+				map[string]interface{}{
+					"limit_type":  repo.StorageConsumptionLimit.LimitType,
+					"limit_value": repo.StorageConsumptionLimit.LimitValue,
+				},
+			},
 		}
 
-		// Create JSON string for the repositories map (like VMs data source)
-		detailJSON, err := json.Marshal(repositoryDetails[i])
-		if err != nil {
-			return diag.FromErr(fmt.Errorf("failed to marshal repository details: %w", err))
-		}
-		repositories[repo.Name] = string(detailJSON)
+		// Create JSON string for the repositories map
+	detailJSON, err := json.Marshal(repositoryDetails[i])
+	if err != nil {
+		return diag.FromErr(fmt.Errorf("failed to marshal repository details: %w", err))
 	}
+	repositories[repo.Name] = string(detailJSON)
+}
 
 	// Set the data in the resource
 	if err := d.Set("repositories", repositories); err != nil {
