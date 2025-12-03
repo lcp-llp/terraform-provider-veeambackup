@@ -20,3 +20,43 @@ type PolicyNotificationSettings struct {
 type PolicyRegion struct {
     RegionID string `json:"regionId"`
 }
+
+// expandPolicyRegions converts a Terraform list to a slice of PolicyRegion
+func expandPolicyRegions(input []interface{}) []PolicyRegion {
+       if len(input) == 0 {
+           return nil
+       }
+       result := make([]PolicyRegion, len(input))
+       for i, v := range input {
+           m := v.(map[string]interface{})
+           result[i] = PolicyRegion{
+               RegionID: m["region_id"].(string),
+           }
+       }
+       return result
+}
+
+// expandRetrySettings converts a Terraform list to a RetrySettings pointer
+func expandRetrySettings(input []interface{}) *RetrySettings {
+       if len(input) == 0 {
+           return nil
+       }
+       m := input[0].(map[string]interface{})
+       return &RetrySettings{
+           RetryCount: m["retry_count"].(int),
+       }
+}
+
+// expandPolicyNotificationSettings converts a Terraform list to a PolicyNotificationSettings pointer
+func expandPolicyNotificationSettings(input []interface{}) *PolicyNotificationSettings {
+       if len(input) == 0 {
+           return nil
+       }
+       m := input[0].(map[string]interface{})
+       return &PolicyNotificationSettings{
+           Recipient:       getStringPtr(m["recipient"]),
+           NotifyOnSuccess: getBoolPtr(m["notify_on_success"]),
+           NotifyOnWarning: getBoolPtr(m["notify_on_warning"]),
+           NotifyOnFailure: getBoolPtr(m["notify_on_failure"]),
+       }
+}

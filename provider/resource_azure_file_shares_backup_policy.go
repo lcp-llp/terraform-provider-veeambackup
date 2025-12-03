@@ -424,11 +424,10 @@ func resourceAzureFileSharesBackupPolicyCreate(ctx context.Context, d *schema.Re
 
 	jsonData, err := json.Marshal(policyRequest)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("error marshaling Azure File Shares Backup Policy request: %s", err)
-	)
+		return diag.FromErr(fmt.Errorf("error marshaling Azure File Shares Backup Policy request: %s", err))
 	}
 
-	url := fmt.Sprintf("%s/policies/fileShares", client.BaseURL)
+	url := client.BuildAPIURL("/policies/fileShares")
 	resp, err := client.MakeAuthenticatedRequest("POST", url, strings.NewReader(string(jsonData)))
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("error creating Azure File Shares Backup Policy: %s", err))
@@ -457,7 +456,7 @@ func resourceAzureFileSharesBackupPolicyCreate(ctx context.Context, d *schema.Re
 // CRUD Operations for Resource (READ)
 func resourceAzureFileSharesBackupPolicyRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*AzureBackupClient)
-	url := fmt.Sprintf("%s/policies/fileShares/%s", client.BaseURL, d.Id())
+	url := client.BuildAPIURL(fmt.Sprintf("/policies/fileShares/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("GET", url, nil)
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("error reading Azure File Shares Backup Policy: %s", err))
@@ -506,7 +505,7 @@ func resourceAzureFileSharesBackupPolicyUpdate(ctx context.Context, d *schema.Re
 		return diag.FromErr(fmt.Errorf("error marshaling Azure File Shares Backup Policy update request: %s", err))
 	}
 
-	url := fmt.Sprintf("%s/policies/fileShares/%s", client.BaseURL, d.Id())
+	url := client.BuildAPIURL(fmt.Sprintf("/policies/fileShares/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("PUT", url, strings.NewReader(string(jsonData)))
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("error updating Azure File Shares Backup Policy: %s", err))
@@ -523,7 +522,7 @@ func resourceAzureFileSharesBackupPolicyUpdate(ctx context.Context, d *schema.Re
 // CRUD Operations for Resource (Delete)
 func resourceAzureFileSharesBackupPolicyDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*AzureBackupClient)
-	url := fmt.Sprintf("%s/policies/fileShares/%s", client.BaseURL, d.Id())
+	url := client.BuildAPIURL(fmt.Sprintf("/policies/fileShares/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("DELETE", url, nil)
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("error deleting Azure File Shares Backup Policy: %s", err))
