@@ -15,25 +15,24 @@ import (
 )
 
 type VMBackupPolicyRequest struct {
-    ID               *string                  `json:"id,omitempty"`
-    BackupType       string                   `json:"backupType"`
-    IsEnabled        bool                     `json:"isEnabled"`
-    Name             string                   `json:"name"`
-    TenantID         string                   `json:"tenantId"`
-    ServiceAccountID string                   `json:"serviceAccountId"`
-    Description      *string                  `json:"description,omitempty"`
-    Regions          []VMPolicyRegion         `json:"regions"`
-    SelectedItems    *VMPolicySelectedItems   `json:"selectedItems,omitempty"`
-    ExcludedItems    *VMPolicySelectedItems   `json:"excludedItems,omitempty"`
-	RetrySettings    *RetrySettings          `json:"retrySettings,omitempty"`
-	DailySchedule    *DailySchedule          `json:"dailySchedule,omitempty"`
-	WeeklySchedule   *WeeklySchedule         `json:"weeklySchedule,omitempty"`
-	MonthlySchedule  *MonthlySchedule        `json:"monthlySchedule,omitempty"`
-	YearlySchedule   *YearlySchedule         `json:"yearlySchedule,omitempty"`
-	SnapshotSettings *VMSnapshotSettings      `json:"snapshotSettings,omitempty"`
-	PolicyNotificationSettings *[]PolicyNotificationSettings `json:"policyNotificationSettings,omitempty"`
-	HealthCheckSchedule *HealthCheckSchedule    `json:"healthCheckSchedule,omitempty"`
-
+    ID               			*string                  `json:"id,omitempty"`
+    BackupType       			string                   `json:"backupType"`
+    IsEnabled        			bool                     `json:"isEnabled"`
+    Name             			string                   `json:"name"`
+    TenantID         			string                   `json:"tenantId"`
+    ServiceAccountID 			string                   `json:"serviceAccountId"`
+    Description      			*string                  `json:"description,omitempty"`
+    Regions          			[]PolicyRegion         `json:"regions"`
+    SelectedItems    			*VMPolicySelectedItems   `json:"selectedItems,omitempty"`
+    ExcludedItems   		 	*VMPolicySelectedItems   `json:"excludedItems,omitempty"`
+	RetrySettings    			*RetrySettings          `json:"retrySettings,omitempty"`
+	DailySchedule    			*DailySchedule          `json:"dailySchedule,omitempty"`
+	WeeklySchedule   			*WeeklySchedule         `json:"weeklySchedule,omitempty"`
+	MonthlySchedule  			*MonthlySchedule        `json:"monthlySchedule,omitempty"`
+	YearlySchedule   			*YearlySchedule         `json:"yearlySchedule,omitempty"`
+	SnapshotSettings 			*VMSnapshotSettings      `json:"snapshotSettings,omitempty"`
+	PolicyNotificationSettings 	*PolicyNotificationSettings `json:"policyNotificationSettings,omitempty"`
+	HealthCheckSchedule 		*HealthCheckSchedule    `json:"healthCheckSchedule,omitempty"`
 }
 
 type VMBackupPolicyResponse struct {
@@ -44,18 +43,14 @@ type VMBackupPolicyResponse struct {
     TenantID         string                   `json:"tenantId"`
     ServiceAccountID string                   `json:"serviceAccountId"`
     Description      *string                   `json:"description"`
-    Regions          []VMPolicyRegion         `json:"regions"`
+    Regions          []PolicyRegion         `json:"regions"`
 	DailySchedule    *DailySchedule          `json:"dailySchedule,omitempty"`
 	WeeklySchedule   *WeeklySchedule         `json:"weeklySchedule,omitempty"`
 	MonthlySchedule  *MonthlySchedule        `json:"monthlySchedule,omitempty"`
 	YearlySchedule   *YearlySchedule         `json:"yearlySchedule,omitempty"`
 	SnapshotSettings *VMSnapshotSettings      `json:"snapshotSettings,omitempty"`
-	PolicyNotificationSettings *[]PolicyNotificationSettings `json:"policyNotificationSettings,omitempty"`
+	PolicyNotificationSettings *PolicyNotificationSettings `json:"policyNotificationSettings,omitempty"`
 	HealthCheckSchedule *HealthCheckSchedule    `json:"healthCheckSchedule,omitempty"`
-}
-
-type VMPolicyRegion struct {
-    RegionID string `json:"regionId"`
 }
 
 type VMPolicySelectedItems struct {
@@ -72,9 +67,6 @@ type VMSnapshotSettings struct {
 }
 
 // Schedule and settings structs
-type RetrySettings struct {
-    RetryCount int `json:"retryCount,omitempty"`
-}
 
 type DailySchedule struct {
     DailyType        *string             `json:"dailyType,omitempty"`
@@ -130,15 +122,8 @@ type Retention struct {
     RetentionDurationType   *string `json:"retentionDurationType,omitempty"`
 }
 
-type PolicyNotificationSettings struct {
-    Recipient        *string `json:"recipient,omitempty"`
-    NotifyOnSuccess  *bool   `json:"notifyOnSuccess,omitempty"`
-    NotifyOnWarning  *bool   `json:"notifyOnWarning,omitempty"`
-    NotifyOnFailure  *bool   `json:"notifyOnFailure,omitempty"`
-}
-
 type HealthCheckSchedule struct {
-    HealthCheckEnabled  *bool    `json:"healthCheckEnabled,omitempty"`
+    HealthCheckEnabled *bool    `json:"healthCheckEnabled,omitempty"`
     LocalTime          *string  `json:"localTime,omitempty"`
     DayNumberInMonth   *string  `json:"dayNumberInMonth,omitempty"`
     DayOfWeek          *string  `json:"dayOfWeek,omitempty"`
@@ -971,7 +956,7 @@ func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
 		regions := regionsData.([]interface{})
 		for _, r := range regions {
 			region := r.(map[string]interface{})
-			policyRegion := VMPolicyRegion{
+			policyRegion := PolicyRegion{
 				RegionID: region["name"].(string),
 			}
 			request.Regions = append(request.Regions, policyRegion)
