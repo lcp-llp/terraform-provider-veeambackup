@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -556,4 +557,42 @@ func (c *AzureBackupClient) IsAuthenticated() bool {
 // BuildAPIURL constructs a versioned API URL
 func (c *AzureBackupClient) BuildAPIURL(endpoint string) string {
 	return fmt.Sprintf("%s/api/v%s%s", c.hostname, c.apiVersion, endpoint)
+}
+
+// BuildAPIURL constructs API URL for VBR client
+func (c *VBRClient) BuildAPIURL(endpoint string) string {
+	return fmt.Sprintf("%s%s", c.hostname, endpoint)
+}
+
+// DoRequest performs an authenticated HTTP request for VBR client
+func (c *VBRClient) DoRequest(ctx context.Context, method, url string, body []byte) ([]byte, error) {
+	var reqBody io.Reader
+	if body != nil {
+		reqBody = strings.NewReader(string(body))
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.accessToken)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return respBody, fmt.Errorf("API request failed with status %d", resp.StatusCode)
+	}
+
+	return respBody, nil
 }

@@ -60,3 +60,17 @@ func expandPolicyNotificationSettings(input []interface{}) *PolicyNotificationSe
            NotifyOnFailure: getBoolPtr(m["notify_on_failure"]),
        }
 }
+
+// VBR
+
+type VbrUnstructuredDataServerProcessing struct {
+	BackupProxies   		VbrBackupProxies `json:"backupProxies"`
+	CacheRepositoryID  		*string          `json:"cacheRepositoryId,omitempty"`
+	BackupIOControlLevel  	*string          `json:"backupIOControlLevel,omitempty"`
+}
+
+type VbrUnstructuredDataServerAdvancedSettings struct {
+	ProcessingMode 					*string `json:"processingMode,omitempty"`
+	DirectBackupFailoverEnabled 	*bool   `json:"directBackupFailoverEnabled,omitempty"`
+	StorageSnapshotPath 			*string `json:"storageSnapshotPath,omitempty"`
+}
