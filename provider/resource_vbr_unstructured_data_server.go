@@ -214,7 +214,6 @@ func resourceVbrUnstructuredDataServer() *schema.Resource {
 			"result": {
 				Type:        schema.TypeList,
 				Computed:    true,
-				MaxItems:    1,
 				Description: "The result details of the unstructured data server.",
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{

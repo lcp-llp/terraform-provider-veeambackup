@@ -115,7 +115,6 @@ func dataSourceVbrUnstructuredDataServers() *schema.Resource {
 						"advanced_settings": {
 							Type:        schema.TypeList,
 							Computed:    true,
-							MaxItems:    1,
 							Description: "Advanced settings (SMBShare only).",
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
