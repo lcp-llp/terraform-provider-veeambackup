@@ -15,18 +15,21 @@ The unified Veeam provider is used to interact with multiple Veeam services incl
 provider "veeambackup" {
   # Veeam Backup for Azure
   azure {
-    hostname = "https://azure-backup.example.com"
-    username = "admin@example.com"
-    password = "your-azure-password"
+    hostname             = "https://azure-backup.example.com"
+    username             = "admin@example.com"
+    password             = "your-azure-password"
+    api_version          = "8.1"
+    insecure_skip_verify = false  # Set to true for self-signed certificates (not recommended for production)
   }
   
   # Veeam Backup & Replication
   vbr {
-    hostname    = "vbr-server.example.com"
-    port        = "9419"
-    username    = "administrator"
-    password    = "your-vbr-password"
-    api_version = "1.3-rev1"
+    hostname             = "vbr-server.example.com"
+    port                 = "9419"
+    username             = "administrator"
+    password             = "your-vbr-password"
+    api_version          = "1.3-rev1"
+    insecure_skip_verify = false  # Set to true for self-signed certificates (not recommended for production)
   }
 }
 
@@ -75,6 +78,7 @@ You can provide credentials via environment variables:
 export VEEAM_AZURE_HOSTNAME="https://azure-backup.example.com"
 export VEEAM_AZURE_USERNAME="admin@example.com"
 export VEEAM_AZURE_PASSWORD="your-password"
+export VEEAM_AZURE_INSECURE_SKIP_VERIFY="false"
 
 # Veeam Backup & Replication
 export VEEAM_VBR_HOSTNAME="vbr-server.example.com"
@@ -82,6 +86,7 @@ export VEEAM_VBR_PORT="9419"
 export VEEAM_VBR_USERNAME="administrator"
 export VEEAM_VBR_PASSWORD="your-password"
 export VEEAM_VBR_API_VERSION="1.3-rev1"
+export VEEAM_VBR_INSECURE_SKIP_VERIFY="false"
 ```
 
 ## Schema
@@ -92,6 +97,8 @@ export VEEAM_VBR_API_VERSION="1.3-rev1"
   - `hostname` (String, Required) - Hostname of the Azure backup server. Can be sourced from `VEEAM_AZURE_HOSTNAME`
   - `username` (String, Required) - Username for authentication. Can be sourced from `VEEAM_AZURE_USERNAME`
   - `password` (String, Required, Sensitive) - Password for authentication. Can be sourced from `VEEAM_AZURE_PASSWORD`
+  - `api_version` (String, Optional) - Azure Backup REST API version. Default: "8.1". Can be sourced from `VEEAM_AZURE_API_VERSION`
+  - `insecure_skip_verify` (Boolean, Optional) - Skip SSL certificate verification. Default: `false`. Can be sourced from `VEEAM_AZURE_INSECURE_SKIP_VERIFY`. **Warning**: Only use in development/testing environments.
 
 ### VBR Block
 
@@ -101,6 +108,7 @@ export VEEAM_VBR_API_VERSION="1.3-rev1"
   - `username` (String, Required) - Username for authentication. Can be sourced from `VEEAM_VBR_USERNAME`
   - `password` (String, Required, Sensitive) - Password for authentication. Can be sourced from `VEEAM_VBR_PASSWORD`
   - `api_version` (String, Optional) - REST API version. Default: "1.3-rev1". Can be sourced from `VEEAM_VBR_API_VERSION`
+  - `insecure_skip_verify` (Boolean, Optional) - Skip SSL certificate verification. Default: `false`. Can be sourced from `VEEAM_VBR_INSECURE_SKIP_VERIFY`. **Warning**: Only use in development/testing environments.
 
 ## Service Compatibility
 

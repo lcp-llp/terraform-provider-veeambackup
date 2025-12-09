@@ -43,6 +43,13 @@ func Provider() *schema.Provider {
 							Description: "Azure Backup REST API version (default: 8.1)",
 							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AZURE_API_VERSION", "8.1"),
 						},
+						"insecure_skip_verify": {
+							Type:        schema.TypeBool,
+							Optional:    true,
+							Default:     false,
+							Description: "Skip SSL certificate verification (default: false)",
+							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AZURE_INSECURE_SKIP_VERIFY", false),
+						},
 					},
 				},
 			},
@@ -87,6 +94,13 @@ func Provider() *schema.Provider {
 							Description: "VBR REST API version (default: 1.3-rev1)",
 							DefaultFunc: schema.EnvDefaultFunc("VEEAM_VBR_API_VERSION", "1.3-rev1"),
 						},
+						"insecure_skip_verify": {
+							Type:        schema.TypeBool,
+							Optional:    true,
+							Default:     false,
+							Description: "Skip SSL certificate verification (default: false)",
+							DefaultFunc: schema.EnvDefaultFunc("VEEAM_VBR_INSECURE_SKIP_VERIFY", false),
+						},
 					},
 				},
 			},
@@ -122,10 +136,11 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 	if len(azureConfig) > 0 {
 		azureMap := azureConfig[0].(map[string]interface{})
 		config.Azure = &AzureConfig{
-			Hostname:   azureMap["hostname"].(string),
-			Username:   azureMap["username"].(string),
-			Password:   azureMap["password"].(string),
-			APIVersion: azureMap["api_version"].(string),
+			Hostname:            azureMap["hostname"].(string),
+			Username:            azureMap["username"].(string),
+			Password:            azureMap["password"].(string),
+			APIVersion:          azureMap["api_version"].(string),
+			InsecureSkipVerify:  azureMap["insecure_skip_verify"].(bool),
 		}
 	}
 	
@@ -133,11 +148,12 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 	if len(vbrConfig) > 0 {
 		vbrMap := vbrConfig[0].(map[string]interface{})
 		config.VBR = &VBRConfig{
-			Hostname:   vbrMap["hostname"].(string),
-			Port:       vbrMap["port"].(string),
-			Username:   vbrMap["username"].(string),
-			Password:   vbrMap["password"].(string),
-			APIVersion: vbrMap["api_version"].(string),
+			Hostname:            vbrMap["hostname"].(string),
+			Port:                vbrMap["port"].(string),
+			Username:            vbrMap["username"].(string),
+			Password:            vbrMap["password"].(string),
+			APIVersion:          vbrMap["api_version"].(string),
+			InsecureSkipVerify:  vbrMap["insecure_skip_verify"].(bool),
 		}
 	}
 	

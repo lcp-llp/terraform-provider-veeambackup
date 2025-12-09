@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -63,18 +64,20 @@ type ClientConfig struct {
 }
 
 type AzureConfig struct {
-	Hostname   string
-	Username   string
-	Password   string
-	APIVersion string // Default: v8.1 or latest
+	Hostname            string
+	Username            string
+	Password            string
+	APIVersion          string // Default: v8.1 or latest
+	InsecureSkipVerify  bool   // Skip SSL certificate verification
 }
 
 type VBRConfig struct {
-	Hostname   string
-	Port       string // Default: 9419
-	Username   string
-	Password   string
-	APIVersion string // Default: 1.3-rev1
+	Hostname            string
+	Port                string // Default: 9419
+	Username            string
+	Password            string
+	APIVersion          string // Default: 1.3-rev1
+	InsecureSkipVerify  bool   // Skip SSL certificate verification
 }
 
 type AWSConfig struct {
@@ -122,12 +125,22 @@ func NewVeeamClient(config ClientConfig) (*VeeamClient, error) {
 			apiVersion = "8.1" // Default Azure API version
 		}
 		
+		// Configure HTTP client with TLS settings
+		transport := &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: config.Azure.InsecureSkipVerify,
+			},
+		}
+		
 		azureClient := &AzureBackupClient{
 			hostname:   strings.TrimSuffix(config.Azure.Hostname, "/"),
 			username:   config.Azure.Username,
 			password:   config.Azure.Password,
 			apiVersion: apiVersion,
-			httpClient: &http.Client{Timeout: 30 * time.Second},
+			httpClient: &http.Client{
+				Timeout:   30 * time.Second,
+				Transport: transport,
+			},
 		}
 		
 		// Test authentication
@@ -149,11 +162,21 @@ func NewVeeamClient(config ClientConfig) (*VeeamClient, error) {
 			apiVersion = "1.3-rev1" // Default API version
 		}
 		
+		// Configure HTTP client with TLS settings
+		transport := &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: config.VBR.InsecureSkipVerify,
+			},
+		}
+		
 		vbrClient := &VBRClient{
 			hostname:   strings.TrimSuffix(config.VBR.Hostname, "/"),
 			username:   config.VBR.Username,
 			password:   config.VBR.Password,
-			httpClient: &http.Client{Timeout: 30 * time.Second},
+			httpClient: &http.Client{
+				Timeout:   30 * time.Second,
+				Transport: transport,
+			},
 		}
 		
 		// Store port and API version for URL construction
