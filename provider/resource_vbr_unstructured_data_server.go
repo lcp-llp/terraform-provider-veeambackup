@@ -18,7 +18,7 @@ type VbrUnstructuredDataServer struct {
 	Processing  				VbrUnstructuredDataServerProcessing 		`json:"processing"`
 	HostID          			*string                                 	`json:"hostId,omitempty"` //Used for type FileServer
 	Path 	   					*string                                 	`json:"path,omitempty"` //Used for type SMBShare
-	AccessCredentialsRequired *bool   									`json:"accessCredentialsRequired,omitempty"` //Used for type SMBShare
+	AccessCredentialsRequired   *bool   									`json:"accessCredentialsRequired,omitempty"` //Used for type SMBShare
 	AccessCredentialsID 		*string 									`json:"accessCredentialsId,omitempty"` //Used for type SMBShare
 	AdvancedSettings 			*VbrUnstructuredDataServerAdvancedSettings 	`json:"advancedSettings,omitempty"` //Used for type SMBShare
 	Account						*string 									`json:"account,omitempty"`//Used for type AmazonS3, S3Compatible,

@@ -74,3 +74,26 @@ type VbrUnstructuredDataServerAdvancedSettings struct {
 	DirectBackupFailoverEnabled 	*bool   `json:"directBackupFailoverEnabled,omitempty"`
 	StorageSnapshotPath 			*string `json:"storageSnapshotPath,omitempty"`
 }
+
+type VBRCloudCredentialAzureExistingAccountDeployment struct {
+	DeploymentType string `json:"deploymentType"`
+	Region		 string `json:"region"`
+}
+type VBRCloudCredentialAzureExistingAccountSubscription struct {
+	TenantID     string `json:"tenantId"`
+	ApplicationID string `json:"applicationId"`
+	Secret 	      *string `json:"secret,omitempty"`
+	Certificate   *VBRCloudCredentialAzureExistingAccountSubscriptionCertificate `json:"certificate,omitempty"`
+}
+
+type VBRCloudCredentialsResponseData struct {
+	ID   				string 	`json:"id"`
+	Type				string  `json:"type"`
+	Account				*string `json:"account,omitempty"` //Used for type AzureStorage
+	ConnectionName		*string `json:"connectionName,omitempty"` //Used for type AzureCompute
+	Deployment          VBRCloudCredentialAzureExistingAccountDeployment  `json:"deployment,omitempty"` //Used for type AzureCompute
+	Subscription        VBRCloudCredentialAzureExistingAccountSubscription `json:"subscription,omitempty"` //Used for type AzureCompute
+	AccessKey			*string `json:"accessKey,omitempty"` //Used for type Amazon
+	Description 		*string `json:"description,omitempty"`
+	UniqueID			*string `json:"uniqueId,omitempty"`
+}
