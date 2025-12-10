@@ -127,7 +127,7 @@ func dataSourceVbrCloudCredentials() *schema.Resource {
 
 func dataSourceVbrCloudCredentialsRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
-	client := m.(*VBRClient)
+	client := m.(*VeeamClient).VBRClient
 	apiUrl := "/api/v1/cloudCredentials"
 	// Build query parameters
 	queryParams := url.Values{}

@@ -70,8 +70,8 @@ func dataSourceVbrCloudCredential() *schema.Resource {
 	}
 }
 
-func dataSourceVbrAzureCloudCredentialRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*VBRClient)
+func dataSourceVbrCloudCredentialRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+	client := m.(*VeeamClient).VBRClient
 	var diags diag.Diagnostics
 	cloudCredentialID := d.Get("id").(string)
 	apiUrl := fmt.Sprintf("/cloudCredentials/%s", url.PathEscape(cloudCredentialID))

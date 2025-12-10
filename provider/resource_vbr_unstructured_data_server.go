@@ -312,7 +312,7 @@ func resourceVbrUnstructuredDataServer() *schema.Resource {
 
 // CRUD Operations for Resource (Create)
 func resourceVbrUnstructuredDataServerCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*VBRClient)
+	client := m.(*VeeamClient).VBRClient
 	var diags diag.Diagnostics
 	unstructuredDataServer, err := expandVbrUnstructuredDataServer(d)
 	if err != nil {
@@ -352,7 +352,7 @@ func resourceVbrUnstructuredDataServerCreate(ctx context.Context, d *schema.Reso
 // CRUD Operations for Resource (Read)
 
 func resourceVbrUnstructuredDataServerRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*VBRClient)
+	client := m.(*VeeamClient).VBRClient
 	var diags diag.Diagnostics
 	url := client.BuildAPIURL(fmt.Sprintf("/api/v1/inventory/unstructuredDataServers/%s", url.PathEscape(d.Id())))
 	   respBody, err := client.DoRequest(ctx, "GET", url, nil)
@@ -388,7 +388,7 @@ func resourceVbrUnstructuredDataServerRead(ctx context.Context, d *schema.Resour
 
 // CRUD Operations for Resource (Update)
 func resourceVbrUnstructuredDataServerUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*VBRClient)
+	client := m.(*VeeamClient).VBRClient
 	var diags diag.Diagnostics
 	unstructuredDataServer, err := expandVbrUnstructuredDataServer(d)
 	if err != nil {
@@ -422,7 +422,7 @@ func resourceVbrUnstructuredDataServerUpdate(ctx context.Context, d *schema.Reso
 
 // CRUD Operations for Resource (Delete)
 func resourceVbrUnstructuredDataServerDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*VBRClient)
+	client := m.(*VeeamClient).VBRClient
 	var diags diag.Diagnostics
 	url := client.BuildAPIURL(fmt.Sprintf("/api/v1/inventory/unstructuredDataServers/%s", url.PathEscape(d.Id())))
 	_, err := client.DoRequest(ctx, "DELETE", url, nil)
