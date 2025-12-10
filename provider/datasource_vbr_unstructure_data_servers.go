@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 type UnstructuredDataServersDataSourceModel struct {
@@ -17,6 +18,7 @@ type UnstructuredDataServersDataSourceModel struct {
 	OrderColumn *string `json:"orderColumn,omitempty"`
 	OrderAsc  *bool   `json:"orderAsc,omitempty"`
 	NameFilter *string `json:"nameFilter,omitempty"`
+	TypeFilter *string `json:"typeFilter,omitempty"`
 }
 
 type UnstructuredDataServersResponse struct {
@@ -74,6 +76,23 @@ func dataSourceVbrUnstructuredDataServers() *schema.Resource {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Description: "Filter results by name.",
+			},
+			"type_filter": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: "Filter results by type. Valid values: FileServer, SMBShare, NFSShare, NASFiler, S3Compatible, AmazonS3, AzureBlob.",
+				Elem: &schema.Schema{
+					Type: schema.TypeString,
+					ValidateFunc: validation.StringInSlice([]string{
+						"FileServer",
+						"SMBShare",
+						"NFSShare",
+						"NASFiler",
+						"S3Compatible",
+						"AmazonS3",
+						"AzureBlob",
+					}, false),
+				},
 			},
 			// Computed attributes
 			"unstructured_data_servers": {
@@ -182,6 +201,12 @@ func dataSourceVbrUnstructuredDataServers() *schema.Resource {
 	}
 	if v, ok := d.GetOk("name_filter"); ok {
 		queryParams.Add("nameFilter", v.(string))
+	}
+	if v, ok := d.GetOk("type_filter"); ok {
+		typeFilterList := v.([]interface{})
+		for _, typeFilter := range typeFilterList {
+			queryParams.Add("typeFilter", typeFilter.(string))
+		}
 	}
 
 	// Make the API request
