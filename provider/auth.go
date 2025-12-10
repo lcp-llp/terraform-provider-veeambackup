@@ -169,8 +169,13 @@ func NewVeeamClient(config ClientConfig) (*VeeamClient, error) {
 			},
 		}
 		
+		// Strip any http:// or https:// scheme from hostname
+		hostname := strings.TrimSuffix(config.VBR.Hostname, "/")
+		hostname = strings.TrimPrefix(hostname, "https://")
+		hostname = strings.TrimPrefix(hostname, "http://")
+		
 		vbrClient := &VBRClient{
-			hostname:   strings.TrimSuffix(config.VBR.Hostname, "/"),
+			hostname:   hostname,
 			username:   config.VBR.Username,
 			password:   config.VBR.Password,
 			httpClient: &http.Client{
@@ -584,7 +589,7 @@ func (c *AzureBackupClient) BuildAPIURL(endpoint string) string {
 
 // BuildAPIURL constructs API URL for VBR client
 func (c *VBRClient) BuildAPIURL(endpoint string) string {
-	return fmt.Sprintf("%s%s", c.hostname, endpoint)
+	return fmt.Sprintf("https://%s%s", c.hostname, endpoint)
 }
 
 // DoRequest performs an authenticated HTTP request for VBR client
