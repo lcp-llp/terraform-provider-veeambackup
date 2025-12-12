@@ -65,7 +65,7 @@ resource "veeambackup_vbr_azure_cloud_credential" "compute_cert_pem" {
   
   existing_account {
     deployment {
-      deployment_type = "ResourceManager"
+      deployment_type = "MicrosoftAzure"
       region          = "westus2"
     }
     

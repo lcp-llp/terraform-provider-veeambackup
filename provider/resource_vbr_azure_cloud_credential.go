@@ -10,50 +10,48 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
-
 type VbrCloudCredential struct {
-    Type 			 	string                                      `json:"type"`
-    Account          	*string                                     `json:"account,omitempty"` //Used for type AzureStorage
-    SharedKey      		*string                                     `json:"sharedKey,omitempty"` //Used for type AzureStorage
-    ConnectionName  	*string                                     `json:"connectionName,omitempty"` //Used for type AzureCompute
-    CreationMode   		*string                                     `json:"creationMode,omitempty"` //Used for type AzureCompute
-    ExistingAccount  	*VBRCloudCredentialAzureExistingAccount     `json:"existingAccount,omitempty"` //Used for type AzureCompute - Changed to pointer
-    NewAccount      	*VBRCloudCredentialAzureNewAccount          `json:"newAccount,omitempty"` //Used for type AzureCompute - Changed to pointer
-    Description 		*string                                     `json:"description,omitempty"`
-    UniqueID       		*string                                     `json:"uniqueId,omitempty"`
+	Type            string                                  `json:"type"`
+	Account         *string                                 `json:"account,omitempty"`         //Used for type AzureStorage
+	SharedKey       *string                                 `json:"sharedKey,omitempty"`       //Used for type AzureStorage
+	ConnectionName  *string                                 `json:"connectionName,omitempty"`  //Used for type AzureCompute
+	CreationMode    *string                                 `json:"creationMode,omitempty"`    //Used for type AzureCompute
+	ExistingAccount *VBRCloudCredentialAzureExistingAccount `json:"existingAccount,omitempty"` //Used for type AzureCompute - Changed to pointer
+	NewAccount      *VBRCloudCredentialAzureNewAccount      `json:"newAccount,omitempty"`      //Used for type AzureCompute - Changed to pointer
+	Description     *string                                 `json:"description,omitempty"`
+	UniqueID        *string                                 `json:"uniqueId,omitempty"`
 }
 
 type VBRCloudCredentialAzureExistingAccount struct {
-	Deployment VBRCloudCredentialAzureExistingAccountDeployment `json:"deployment"`
+	Deployment   VBRCloudCredentialAzureExistingAccountDeployment   `json:"deployment"`
 	Subscription VBRCloudCredentialAzureExistingAccountSubscription `json:"subscription"`
 }
 
 type VBRCloudCredentialAzureExistingAccountSubscriptionCertificate struct {
-	Certificate string `json:"certificate"`
-	FormatType	    string `json:"formatType"`
-	Password        *string `json:"password,omitempty"`
+	Certificate string  `json:"certificate"`
+	FormatType  string  `json:"formatType"`
+	Password    *string `json:"password,omitempty"`
 }
 
 type VBRCloudCredentialAzureNewAccount struct {
-	Region string `json:"region"`
+	Region           string `json:"region"`
 	VerificationCode string `json:"verificationCode"`
 }
 
-
 type VbrAzureCloudCredentialResponse struct {
-	ID        string `json:"id"`
-	Type      string `json:"type"`
-	Account   string `json:"account,omitempty"` //Used for type AzureStorage
-	ConnectionName  string `json:"connectionName,omitempty"` //Used for type AzureCompute
-	Deployment      VBRCloudCredentialAzureExistingAccountDeployment `json:"deployment,omitempty"` //Used for type AzureCompute
-	Subscription	VBRCloudCredentialAzureExistingAccountSubscription `json:"subscription,omitempty"` //Used for type AzureCompute
-	Description  *string `json:"description,omitempty"`
-	UniqueID  string `json:"uniqueId"`
+	ID             string                                             `json:"id"`
+	Type           string                                             `json:"type"`
+	Account        string                                             `json:"account,omitempty"`        //Used for type AzureStorage
+	ConnectionName string                                             `json:"connectionName,omitempty"` //Used for type AzureCompute
+	Deployment     VBRCloudCredentialAzureExistingAccountDeployment   `json:"deployment,omitempty"`     //Used for type AzureCompute
+	Subscription   VBRCloudCredentialAzureExistingAccountSubscription `json:"subscription,omitempty"`   //Used for type AzureCompute
+	Description    *string                                            `json:"description,omitempty"`
+	UniqueID       string                                             `json:"uniqueId"`
 }
 
 func resourceVbrAzureCloudCredential() *schema.Resource {
 	return &schema.Resource{
-		Description: "Manages a Veeam Backup & Replication Azure Cloud Credential.",
+		Description:   "Manages a Veeam Backup & Replication Azure Cloud Credential.",
 		CreateContext: resourceVbrAzureCloudCredentialCreate,
 		ReadContext:   resourceVbrAzureCloudCredentialRead,
 		UpdateContext: resourceVbrAzureCloudCredentialUpdate,
@@ -63,10 +61,10 @@ func resourceVbrAzureCloudCredential() *schema.Resource {
 		},
 		Schema: map[string]*schema.Schema{
 			"type": {
-				Type:        schema.TypeString,
-				Required:    true,
+				Type:         schema.TypeString,
+				Required:     true,
 				ValidateFunc: validation.StringInSlice([]string{"AzureStorage", "AzureCompute"}, false),
-				Description: "Type of the Azure Cloud Credential. Valid values are 'AzureStorage' and 'AzureCompute'.",
+				Description:  "Type of the Azure Cloud Credential. Valid values are 'AzureStorage' and 'AzureCompute'.",
 			},
 			"account": {
 				Type:        schema.TypeString,
@@ -84,16 +82,16 @@ func resourceVbrAzureCloudCredential() *schema.Resource {
 				Description: "Connection name for the Azure Compute account. Required when type is 'AzureCompute'.",
 			},
 			"creation_mode": {
-				Type:        schema.TypeString,
-				Optional:    true,
+				Type:         schema.TypeString,
+				Optional:     true,
 				ValidateFunc: validation.StringInSlice([]string{"ExistingAccount", "NewAccount"}, false),
-				Description: "Creation mode for the Azure Compute account. Valid values are 'ExistingAccount' and 'NewAccount'. Required when type is 'AzureCompute'.",
+				Description:  "Creation mode for the Azure Compute account. Valid values are 'ExistingAccount' and 'NewAccount'. Required when type is 'AzureCompute'.",
 			},
 			"description": {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Description: "Description of the Azure Cloud Credential.",
-			}, 
+			},
 			"existing_account": {
 				Type:        schema.TypeList,
 				Optional:    true,
@@ -112,13 +110,13 @@ func resourceVbrAzureCloudCredential() *schema.Resource {
 										Type:         schema.TypeString,
 										Required:     true,
 										ValidateFunc: validation.StringInSlice([]string{"MicrosoftAzure", "MicrosoftAzureStack"}, false),
-										Description:  "Deployment type for the existing Azure account. Valid values are 'MicrosoftAzure' and 'Classic'.",
+										Description:  "Deployment type for the existing Azure account. Valid values are 'MicrosoftAzure' and 'MicrosoftAzureStack'.",
 									},
 									"region": {
-										Type:        schema.TypeString,
-										Optional:    true,
+										Type:         schema.TypeString,
+										Optional:     true,
 										ValidateFunc: validation.StringInSlice([]string{"China", "Global", "Government"}, false),
-										Description: "Region for the existing Azure account.",
+										Description:  "Region for the existing Azure account. Valid values are 'China', 'Global', and 'Government'.",
 									},
 								},
 							},
@@ -159,9 +157,9 @@ func resourceVbrAzureCloudCredential() *schema.Resource {
 													Description: "Certificate content for the existing Azure account.",
 												},
 												"format_type": {
-													Type:        schema.TypeString,
-													Required:    true,
-													Description: "Format type of the certificate for the existing Azure account.",
+													Type:         schema.TypeString,
+													Required:     true,
+													Description:  "Format type of the certificate for the existing Azure account.",
 													ValidateFunc: validation.StringInSlice([]string{"Pem", "Pfx"}, false),
 												},
 												"password": {
@@ -220,8 +218,16 @@ func resourceVbrAzureCloudCredentialCreate(ctx context.Context, d *schema.Resour
 	if err != nil {
 		return diag.FromErr(err)
 	}
+
+	// Debug: Log the actual JSON being sent
+	fmt.Printf("[DEBUG] Sending JSON payload: %s\n", string(reqBodyBytes))
+
 	respBodyBytes, err := client.DoRequest(ctx, "POST", apiUrl, reqBodyBytes)
 	if err != nil {
+		// Debug: Log the response body if available
+		if len(respBodyBytes) > 0 {
+			fmt.Printf("[DEBUG] Error response body: %s\n", string(respBodyBytes))
+		}
 		return diag.FromErr(err)
 	}
 	// Parse the response
