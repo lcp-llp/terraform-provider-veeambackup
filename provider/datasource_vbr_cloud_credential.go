@@ -74,7 +74,7 @@ func dataSourceVbrCloudCredentialRead(ctx context.Context, d *schema.ResourceDat
 	client := m.(*VeeamClient).VBRClient
 	var diags diag.Diagnostics
 	cloudCredentialID := d.Get("id").(string)
-	apiUrl := fmt.Sprintf("/cloudCredentials/%s", url.PathEscape(cloudCredentialID))
+	apiUrl := fmt.Sprintf("/api/v1/cloudCredentials/%s", url.PathEscape(cloudCredentialID))
 	// Make the API request
 	fullUrl := client.BuildAPIURL(apiUrl)
 	respBody, err := client.DoRequest(ctx, "GET", fullUrl, nil)

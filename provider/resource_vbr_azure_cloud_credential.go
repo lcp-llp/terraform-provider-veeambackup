@@ -444,10 +444,13 @@ func resourceVbrAzureCloudCredentialUpdate(ctx context.Context, d *schema.Resour
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	_, err = client.DoRequest(ctx, "PUT", apiUrl, reqBodyBytes)
-	if err != nil {
-		return diag.FromErr(err)
-	}
+    // Debug: Log the actual JSON being sent
+    fmt.Printf("[DEBUG] UPDATE - Sending JSON payload: %s\n", string(reqBodyBytes))
+    
+    _, err = client.DoRequest(ctx, "PUT", apiUrl, reqBodyBytes)
+    if err != nil {
+        return diag.FromErr(err)
+    }
 	return resourceVbrAzureCloudCredentialRead(ctx, d, m)
 }
 
