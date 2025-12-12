@@ -49,6 +49,18 @@ type VbrAzureCloudCredentialResponse struct {
 	UniqueID       string                                             `json:"uniqueId"`
 }
 
+type VbrCloudCredentialUpdate struct {
+	ID             string                                              `json:"id"`                       // ID is required for updates
+	Type           string                                              `json:"type"`
+	Account        *string                                             `json:"account,omitempty"`        //Used for type AzureStorage
+	SharedKey      *string                                             `json:"sharedKey,omitempty"`      //Used for type AzureStorage
+	ConnectionName *string                                             `json:"connectionName,omitempty"` //Used for type AzureCompute
+	Deployment     *VBRCloudCredentialAzureExistingAccountDeployment   `json:"deployment,omitempty"`     //Used for type AzureCompute - directly at root level for updates
+	Subscription   *VBRCloudCredentialAzureExistingAccountSubscription `json:"subscription,omitempty"`   //Used for type AzureCompute - directly at root level for updates
+	Description    *string                                             `json:"description,omitempty"`
+	UniqueID       *string                                             `json:"uniqueId,omitempty"`
+}
+
 func resourceVbrAzureCloudCredential() *schema.Resource {
 	return &schema.Resource{
 		Description:   "Manages a Veeam Backup & Replication Azure Cloud Credential.",
@@ -432,25 +444,133 @@ func resourceVbrAzureCloudCredentialRead(ctx context.Context, d *schema.Resource
 	d.Set("unique_id", respData.UniqueID)
 	return diags
 }
+func buildVbrAzureCloudCredentialUpdatePayload(d *schema.ResourceData) (*VbrCloudCredentialUpdate, error) {
+	credentialType := d.Get("type").(string)
+	updatePayload := &VbrCloudCredentialUpdate{
+		ID:   d.Id(), // Add the resource ID to the payload
+		Type: credentialType,
+	}
+
+	// Populate fields based on the type
+	switch credentialType {
+	case "AzureStorage":
+		if v, ok := d.GetOk("account"); ok {
+			account := v.(string)
+			updatePayload.Account = &account
+		}
+		if v, ok := d.GetOk("shared_key"); ok {
+			sharedKey := v.(string)
+			updatePayload.SharedKey = &sharedKey
+		}
+	case "AzureCompute":
+		if v, ok := d.GetOk("connection_name"); ok {
+			connectionName := v.(string)
+			updatePayload.ConnectionName = &connectionName
+		}
+
+		// For updates, extract deployment and subscription directly from existing_account
+		if v, ok := d.GetOk("existing_account"); ok {
+			existingAccountList := v.([]interface{})
+			if len(existingAccountList) > 0 {
+				existingAccountMap := existingAccountList[0].(map[string]interface{})
+
+				// Extract deployment
+				if depV, depOk := existingAccountMap["deployment"]; depOk {
+					deploymentList := depV.([]interface{})
+					if len(deploymentList) > 0 {
+						deploymentMap := deploymentList[0].(map[string]interface{})
+						deployment := VBRCloudCredentialAzureExistingAccountDeployment{}
+						if dt, ok := deploymentMap["deployment_type"]; ok {
+							deployment.DeploymentType = dt.(string)
+						}
+						if r, ok := deploymentMap["region"]; ok {
+							deployment.Region = r.(string)
+						}
+						updatePayload.Deployment = &deployment
+					}
+				}
+
+				// Extract subscription
+				if subV, subOk := existingAccountMap["subscription"]; subOk {
+					subscriptionList := subV.([]interface{})
+					if len(subscriptionList) > 0 {
+						subscriptionMap := subscriptionList[0].(map[string]interface{})
+						subscription := VBRCloudCredentialAzureExistingAccountSubscription{}
+						if tid, ok := subscriptionMap["tenant_id"]; ok {
+							subscription.TenantID = tid.(string)
+						}
+						if aid, ok := subscriptionMap["application_id"]; ok {
+							subscription.ApplicationID = aid.(string)
+						}
+						if s, ok := subscriptionMap["secret"]; ok {
+							secret := s.(string)
+							subscription.Secret = &secret
+						}
+						// Build certificate
+						if c, ok := subscriptionMap["certificate"]; ok {
+							certificateList := c.([]interface{})
+							if len(certificateList) > 0 {
+								certificateMap := certificateList[0].(map[string]interface{})
+								certificate := VBRCloudCredentialAzureExistingAccountSubscriptionCertificate{}
+								if cert, ok := certificateMap["certificate"]; ok {
+									certificate.Certificate = cert.(string)
+								}
+								if ft, ok := certificateMap["format_type"]; ok {
+									certificate.FormatType = ft.(string)
+								}
+								if p, ok := certificateMap["password"]; ok {
+									password := p.(string)
+									certificate.Password = &password
+								}
+								subscription.Certificate = &certificate
+							}
+						}
+						updatePayload.Subscription = &subscription
+					}
+				}
+			}
+		}
+	}
+
+	if v, ok := d.GetOk("description"); ok {
+		description := v.(string)
+		updatePayload.Description = &description
+	}
+	if v, ok := d.GetOk("unique_id"); ok {
+		uniqueID := v.(string)
+		updatePayload.UniqueID = &uniqueID
+	}
+
+	return updatePayload, nil
+}
+
 func resourceVbrAzureCloudCredentialUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*VeeamClient).VBRClient
 	apiUrl := client.BuildAPIURL(fmt.Sprintf("/api/v1/cloudCredentials/%s", d.Id()))
-	// Build the request payload
-	azureCloudCredential, err := buildVbrAzureCloudCredentialPayload(d)
+
+	// Build the update-specific payload
+	azureCloudCredential, err := buildVbrAzureCloudCredentialUpdatePayload(d)
 	if err != nil {
 		return diag.FromErr(err)
 	}
+
 	reqBodyBytes, err := json.Marshal(azureCloudCredential)
 	if err != nil {
 		return diag.FromErr(err)
 	}
-    // Debug: Log the actual JSON being sent
-    fmt.Printf("[DEBUG] UPDATE - Sending JSON payload: %s\n", string(reqBodyBytes))
-    
-    _, err = client.DoRequest(ctx, "PUT", apiUrl, reqBodyBytes)
-    if err != nil {
-        return diag.FromErr(err)
-    }
+
+	// Debug: Log the actual JSON being sent
+	fmt.Printf("[DEBUG] UPDATE - Sending JSON payload: %s\n", string(reqBodyBytes))
+
+	respBodyBytes, err := client.DoRequest(ctx, "PUT", apiUrl, reqBodyBytes)
+	if err != nil {
+		// Debug: Log the response body if available
+		if len(respBodyBytes) > 0 {
+			fmt.Printf("[DEBUG] UPDATE Error response body: %s\n", string(respBodyBytes))
+		}
+		return diag.FromErr(err)
+	}
+
 	return resourceVbrAzureCloudCredentialRead(ctx, d, m)
 }
 
