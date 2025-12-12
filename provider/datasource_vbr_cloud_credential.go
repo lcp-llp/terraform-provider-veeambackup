@@ -18,7 +18,7 @@ type VBRCloudCredentialDataSourceModel struct {
 func dataSourceVbrCloudCredential() *schema.Resource {
 	return &schema.Resource{
 		Description: "Retrieves information about an Azure cloud credential from Veeam Backup & Replication.",
-		ReadContext: dataSourceVbrAzureCloudCredentialRead,
+		ReadContext: dataSourceVbrCloudCredentialRead,
 		Schema: map[string]*schema.Schema{
 			"id": {
 				Type:        schema.TypeString,
