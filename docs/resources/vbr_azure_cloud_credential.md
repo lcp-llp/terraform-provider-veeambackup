@@ -93,7 +93,7 @@ resource "veeambackup_vbr_azure_cloud_credential" "compute_cert_pfx" {
   
   existing_account {
     deployment {
-      deployment_type = "ResourceManager"
+      deployment_type = "MicrosoftAzure"
       region          = "centralus"
     }
     
@@ -155,7 +155,7 @@ Required when `creation_mode = "ExistingAccount"`. Contains the following blocks
 
 ##### deployment Block
 
-* `deployment_type` - (Required) Azure deployment type (typically `ResourceManager`).
+* `deployment_type` - (Required) Azure deployment type (Supported values are `MicrosoftAzure` and `MicrosoftAzureStack`).
 * `region` - (Optional) Azure region for deployment.
 
 ##### subscription Block

@@ -12,15 +12,15 @@ import (
 
 
 type VbrCloudCredential struct {
-	Type 			 string                             `json:"type"`
-	Account          *string                            `json:"account,omitempty"` //Used for type AzureStorage
-	SharedKey      *string                            `json:"sharedKey,omitempty"` //Used for type AzureStorage
-	ConnectionName  *string                            `json:"connectionName,omitempty"` //Used for type AzureCompute
-	CreationMode   *string                            `json:"creationMode,omitempty"` //Used for type AzureCompute
-	ExistingAccount  VBRCloudCredentialAzureExistingAccount  `json:"existingAccount,omitempty"` //Used for type AzureCompute
-	NewAccount      VBRCloudCredentialAzureNewAccount       `json:"newAccount,omitempty"` //Used for type AzureCompute
-	Description 		*string                            `json:"description,omitempty"`
-	UniqueID       		*string                            `json:"uniqueId,omitempty"`
+    Type 			 	string                                      `json:"type"`
+    Account          	*string                                     `json:"account,omitempty"` //Used for type AzureStorage
+    SharedKey      		*string                                     `json:"sharedKey,omitempty"` //Used for type AzureStorage
+    ConnectionName  	*string                                     `json:"connectionName,omitempty"` //Used for type AzureCompute
+    CreationMode   		*string                                     `json:"creationMode,omitempty"` //Used for type AzureCompute
+    ExistingAccount  	*VBRCloudCredentialAzureExistingAccount     `json:"existingAccount,omitempty"` //Used for type AzureCompute - Changed to pointer
+    NewAccount      	*VBRCloudCredentialAzureNewAccount          `json:"newAccount,omitempty"` //Used for type AzureCompute - Changed to pointer
+    Description 		*string                                     `json:"description,omitempty"`
+    UniqueID       		*string                                     `json:"uniqueId,omitempty"`
 }
 
 type VBRCloudCredentialAzureExistingAccount struct {
@@ -109,13 +109,15 @@ func resourceVbrAzureCloudCredential() *schema.Resource {
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
 									"deployment_type": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Deployment type for the existing Azure account.",
+										Type:         schema.TypeString,
+										Required:     true,
+										ValidateFunc: validation.StringInSlice([]string{"MicrosoftAzure", "MicrosoftAzureStack"}, false),
+										Description:  "Deployment type for the existing Azure account. Valid values are 'MicrosoftAzure' and 'Classic'.",
 									},
 									"region": {
 										Type:        schema.TypeString,
 										Optional:    true,
+										ValidateFunc: validation.StringInSlice([]string{"China", "Global", "Government"}, false),
 										Description: "Region for the existing Azure account.",
 									},
 								},
@@ -268,7 +270,7 @@ func buildVbrAzureCloudCredentialPayload(d *schema.ResourceData) (*VbrCloudCrede
 					if err != nil {
 						return nil, err
 					}
-					azureCloudCredential.ExistingAccount = *existingAccount
+					azureCloudCredential.ExistingAccount = existingAccount
 				}
 			}
 		} else if creationMode == "NewAccount" {
@@ -280,7 +282,7 @@ func buildVbrAzureCloudCredentialPayload(d *schema.ResourceData) (*VbrCloudCrede
 					if err != nil {
 						return nil, err
 					}
-					azureCloudCredential.NewAccount = *newAccount
+					azureCloudCredential.NewAccount = newAccount
 				}
 			}
 		}
