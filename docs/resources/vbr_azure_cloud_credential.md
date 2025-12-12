@@ -156,7 +156,7 @@ Required when `creation_mode = "ExistingAccount"`. Contains the following blocks
 ##### deployment Block
 
 * `deployment_type` - (Required) Azure deployment type (Supported values are `MicrosoftAzure` and `MicrosoftAzureStack`).
-* `region` - (Optional) Azure region for deployment.
+* `region` - (Optional) Azure region for deployment (Supported values are `China`, `Global` and `Government`).
 
 ##### subscription Block
 

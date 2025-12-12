@@ -138,7 +138,7 @@ func NewVeeamClient(config ClientConfig) (*VeeamClient, error) {
 			password:   config.Azure.Password,
 			apiVersion: apiVersion,
 			httpClient: &http.Client{
-				Timeout:   30 * time.Second,
+				Timeout:   10 * time.Minute,
 				Transport: transport,
 			},
 		}
@@ -179,7 +179,7 @@ func NewVeeamClient(config ClientConfig) (*VeeamClient, error) {
 			username:   config.VBR.Username,
 			password:   config.VBR.Password,
 			httpClient: &http.Client{
-				Timeout:   30 * time.Second,
+				Timeout:   10 * time.Minute,
 				Transport: transport,
 			},
 		}
