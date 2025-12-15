@@ -491,7 +491,6 @@ func resourceVbrRepository() *schema.Resource {
 				Type:         schema.TypeString,
 				Computed:     true,
 				Description:  "The current state of the repository.",
-				ValidateFunc: validation.StringInSlice([]string{"Stopped", "Starting", "Stopping", "Working", "Pausing", "Resuming", "WaitingTape", "Idle", "Postprocessing", "WaitingRepository", "WaitingSlot"}, false),
 			},
 			"usn": {
 				Type:        schema.TypeInt,
