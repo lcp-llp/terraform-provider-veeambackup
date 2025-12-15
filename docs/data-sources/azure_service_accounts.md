@@ -1,3 +1,7 @@
+---
+subcategory: "Veeam Backup for Azure"
+---
+
 # veeambackup_azure_service_accounts Data Source
 
 Retrieves a list of Azure service accounts from Veeam Backup for Microsoft Azure with optional filtering and pagination.

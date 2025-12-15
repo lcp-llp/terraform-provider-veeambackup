@@ -1,6 +1,10 @@
+---
+subcategory: "Veeam Backup for Azure"
+---
+
 # veeambackup_azure_service_account Data Source
 
-Retrieves information about a specific Azure service account from Veeam Backup for Microsoft Azure.
+Retrieves information about a specific Azure service account configured in Veeam Backup for Microsoft Azure.
 
 ## Example Usage
 

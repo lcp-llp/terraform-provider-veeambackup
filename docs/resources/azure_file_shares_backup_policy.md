@@ -1,3 +1,7 @@
+---
+subcategory: "Veeam Backup for Azure"
+---
+
 # veeambackup_azure_file_shares_backup_policy Resource
 
 Manages a backup policy for Azure file shares in Veeam Backup for Microsoft Azure.

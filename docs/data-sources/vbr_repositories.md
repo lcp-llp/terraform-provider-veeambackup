@@ -1,3 +1,7 @@
+---
+subcategory: "VBR (Backup & Replication)"
+---
+
 # veeambackup_vbr_repositories
 
 Retrieves information about backup repositories from Veeam Backup & Replication.

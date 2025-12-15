@@ -1,3 +1,7 @@
+---
+subcategory: "Veeam Backup for Azure"
+---
+
 # veeambackup_azure_service_account Resource
 
 Creates and manages an Azure service account in Veeam Backup for Microsoft Azure using an existing Entra ID application.

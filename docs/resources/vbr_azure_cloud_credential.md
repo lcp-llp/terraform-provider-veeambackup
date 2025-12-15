@@ -1,3 +1,7 @@
+---
+subcategory: "VBR (Backup & Replication)"
+---
+
 # veeambackup_vbr_azure_cloud_credential Resource
 
 Creates and manages Azure cloud credentials in Veeam Backup & Replication for connecting to Azure Storage and Azure Compute services.

@@ -1,3 +1,7 @@
+---
+subcategory: "VBR (Backup & Replication)"
+---
+
 # veeambackup_vbr_object_storage_backup_job
 
 Manages an object storage backup job in Veeam Backup & Replication.

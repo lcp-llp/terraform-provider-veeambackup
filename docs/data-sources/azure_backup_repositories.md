@@ -1,3 +1,7 @@
+---
+subcategory: "Veeam Backup for Azure"
+---
+
 # veeambackup_azure_backup_repositories Data Source
 
 Retrieves a list of Azure backup repositories from Veeam Backup for Microsoft Azure with optional filtering and pagination.

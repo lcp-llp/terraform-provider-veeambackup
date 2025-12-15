@@ -168,7 +168,7 @@ func resourceVbrRepository() *schema.Resource {
 								Schema: map[string]*schema.Schema{
 									"is_enabled": {
 										Type:        schema.TypeBool,
-										Required:    true,
+										Optional:    true,
 										Default:     true,
 										Description: "Specifies whether immutability is enabled.",
 									},

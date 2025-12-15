@@ -1,3 +1,7 @@
+---
+subcategory: "VBR (Backup & Replication)"
+---
+
 # veeambackup_vbr_repository
 
 Manages a repository in Veeam Backup & Replication.

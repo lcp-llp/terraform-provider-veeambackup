@@ -1,3 +1,7 @@
+---
+subcategory: "VBR (Backup & Replication)"
+---
+
 # veeambackup_vbr_unstructured_data_server Resource
 
 Manages an unstructured data server in Veeam Backup & Replication.

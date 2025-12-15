@@ -1,3 +1,7 @@
+---
+subcategory: "VBR (Backup & Replication)"
+---
+
 # veeambackup_vbr_cloud_credential
 
 Retrieves information about a specific Azure cloud credential from Veeam Backup & Replication.

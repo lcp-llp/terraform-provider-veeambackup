@@ -1,3 +1,7 @@
+---
+subcategory: "Veeam Backup for Azure"
+---
+
 # veeambackup_azure_vm_backup_policy
 
 Manages an Azure VM backup policy in Veeam Backup for Microsoft Azure.

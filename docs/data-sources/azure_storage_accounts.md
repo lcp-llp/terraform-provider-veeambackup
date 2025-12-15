@@ -1,3 +1,7 @@
+---
+subcategory: "Veeam Backup for Azure"
+---
+
 # veeambackup_azure_storage_accounts Data Source
 
 Retrieves information about Azure Storage Accounts available in Veeam Backup for Microsoft Azure with optional filtering and pagination.

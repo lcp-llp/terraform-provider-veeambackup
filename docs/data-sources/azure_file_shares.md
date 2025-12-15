@@ -1,3 +1,7 @@
+---
+subcategory: "Veeam Backup for Azure"
+---
+
 # azure_file_shares Data Source
 
 Use this data source to retrieve information about Azure file shares that can be backed up using Veeam Backup for Microsoft Azure.

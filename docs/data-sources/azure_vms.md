@@ -1,3 +1,7 @@
+---
+subcategory: "Veeam Backup for Azure"
+---
+
 # veeambackup_azure_vms Data Source
 
 Retrieves information about Azure VMs from Veeam Backup for Microsoft Azure with optional filtering and pagination.
