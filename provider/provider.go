@@ -111,7 +111,9 @@ func Provider() *schema.Provider {
 			"veeambackup_azure_file_shares_backup_policy": resourceAzureFileSharesBackupPolicy(),
 			"veeambackup_vbr_unstructured_data_server": resourceVbrUnstructuredDataServer(),
 			"veeambackup_vbr_azure_cloud_credential": resourceVbrAzureCloudCredential(),
-		},
+			"veeambackup_vbr_object_storage_backup_job": resourceVbrObjectStorageBackupJob(),
+			"veeambackup_vbr_repository": resourceVbrRepository(),
+	},
 		DataSourcesMap: map[string]*schema.Resource{
 			"veeambackup_azure_backup_repositories": dataSourceAzureBackupRepositories(),
 			"veeambackup_azure_service_accounts":    dataSourceAzureServiceAccounts(),

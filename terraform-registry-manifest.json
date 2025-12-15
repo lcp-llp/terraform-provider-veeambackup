@@ -2,5 +2,48 @@
   "version": 1,
   "metadata": {
     "protocol_versions": ["5.0"]
+  },
+  "categories": {
+    "resources": [
+      {
+        "name": "Azure",
+        "resources": [
+          "veeambackup_azure_service_account",
+          "veeambackup_azure_vm_backup_policy",
+          "veeambackup_azure_file_shares_backup_policy"
+        ]
+      },
+      {
+        "name": "VBR (Backup & Replication)",
+        "resources": [
+          "veeambackup_vbr_unstructured_data_server",
+          "veeambackup_vbr_azure_cloud_credential",
+          "veeambackup_vbr_object_storage_backup_job",
+          "veeambackup_vbr_repository"
+        ]
+      }
+    ],
+    "data-sources": [
+      {
+        "name": "Azure",
+        "data_sources": [
+          "veeambackup_azure_backup_repositories",
+          "veeambackup_azure_service_accounts",
+          "veeambackup_azure_service_account",
+          "veeambackup_azure_storage_accounts",
+          "veeambackup_azure_vms",
+          "veeambackup_azure_file_shares"
+        ]
+      },
+      {
+        "name": "VBR (Backup & Replication)",
+        "data_sources": [
+          "veeambackup_vbr_cloud_credential",
+          "veeambackup_vbr_cloud_credentials",
+          "veeambackup_vbr_unstructured_data_servers",
+          "veeambackup_vbr_repositories"
+        ]
+      }
+    ]
   }
 }
