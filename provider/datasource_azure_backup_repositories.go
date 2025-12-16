@@ -17,10 +17,10 @@ type BackupRepository struct {
 	Status              string `json:"status,omitempty"`
 	Type                string `json:"type,omitempty"`
 	Tier                string `json:"tier,omitempty"`
-	SearchPattern	    string `json:"searchPattern,omitempty"`
+	SearchPattern       string `json:"searchPattern,omitempty"`
 	IsEncrypted         bool   `json:"isEncrypted,omitempty"`
-	Offset			    int    `json:"offset,omitempty"`
-	Limit			    int    `json:"limit,omitempty"`
+	Offset              int    `json:"offset,omitempty"`
+	Limit               int    `json:"limit,omitempty"`
 	TenantID            string `json:"tenantId,omitempty"`
 	ServiceAccountID    string `json:"serviceAccountId,omitempty"`
 	ImmutabilityEnabled bool   `json:"immutabilityEnabled,omitempty"`
@@ -28,47 +28,46 @@ type BackupRepository struct {
 
 // BackupRepositoriesResponse represents the API response for backup repositories
 type BackupRepositoriesResponse struct {
-    Results    []BackupRepositoryDetail `json:"results"`
-    TotalCount int            `json:"totalCount"`
+	Results    []BackupRepositoryDetail `json:"results"`
+	TotalCount int                      `json:"totalCount"`
 }
 
 type BackupRepositoryDetail struct {
-	EncryptionEnabled    	bool   `json:"enabledEncryption"`
-	StorageTier		     	string `json:"storageTier"`
-	VeeamID                 string `json:"id"`
-	Name                 	string `json:"name"`
-	Description          	string `json:"description"`
-	AzureStorageAccountId   string `json:"azureStorageAccountId"`
-	AzureStorageFolder    	AzureStorageFolder `json:"azureStorageFolder"`
-	AzureStorageContainer 	AzureStorageContainer `json:"azureStorageContainer"`
-	RegionId				string `json:"regionId"`
-	RegionName				string `json:"regionName"`
-	AzureAccountId 			string `json:"azureAccountId"`
-	RepositoryType       	string `json:"repositoryType"`
-	Status               	string `json:"status"`
-	IsStorageTierInferred  	bool   					  `json:"isStorageTierInferred"`
-	ImmutabilityEnabled  	bool   				      `json:"immutabilityEnabled"`
-	RepositoryOwnership   	RepositoryOwnership     `json:"repositoryOwnership"`
-	ConcurrencyLimit       	int    				  	  `json:"concurrencyLimit"`
+	EncryptionEnabled       bool                    `json:"enabledEncryption"`
+	StorageTier             string                  `json:"storageTier"`
+	VeeamID                 string                  `json:"id"`
+	Name                    string                  `json:"name"`
+	Description             string                  `json:"description"`
+	AzureStorageAccountId   string                  `json:"azureStorageAccountId"`
+	AzureStorageFolder      AzureStorageFolder      `json:"azureStorageFolder"`
+	AzureStorageContainer   AzureStorageContainer   `json:"azureStorageContainer"`
+	RegionId                string                  `json:"regionId"`
+	RegionName              string                  `json:"regionName"`
+	AzureAccountId          string                  `json:"azureAccountId"`
+	RepositoryType          string                  `json:"repositoryType"`
+	Status                  string                  `json:"status"`
+	IsStorageTierInferred   bool                    `json:"isStorageTierInferred"`
+	ImmutabilityEnabled     bool                    `json:"immutabilityEnabled"`
+	RepositoryOwnership     RepositoryOwnership     `json:"repositoryOwnership"`
+	ConcurrencyLimit        int                     `json:"concurrencyLimit"`
 	StorageConsumptionLimit StorageConsumptionLimit `json:"storageConsumptionLimit"`
-	VeeamVaultId            int  					  `json:"veeamVaultId"`
+	VeeamVaultId            int                     `json:"veeamVaultId"`
 }
 
 type AzureStorageFolder struct {
-	Name 					string 	`json:"name"`
-	SupportsVersioning 		bool 	`json:"supportsVersioning"`
-	ImmutabilityPolicyState string 	`json:"immutabilityPolicyState"`
+	Name                    string `json:"name"`
+	SupportsVersioning      bool   `json:"supportsVersioning"`
+	ImmutabilityPolicyState string `json:"immutabilityPolicyState"`
 }
 
 type AzureStorageContainer struct {
-	Name 					string 	`json:"name"`
-	SupportsVersioning 		bool 	`json:"supportsVersioning"`
-	ImmutabilityPolicyState string 	`json:"immutabilityPolicyState"`
+	Name                    string `json:"name"`
+	SupportsVersioning      bool   `json:"supportsVersioning"`
+	ImmutabilityPolicyState string `json:"immutabilityPolicyState"`
 }
 
-
 type RepositoryOwnership struct {
-	HasAnotherOwner 	   bool   `json:"hasAnotherOwner"`
+	HasAnotherOwner        bool   `json:"hasAnotherOwner"`
 	CurrentOwnerIdentifier string `json:"currentOwnerIdentifier"`
 	CurrentOwnerName       string `json:"currentOwnerName"`
 }
@@ -443,22 +442,22 @@ func dataSourceAzureBackupRepositoriesRead(ctx context.Context, d *schema.Resour
 
 	for i, repo := range repositoriesResp.Results {
 		repositoryDetails[i] = map[string]interface{}{
-			"veeam_id":                  repo.VeeamID,
-			"name":                      repo.Name,
-			"description":               repo.Description,
-			"status":                    repo.Status,
-			"repository_type":           repo.RepositoryType,
-			"storage_tier":              repo.StorageTier,
-			"encryption_enabled":        repo.EncryptionEnabled,
-			"immutability_enabled":      repo.ImmutabilityEnabled,
-			"azure_storage_account_id":  repo.AzureStorageAccountId,
-			"region_id":                 repo.RegionId,
-			"region_name":               repo.RegionName,
-			"azure_account_id":          repo.AzureAccountId,
+			"veeam_id":                 repo.VeeamID,
+			"name":                     repo.Name,
+			"description":              repo.Description,
+			"status":                   repo.Status,
+			"repository_type":          repo.RepositoryType,
+			"storage_tier":             repo.StorageTier,
+			"encryption_enabled":       repo.EncryptionEnabled,
+			"immutability_enabled":     repo.ImmutabilityEnabled,
+			"azure_storage_account_id": repo.AzureStorageAccountId,
+			"region_id":                repo.RegionId,
+			"region_name":              repo.RegionName,
+			"azure_account_id":         repo.AzureAccountId,
 			"azure_storage_container": []interface{}{
 				map[string]interface{}{
-					"name":                     repo.AzureStorageContainer.Name,
-					"supports_versioning":      repo.AzureStorageContainer.SupportsVersioning,
+					"name":                      repo.AzureStorageContainer.Name,
+					"supports_versioning":       repo.AzureStorageContainer.SupportsVersioning,
 					"immutability_policy_state": repo.AzureStorageContainer.ImmutabilityPolicyState,
 				},
 			},
@@ -471,11 +470,11 @@ func dataSourceAzureBackupRepositoriesRead(ctx context.Context, d *schema.Resour
 			},
 			"repository_ownership": []interface{}{
 				map[string]interface{}{
-					"has_another_owner":         repo.RepositoryOwnership.HasAnotherOwner,
-					"current_owner_identifier":  repo.RepositoryOwnership.CurrentOwnerIdentifier,
-					"current_owner_name":        repo.RepositoryOwnership.CurrentOwnerName,
+					"has_another_owner":        repo.RepositoryOwnership.HasAnotherOwner,
+					"current_owner_identifier": repo.RepositoryOwnership.CurrentOwnerIdentifier,
+					"current_owner_name":       repo.RepositoryOwnership.CurrentOwnerName,
 				},
-        	},
+			},
 			"storage_consumption_limit": []interface{}{
 				map[string]interface{}{
 					"limit_type":  repo.StorageConsumptionLimit.LimitType,
@@ -485,12 +484,12 @@ func dataSourceAzureBackupRepositoriesRead(ctx context.Context, d *schema.Resour
 		}
 
 		// Create JSON string for the repositories map
-	detailJSON, err := json.Marshal(repositoryDetails[i])
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to marshal repository details: %w", err))
+		detailJSON, err := json.Marshal(repositoryDetails[i])
+		if err != nil {
+			return diag.FromErr(fmt.Errorf("failed to marshal repository details: %w", err))
+		}
+		repositories[repo.Name] = string(detailJSON)
 	}
-	repositories[repo.Name] = string(detailJSON)
-}
 
 	// Set the data in the resource
 	if err := d.Set("repositories", repositories); err != nil {

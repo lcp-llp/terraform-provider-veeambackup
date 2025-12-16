@@ -16,10 +16,10 @@ import (
 type VeeamClient struct {
 	// Azure Backup for Azure API client
 	AzureClient *AzureBackupClient
-	
+
 	// Future: VBR client
 	VBRClient *VBRClient
-	
+
 	// Future: AWS client
 	AWSClient *AWSBackupClient
 }
@@ -49,11 +49,11 @@ type VBRClient struct {
 
 // AWSBackupClient handles future AWS backup API
 type AWSBackupClient struct {
-	hostname     string
-	accessKey    string
-	secretKey    string
-	accessToken  string
-	httpClient   *http.Client
+	hostname    string
+	accessKey   string
+	secretKey   string
+	accessToken string
+	httpClient  *http.Client
 }
 
 // ClientConfig holds configuration for all Veeam services
@@ -64,20 +64,20 @@ type ClientConfig struct {
 }
 
 type AzureConfig struct {
-	Hostname            string
-	Username            string
-	Password            string
-	APIVersion          string // Default: v8.1 or latest
-	InsecureSkipVerify  bool   // Skip SSL certificate verification
+	Hostname           string
+	Username           string
+	Password           string
+	APIVersion         string // Default: v8.1 or latest
+	InsecureSkipVerify bool   // Skip SSL certificate verification
 }
 
 type VBRConfig struct {
-	Hostname            string
-	Port                string // Default: 9419
-	Username            string
-	Password            string
-	APIVersion          string // Default: 1.3-rev1
-	InsecureSkipVerify  bool   // Skip SSL certificate verification
+	Hostname           string
+	Port               string // Default: 9419
+	Username           string
+	Password           string
+	APIVersion         string // Default: 1.3-rev1
+	InsecureSkipVerify bool   // Skip SSL certificate verification
 }
 
 type AWSConfig struct {
@@ -117,21 +117,21 @@ type ErrorResponse struct {
 // NewVeeamClient creates a new unified client
 func NewVeeamClient(config ClientConfig) (*VeeamClient, error) {
 	client := &VeeamClient{}
-	
+
 	// Initialize Azure client if credentials provided
 	if config.Azure != nil {
 		apiVersion := config.Azure.APIVersion
 		if apiVersion == "" {
 			apiVersion = "8.1" // Default Azure API version
 		}
-		
+
 		// Configure HTTP client with TLS settings
 		transport := &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: config.Azure.InsecureSkipVerify,
 			},
 		}
-		
+
 		azureClient := &AzureBackupClient{
 			hostname:   strings.TrimSuffix(config.Azure.Hostname, "/"),
 			username:   config.Azure.Username,
@@ -142,15 +142,15 @@ func NewVeeamClient(config ClientConfig) (*VeeamClient, error) {
 				Transport: transport,
 			},
 		}
-		
+
 		// Test authentication
 		if err := azureClient.Authenticate(); err != nil {
 			return nil, fmt.Errorf("failed to authenticate with Azure Backup service: %w", err)
 		}
-		
+
 		client.AzureClient = azureClient
 	}
-	
+
 	// Initialize VBR client if credentials provided
 	if config.VBR != nil {
 		port := config.VBR.Port
@@ -161,46 +161,46 @@ func NewVeeamClient(config ClientConfig) (*VeeamClient, error) {
 		if apiVersion == "" {
 			apiVersion = "1.3-rev1" // Default API version
 		}
-		
+
 		// Configure HTTP client with TLS settings
 		transport := &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: config.VBR.InsecureSkipVerify,
 			},
 		}
-		
+
 		// Strip any http:// or https:// scheme from hostname
 		hostname := strings.TrimSuffix(config.VBR.Hostname, "/")
 		hostname = strings.TrimPrefix(hostname, "https://")
 		hostname = strings.TrimPrefix(hostname, "http://")
-		
+
 		vbrClient := &VBRClient{
-			hostname:   hostname,
-			username:   config.VBR.Username,
-			password:   config.VBR.Password,
+			hostname: hostname,
+			username: config.VBR.Username,
+			password: config.VBR.Password,
 			httpClient: &http.Client{
 				Timeout:   10 * time.Minute,
 				Transport: transport,
 			},
 		}
-		
+
 		// Store port and API version for URL construction
 		vbrClient.hostname = fmt.Sprintf("%s:%s", vbrClient.hostname, port)
-		
+
 		// Test authentication
 		if err := vbrClient.AuthenticateVBR(apiVersion); err != nil {
 			return nil, fmt.Errorf("failed to authenticate with VBR service: %w", err)
 		}
-		
+
 		client.VBRClient = vbrClient
 	}
-	
+
 	// Future: Initialize AWS client
 	if config.AWS != nil {
 		// awsClient := &AWSBackupClient{...}
 		// client.AWSClient = awsClient
 	}
-	
+
 	return client, nil
 }
 
