@@ -335,7 +335,7 @@ func resourceVbrUnstructuredDataServerCreate(ctx context.Context, d *schema.Reso
 	   if err != nil {
 		   return diag.FromErr(err)
 	   }
-	   d.SetId(VbrUnstructuredDataServerResponse.ID)
+	   d.SetId(VbrUnstructuredDataServerResponse.ResourceID)
 	   d.Set("type", VbrUnstructuredDataServerResponse.SessionType) // Set from API response
 	   d.Set("job_id", VbrUnstructuredDataServerResponse.JobID)
 	   d.Set("name", VbrUnstructuredDataServerResponse.Name)
