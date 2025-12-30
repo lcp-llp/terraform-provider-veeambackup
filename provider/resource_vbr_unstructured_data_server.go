@@ -340,10 +340,13 @@ func resourceVbrUnstructuredDataServerCreate(ctx context.Context, d *schema.Reso
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	d.SetId(VbrUnstructuredDataServerResponse.ResourceID)
-	d.Set("type", VbrUnstructuredDataServerResponse.SessionType) // Set from API response
+	d.SetId(VbrUnstructuredDataServerResponse.ID)
+	d.Set("session_type", VbrUnstructuredDataServerResponse.SessionType)
 	d.Set("job_id", VbrUnstructuredDataServerResponse.JobID)
-	d.Set("name", VbrUnstructuredDataServerResponse.Name)
+	d.Set("creation_time", VbrUnstructuredDataServerResponse.CreationTime)
+	d.Set("state", VbrUnstructuredDataServerResponse.State)
+	d.Set("usn", VbrUnstructuredDataServerResponse.USN)
+	d.Set("resource_id", VbrUnstructuredDataServerResponse.ResourceID)
 	d.Set("result", []interface{}{
 		map[string]interface{}{
 			"result":      VbrUnstructuredDataServerResponse.Result.Result,
@@ -377,11 +380,12 @@ func resourceVbrUnstructuredDataServerRead(ctx context.Context, d *schema.Resour
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	d.Set("type", VbrUnstructuredDataServerResponse.SessionType) // Set from API response
+	d.Set("session_type", VbrUnstructuredDataServerResponse.SessionType)
 	d.Set("job_id", VbrUnstructuredDataServerResponse.JobID)
 	d.Set("creation_time", VbrUnstructuredDataServerResponse.CreationTime)
 	d.Set("state", VbrUnstructuredDataServerResponse.State)
 	d.Set("usn", VbrUnstructuredDataServerResponse.USN)
+	d.Set("resource_id", VbrUnstructuredDataServerResponse.ResourceID)
 	d.Set("result", []interface{}{
 		map[string]interface{}{
 			"result":      VbrUnstructuredDataServerResponse.Result.Result,
