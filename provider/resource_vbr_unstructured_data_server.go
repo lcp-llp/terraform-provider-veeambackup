@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/customdiff"
@@ -340,20 +341,22 @@ func resourceVbrUnstructuredDataServerCreate(ctx context.Context, d *schema.Reso
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	d.SetId(VbrUnstructuredDataServerResponse.ID)
-	d.Set("session_type", VbrUnstructuredDataServerResponse.SessionType)
+
+	// Wait for the session to complete
+	sessionID := VbrUnstructuredDataServerResponse.ID
+	err = waitForVbrSession(ctx, client, sessionID)
+	if err != nil {
+		return diag.FromErr(fmt.Errorf("failed waiting for session to complete: %w", err))
+	}
+
+	// Find the actual resource by its identifying attribute
+	resourceID, err := findUnstructuredDataServer(ctx, client, unstructuredDataServer)
+	if err != nil {
+		return diag.FromErr(fmt.Errorf("failed to find created resource: %w", err))
+	}
+
+	d.SetId(resourceID)
 	d.Set("job_id", VbrUnstructuredDataServerResponse.JobID)
-	d.Set("creation_time", VbrUnstructuredDataServerResponse.CreationTime)
-	d.Set("state", VbrUnstructuredDataServerResponse.State)
-	d.Set("usn", VbrUnstructuredDataServerResponse.USN)
-	d.Set("resource_id", VbrUnstructuredDataServerResponse.ResourceID)
-	d.Set("result", []interface{}{
-		map[string]interface{}{
-			"result":      VbrUnstructuredDataServerResponse.Result.Result,
-			"message":     VbrUnstructuredDataServerResponse.Result.Message,
-			"is_canceled": VbrUnstructuredDataServerResponse.Result.IsCanceled,
-		},
-	})
 
 	return diags
 }
@@ -549,4 +552,89 @@ func expandVbrUnstructuredDataServer(d *schema.ResourceData) (*VbrUnstructuredDa
 		}
 	}
 	return unstructuredDataServer, nil
+}
+
+// waitForVbrSession polls a VBR session until it completes
+func waitForVbrSession(ctx context.Context, client *VBRClient, sessionID string) error {
+	sessionURL := client.BuildAPIURL(fmt.Sprintf("/api/v1/sessions/%s", url.PathEscape(sessionID)))
+
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("session polling cancelled by context")
+		default:
+		}
+
+		respBody, err := client.DoRequest(ctx, "GET", sessionURL, nil)
+		if err != nil {
+			return fmt.Errorf("failed to check session status: %w", err)
+		}
+
+		var session VbrUnstructuredDataServerResponse
+		err = json.Unmarshal(respBody, &session)
+		if err != nil {
+			return fmt.Errorf("failed to parse session response: %w", err)
+		}
+
+		switch session.State {
+		case "Stopped":
+			// Check if it was successful
+			if session.Result.Result == "Success" {
+				return nil
+			}
+			return fmt.Errorf("session failed: %s", session.Result.Message)
+		case "Working":
+			// Continue polling
+			time.Sleep(5 * time.Second)
+			continue
+		default:
+			return fmt.Errorf("unknown session state: %s", session.State)
+		}
+	}
+}
+
+// findUnstructuredDataServer finds the created server by its identifying attributes
+func findUnstructuredDataServer(ctx context.Context, client *VBRClient, server *VbrUnstructuredDataServer) (string, error) {
+	// Build query to find the server by name/identifying attribute
+	queryParams := url.Values{}
+	
+	// Use the appropriate identifier based on type
+	switch server.Type {
+	case "AzureBlob":
+		if server.FriendlyName != nil {
+			queryParams.Add("nameFilter", *server.FriendlyName)
+		}
+	case "FileServer":
+		// For FileServer, we might need to search differently
+		queryParams.Add("typeFilter", server.Type)
+	case "SMBShare":
+		if server.Path != nil {
+			queryParams.Add("nameFilter", *server.Path)
+		}
+	case "AmazonS3", "S3Compatible":
+		if server.Account != nil {
+			queryParams.Add("nameFilter", *server.Account)
+		}
+	}
+
+	listURL := client.BuildAPIURL(fmt.Sprintf("/api/v1/inventory/unstructuredDataServers?%s", queryParams.Encode()))
+	respBody, err := client.DoRequest(ctx, "GET", listURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to list unstructured data servers: %w", err)
+	}
+
+	var listResponse struct {
+		Data []UnstructuredDataServersResponseData `json:"data"`
+	}
+	err = json.Unmarshal(respBody, &listResponse)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse server list: %w", err)
+	}
+
+	if len(listResponse.Data) == 0 {
+		return "", fmt.Errorf("no matching unstructured data server found")
+	}
+
+	// Return the first match (most recently created)
+	return listResponse.Data[0].ID, nil
 }
