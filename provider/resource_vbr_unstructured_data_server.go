@@ -71,6 +71,7 @@ func resourceVbrUnstructuredDataServer() *schema.Resource {
 			"type": {
 				Type:         schema.TypeString,
 				Required:     true,
+				ForceNew:     true,
 				Description:  "Type of the unstructured data server.",
 				ValidateFunc: validation.StringInSlice([]string{"AzureBlob", "AmazonS3", "S3Compatible", "FileServer", "SMBShare"}, false),
 			},
@@ -118,11 +119,13 @@ func resourceVbrUnstructuredDataServer() *schema.Resource {
 			"host_id": {
 				Type:        schema.TypeString,
 				Optional:    true,
+				ForceNew:    true,
 				Description: "Host ID for File Server type. Note: Only required if type is 'FileServer'.",
 			},
 			"path": {
 				Type:        schema.TypeString,
 				Optional:    true,
+				ForceNew:    true,
 				Description: "Path for SMB Share type. Note: Only required if type is 'SMBShare'.",
 			},
 			"access_credentials_required": {
@@ -133,6 +136,7 @@ func resourceVbrUnstructuredDataServer() *schema.Resource {
 			"access_credentials_id": {
 				Type:        schema.TypeString,
 				Optional:    true,
+				ForceNew:    true,
 				Description: "Access credentials ID for SMB Share type. Note: Only required if type is 'SMBShare'.",
 			},
 			"advanced_settings": {
@@ -164,21 +168,25 @@ func resourceVbrUnstructuredDataServer() *schema.Resource {
 			"account": {
 				Type:        schema.TypeString,
 				Optional:    true,
+				ForceNew:    true,
 				Description: "Account name for Amazon S3 or S3 Compatible types. Note: Only required if type is 'AmazonS3' or 'S3Compatible'.",
 			},
 			"friendly_name": {
 				Type:        schema.TypeString,
 				Optional:    true,
+				ForceNew:    true,
 				Description: "Friendly name for Azure Blob type. Note: Only required if type is 'AzureBlob'.",
 			},
 			"credentials_id": {
 				Type:        schema.TypeString,
 				Optional:    true,
+				ForceNew:    true,
 				Description: "Credentials ID for Azure Blob type. Note: Only required if type is 'AzureBlob'.",
 			},
 			"region_type": {
 				Type:         schema.TypeString,
 				Optional:     true,
+				ForceNew:     true,
 				Description:  "Region type for Azure Blob type. Note: Only required if type is 'AzureBlob'.",
 				ValidateFunc: validation.StringInSlice([]string{"Global", "Government", "China"}, false),
 			}, // Completed Schema
@@ -378,24 +386,42 @@ func resourceVbrUnstructuredDataServerRead(ctx context.Context, d *schema.Resour
 		}
 		return diag.FromErr(err)
 	}
-	var VbrUnstructuredDataServerResponse VbrUnstructuredDataServerResponse
-	err = json.Unmarshal(respBody, &VbrUnstructuredDataServerResponse)
+	
+	// Use the data source response structure for the actual server details
+	var server UnstructuredDataServersResponseData
+	err = json.Unmarshal(respBody, &server)
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	d.Set("session_type", VbrUnstructuredDataServerResponse.SessionType)
-	d.Set("job_id", VbrUnstructuredDataServerResponse.JobID)
-	d.Set("creation_time", VbrUnstructuredDataServerResponse.CreationTime)
-	d.Set("state", VbrUnstructuredDataServerResponse.State)
-	d.Set("usn", VbrUnstructuredDataServerResponse.USN)
-	d.Set("resource_id", VbrUnstructuredDataServerResponse.ResourceID)
-	d.Set("result", []interface{}{
-		map[string]interface{}{
-			"result":      VbrUnstructuredDataServerResponse.Result.Result,
-			"message":     VbrUnstructuredDataServerResponse.Result.Message,
-			"is_canceled": VbrUnstructuredDataServerResponse.Result.IsCanceled,
-		},
-	})
+	
+	// Set the server configuration fields
+	d.Set("type", server.Type)
+	
+	if server.HostID != nil {
+		d.Set("host_id", *server.HostID)
+	}
+	if server.Path != nil {
+		d.Set("path", *server.Path)
+	}
+	if server.AccessCredentialsRequired != nil {
+		d.Set("access_credentials_required", *server.AccessCredentialsRequired)
+	}
+	if server.AccessCredentialsID != nil {
+		d.Set("access_credentials_id", *server.AccessCredentialsID)
+	}
+	if server.Account != nil {
+		d.Set("account", *server.Account)
+	}
+	if server.FriendlyName != nil {
+		d.Set("friendly_name", *server.FriendlyName)
+	}
+	if server.CredentialsID != nil {
+		d.Set("credentials_id", *server.CredentialsID)
+	}
+	if server.RegionType != nil {
+		d.Set("region_type", *server.RegionType)
+	}
+	
 	return diags
 }
 
