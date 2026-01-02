@@ -16,6 +16,7 @@ type VbrObjectStorageBackupJob struct {
 	BackupRepository  VbrObjectStorageBackupJobBackupRepository `json:"backupRepository"`
 	Description       *string                                   `json:"description,omitempty"`
 	IsHighPriority    *bool                                     `json:"isHighPriority,omitempty"`
+	IsDisabled		  *bool                                     `json:"isDisabled,omitempty"`
 	ArchiveRepository *VbrBackupJobArchiveRepository            `json:"archiveRepository,omitempty"`
 	Schedule          *VbrBackupJobSchedule                     `json:"schedule,omitempty"`
 }
@@ -173,6 +174,11 @@ func resourceVbrObjectStorageBackupJob() *schema.Resource {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Description: "Specifies if the backup job is high priority.",
+			},
+			"is_disabled": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Description: "Specifies if the backup job is disabled. (Required when updating an existing job)",
 			},
 			"objects": {
 				Type:        schema.TypeList,
@@ -1078,6 +1084,7 @@ func resourceVBRObjectStorageBackupJobUpdate(ctx context.Context, d *schema.Reso
 		Name:             d.Get("name").(string),
 		Type:             "ObjectStorageBackup",
 		Description:      getStringPtr(d.Get("description")),
+		IsDisabled:       getBoolPtr(d.Get("is_disabled")),
 		IsHighPriority:   getBoolPtr(d.Get("is_high_priority")),
 		Objects:          expandVBRObjectStorageBackupJobObjects(d.Get("objects").([]interface{})),
 		BackupRepository: expandVBRObjectStorageBackupJobBackupRepository(d.Get("backup_repository").([]interface{})),
