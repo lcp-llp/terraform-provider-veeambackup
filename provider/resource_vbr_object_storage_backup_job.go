@@ -16,9 +16,10 @@ type VbrObjectStorageBackupJob struct {
 	BackupRepository  VbrObjectStorageBackupJobBackupRepository `json:"backupRepository"`
 	Description       *string                                   `json:"description,omitempty"`
 	IsHighPriority    *bool                                     `json:"isHighPriority,omitempty"`
-	IsDisabled		  *bool                                     `json:"isDisabled,omitempty"`
+	IsDisabled		  *bool                                     `json:"isDisabled,omitempty"`  // Used for update operations
 	ArchiveRepository *VbrBackupJobArchiveRepository            `json:"archiveRepository,omitempty"`
 	Schedule          *VbrBackupJobSchedule                     `json:"schedule,omitempty"`
+	ID                *string                                   `json:"id,omitempty"` // Used for update operations
 }
 
 type VbrObjectStorageBackupJobObjects struct {
@@ -1081,6 +1082,7 @@ func resourceVBRObjectStorageBackupJobUpdate(ctx context.Context, d *schema.Reso
 
 	// Build the job payload
 	job := VbrObjectStorageBackupJob{
+		ID:               &jobID,
 		Name:             d.Get("name").(string),
 		Type:             "ObjectStorageBackup",
 		Description:      getStringPtr(d.Get("description")),
