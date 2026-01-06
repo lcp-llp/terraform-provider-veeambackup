@@ -1512,13 +1512,16 @@ func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
 					backupSchedMap := backupSchedList[0].(map[string]interface{})
 					backupSchedule := BackupSchedule{}
 
+					// Only include hours if explicitly set and not empty
 					if hours, ok := backupSchedMap["hours"]; ok && hours != nil {
 						hoursList := hours.([]interface{})
-						hoursArray := []int{}
-						for _, hour := range hoursList {
-							hoursArray = append(hoursArray, hour.(int))
+						if len(hoursList) > 0 {
+							hoursArray := []int{}
+							for _, hour := range hoursList {
+								hoursArray = append(hoursArray, hour.(int))
+							}
+							backupSchedule.Hours = hoursArray
 						}
-						backupSchedule.Hours = hoursArray
 					}
 					if targetRepoID, ok := backupSchedMap["target_repository_id"]; ok && targetRepoID != "" {
 						repoID := targetRepoID.(string)
@@ -1556,7 +1559,8 @@ func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
 			weeklyMap := weeklyList[0].(map[string]interface{})
 			weeklySchedule := WeeklySchedule{}
 
-			if startTime, ok := weeklyMap["start_time"]; ok {
+			// Only set startTime if explicitly provided and non-zero
+			if startTime, ok := weeklyMap["start_time"]; ok && startTime.(int) > 0 {
 				time := startTime.(int)
 				weeklySchedule.StartTime = &time
 			}
