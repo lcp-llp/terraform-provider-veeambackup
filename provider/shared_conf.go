@@ -6,153 +6,171 @@ package provider
 
 // RetrySettings defines retry behavior for backup policies
 type RetrySettings struct {
-    RetryCount int `json:"retryCount,omitempty"`
+	RetryCount int `json:"retryCount,omitempty"`
 }
 
 // PolicyNotificationSettings defines notification settings for backup policies
 type PolicyNotificationSettings struct {
-    Recipient        *string `json:"recipient,omitempty"`
-    NotifyOnSuccess  *bool   `json:"notifyOnSuccess,omitempty"`
-    NotifyOnWarning  *bool   `json:"notifyOnWarning,omitempty"`
-    NotifyOnFailure  *bool   `json:"notifyOnFailure,omitempty"`
+	Recipient       *string `json:"recipient,omitempty"`
+	NotifyOnSuccess *bool   `json:"notifyOnSuccess,omitempty"`
+	NotifyOnWarning *bool   `json:"notifyOnWarning,omitempty"`
+	NotifyOnFailure *bool   `json:"notifyOnFailure,omitempty"`
 }
 
 type PolicyRegion struct {
-    RegionID string `json:"regionId"`
+	RegionID string `json:"regionId"`
 }
 
 // expandPolicyRegions converts a Terraform list to a slice of PolicyRegion
 func expandPolicyRegions(input []interface{}) []PolicyRegion {
-       if len(input) == 0 {
-           return nil
-       }
-       result := make([]PolicyRegion, len(input))
-       for i, v := range input {
-           m := v.(map[string]interface{})
-           result[i] = PolicyRegion{
-               RegionID: m["region_id"].(string),
-           }
-       }
-       return result
+	if len(input) == 0 {
+		return nil
+	}
+	result := make([]PolicyRegion, len(input))
+	for i, v := range input {
+		m := v.(map[string]interface{})
+		result[i] = PolicyRegion{
+			RegionID: m["region_id"].(string),
+		}
+	}
+	return result
 }
 
 // expandRetrySettings converts a Terraform list to a RetrySettings pointer
 func expandRetrySettings(input []interface{}) *RetrySettings {
-       if len(input) == 0 {
-           return nil
-       }
-       m := input[0].(map[string]interface{})
-       return &RetrySettings{
-           RetryCount: m["retry_count"].(int),
-       }
+	if len(input) == 0 {
+		return nil
+	}
+	m := input[0].(map[string]interface{})
+	return &RetrySettings{
+		RetryCount: m["retry_count"].(int),
+	}
 }
 
 // expandPolicyNotificationSettings converts a Terraform list to a PolicyNotificationSettings pointer
 func expandPolicyNotificationSettings(input []interface{}) *PolicyNotificationSettings {
-       if len(input) == 0 {
-           return nil
-       }
-       m := input[0].(map[string]interface{})
-       return &PolicyNotificationSettings{
-           Recipient:       getStringPtr(m["recipient"]),
-           NotifyOnSuccess: getBoolPtr(m["notify_on_success"]),
-           NotifyOnWarning: getBoolPtr(m["notify_on_warning"]),
-           NotifyOnFailure: getBoolPtr(m["notify_on_failure"]),
-       }
+	if len(input) == 0 {
+		return nil
+	}
+	m := input[0].(map[string]interface{})
+	return &PolicyNotificationSettings{
+		Recipient:       getStringPtr(m["recipient"]),
+		NotifyOnSuccess: getBoolPtr(m["notify_on_success"]),
+		NotifyOnWarning: getBoolPtr(m["notify_on_warning"]),
+		NotifyOnFailure: getBoolPtr(m["notify_on_failure"]),
+	}
 }
 
 // VBR
 
 type VbrUnstructuredDataServerProcessing struct {
-	BackupProxies   		VbrBackupProxies `json:"backupProxies"`
-	CacheRepositoryID  		*string          `json:"cacheRepositoryId,omitempty"`
-	BackupIOControlLevel  	*string          `json:"backupIOControlLevel,omitempty"`
+	BackupProxies        VbrBackupProxies `json:"backupProxies"`
+	CacheRepositoryID    *string          `json:"cacheRepositoryId,omitempty"`
+	BackupIOControlLevel *string          `json:"backupIOControlLevel,omitempty"`
 }
 
 type VbrUnstructuredDataServerAdvancedSettings struct {
-	ProcessingMode 					*string `json:"processingMode,omitempty"`
-	DirectBackupFailoverEnabled 	*bool   `json:"directBackupFailoverEnabled,omitempty"`
-	StorageSnapshotPath 			*string `json:"storageSnapshotPath,omitempty"`
+	ProcessingMode              *string `json:"processingMode,omitempty"`
+	DirectBackupFailoverEnabled *bool   `json:"directBackupFailoverEnabled,omitempty"`
+	StorageSnapshotPath         *string `json:"storageSnapshotPath,omitempty"`
 }
 
 type VBRCloudCredentialAzureExistingAccountDeployment struct {
 	DeploymentType string `json:"deploymentType"`
-	Region		 string `json:"region"`
+	Region         string `json:"region"`
 }
 type VBRCloudCredentialAzureExistingAccountSubscription struct {
-	TenantID     string `json:"tenantId"`
-	ApplicationID string `json:"applicationId"`
-	Secret 	      *string `json:"secret,omitempty"`
+	TenantID      string                                                         `json:"tenantId"`
+	ApplicationID string                                                         `json:"applicationId"`
+	Secret        *string                                                        `json:"secret,omitempty"`
 	Certificate   *VBRCloudCredentialAzureExistingAccountSubscriptionCertificate `json:"certificate,omitempty"`
 }
 
 type VBRCloudCredentialsResponseData struct {
-	ID   				string 	`json:"id"`
-	Type				string  `json:"type"`
-	Account				*string `json:"account,omitempty"` //Used for type AzureStorage
-	ConnectionName		*string `json:"connectionName,omitempty"` //Used for type AzureCompute
-	Deployment          VBRCloudCredentialAzureExistingAccountDeployment  `json:"deployment,omitempty"` //Used for type AzureCompute
-	Subscription        VBRCloudCredentialAzureExistingAccountSubscription `json:"subscription,omitempty"` //Used for type AzureCompute
-	AccessKey			*string `json:"accessKey,omitempty"` //Used for type Amazon
-	Description 		*string `json:"description,omitempty"`
-	UniqueID			*string `json:"uniqueId,omitempty"`
+	ID             string                                             `json:"id"`
+	Type           string                                             `json:"type"`
+	Account        *string                                            `json:"account,omitempty"`        //Used for type AzureStorage
+	ConnectionName *string                                            `json:"connectionName,omitempty"` //Used for type AzureCompute
+	Deployment     VBRCloudCredentialAzureExistingAccountDeployment   `json:"deployment,omitempty"`     //Used for type AzureCompute
+	Subscription   VBRCloudCredentialAzureExistingAccountSubscription `json:"subscription,omitempty"`   //Used for type AzureCompute
+	AccessKey      *string                                            `json:"accessKey,omitempty"`      //Used for type Amazon
+	Description    *string                                            `json:"description,omitempty"`
+	UniqueID       *string                                            `json:"uniqueId,omitempty"`
 }
 
-
 // Common Backup Job Structs
+type Tags struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+type AzureSubscriptions struct {
+	SubscriptionID string `json:"subscriptionId"`
+}
+
+type AzureResourceGroups struct {
+	ID string `json:"id"`
+}
+
+type AzureTagGroups struct {
+	Name           string               `json:"name"`
+	Subscription   *AzureSubscriptions  `json:"subscription,omitempty"`
+	ResourceGroups *AzureResourceGroups `json:"resourceGroups,omitempty"`
+	Tags           []Tags               `json:"tags,omitempty"`
+}
 
 type VbrBackupJobRetentionPolicy struct {
-	Type string `json:"type"`
-	Quantity int `json:"quantity"`
+	Type     string `json:"type"`
+	Quantity int    `json:"quantity"`
 }
 
 type VbrBackupJobArchiveRepository struct {
-	ArchiveRepositoryID string `json:"archiveRepositoryId"`
-	ArchiveRecentFileVersions *bool `json:"archiveRecentFileVersions,omitempty"`
-	ArchivePreviousFileVersions *bool `json:"archivePreviousFileVersions,omitempty"`
-	ArchiveRetentionPolicy *VbrBackupJobRetentionPolicy `json:"archiveRetentionPolicy,omitempty"`
-	FileArchiveSettings *VbrBackupJobFileArchiveSettings `json:"fileArchiveSettings,omitempty"`
+	ArchiveRepositoryID         string                           `json:"archiveRepositoryId"`
+	ArchiveRecentFileVersions   *bool                            `json:"archiveRecentFileVersions,omitempty"`
+	ArchivePreviousFileVersions *bool                            `json:"archivePreviousFileVersions,omitempty"`
+	ArchiveRetentionPolicy      *VbrBackupJobRetentionPolicy     `json:"archiveRetentionPolicy,omitempty"`
+	FileArchiveSettings         *VbrBackupJobFileArchiveSettings `json:"fileArchiveSettings,omitempty"`
 }
 
 type VbrBackupJobFileArchiveSettings struct {
-	ArchivalType *string `json:"archivalType,omitempty"`
+	ArchivalType  *string   `json:"archivalType,omitempty"`
 	InclusionMask *[]string `json:"inclusionMask,omitempty"`
 	ExclusionMask *[]string `json:"exclusionMask,omitempty"`
 }
 
 type VbrBackupJobSchedule struct {
-	RunAutomatically bool `json:"runAutomatically"`
-	Daily *VbrBackupJobScheduleDaily `json:"daily,omitempty"`
-	Monthly *VbrBackupJobScheduleMonthly `json:"monthly,omitempty"`
-	Periodically *VbrBackupJobSchedulePeriodically `json:"periodically,omitempty"`
-	Continuously *VbrBackupJobScheduleContinuously `json:"continuously,omitempty"`
-	AfterThisJob *VbrBackupJobScheduleAfterThisJob `json:"afterThisJob,omitempty"`
-	Retry *VbrBackupJobScheduleRetry `json:"retry,omitempty"`
-	BackupWindow *VbrBackupJobScheduleBackupWindows `json:"backupWindow,omitempty"`
+	RunAutomatically bool                               `json:"runAutomatically"`
+	Daily            *VbrBackupJobScheduleDaily         `json:"daily,omitempty"`
+	Monthly          *VbrBackupJobScheduleMonthly       `json:"monthly,omitempty"`
+	Periodically     *VbrBackupJobSchedulePeriodically  `json:"periodically,omitempty"`
+	Continuously     *VbrBackupJobScheduleContinuously  `json:"continuously,omitempty"`
+	AfterThisJob     *VbrBackupJobScheduleAfterThisJob  `json:"afterThisJob,omitempty"`
+	Retry            *VbrBackupJobScheduleRetry         `json:"retry,omitempty"`
+	BackupWindow     *VbrBackupJobScheduleBackupWindows `json:"backupWindow,omitempty"`
 }
 
 type VbrBackupJobScheduleDaily struct {
-	IsEnabled bool `json:"isEnabled"`
-	LocalTime *string `json:"localTime,omitempty"`
-	DailyKind *string `json:"dailyKind,omitempty"`
-	Days *[]string `json:"days,omitempty"`
+	IsEnabled bool      `json:"isEnabled"`
+	LocalTime *string   `json:"localTime,omitempty"`
+	DailyKind *string   `json:"dailyKind,omitempty"`
+	Days      *[]string `json:"days,omitempty"`
 }
 
 type VbrBackupJobScheduleMonthly struct {
-	IsEnabled bool `json:"isEnabled"`
-	DayOfWeek *string `json:"dayOfWeek,omitempty"`
-	DayNumberInMonth *string `json:"dayNumberInMonth,omitempty"`
-	DayOfMonth *int `json:"dayOfMonth,omitempty"`
-	Months *[]string `json:"months,omitempty"`
-	LocalTime *string `json:"localTime,omitempty"`
-	IsLastDayOfMonth *bool `json:"isLastDayOfMonth,omitempty"`
+	IsEnabled        bool      `json:"isEnabled"`
+	DayOfWeek        *string   `json:"dayOfWeek,omitempty"`
+	DayNumberInMonth *string   `json:"dayNumberInMonth,omitempty"`
+	DayOfMonth       *int      `json:"dayOfMonth,omitempty"`
+	Months           *[]string `json:"months,omitempty"`
+	LocalTime        *string   `json:"localTime,omitempty"`
+	IsLastDayOfMonth *bool     `json:"isLastDayOfMonth,omitempty"`
 }
 type VbrBackupJobSchedulePeriodically struct {
-	IsEnabled bool `json:"isEnabled"`
-	PeriodicallyKind *string `json:"periodicallyKind,omitempty"`
-	Frequency *int `json:"frequency,omitempty"`
-	BackupWindow *VbrBackupJobScheduleBackupWindow `json:"backupWindow,omitempty"`
-	StartTimeWithinHour *int `json:"startTimeWithinHour,omitempty"`
+	IsEnabled           bool                              `json:"isEnabled"`
+	PeriodicallyKind    *string                           `json:"periodicallyKind,omitempty"`
+	Frequency           *int                              `json:"frequency,omitempty"`
+	BackupWindow        *VbrBackupJobScheduleBackupWindow `json:"backupWindow,omitempty"`
+	StartTimeWithinHour *int                              `json:"startTimeWithinHour,omitempty"`
 }
 
 type VbrBackupJobScheduleBackupWindow struct {
@@ -160,31 +178,30 @@ type VbrBackupJobScheduleBackupWindow struct {
 }
 
 type VbrBackupJobScheduleBackupWindowDays struct {
-	Day string `json:"day"`
+	Day   string `json:"day"`
 	Hours string `json:"hours"`
 }
 
 type VbrBackupJobScheduleContinuously struct {
-	IsEnabled bool `json:"isEnabled"`
+	IsEnabled    bool                              `json:"isEnabled"`
 	BackupWindow *VbrBackupJobScheduleBackupWindow `json:"backupWindow,omitempty"`
 }
 
 type VbrBackupJobScheduleAfterThisJob struct {
-	IsEnabled bool `json:"isEnabled"`
-	JobName *string `json:"jobName,omitempty"`
+	IsEnabled bool    `json:"isEnabled"`
+	JobName   *string `json:"jobName,omitempty"`
 }
 
 type VbrBackupJobScheduleRetry struct {
-	IsEnabled bool `json:"isEnabled"`
-	RetryCount *int `json:"retryCount,omitempty"`
+	IsEnabled    bool `json:"isEnabled"`
+	RetryCount   *int `json:"retryCount,omitempty"`
 	AwaitMinutes *int `json:"awaitMinutes,omitempty"`
 }
 
 type VbrBackupJobScheduleBackupWindows struct {
-	IsEnabled bool `json:"isEnabled"`
+	IsEnabled    bool                              `json:"isEnabled"`
 	BackupWindow *VbrBackupJobScheduleBackupWindow `json:"backupWindow,omitempty"`
 }
-
 
 // VBR Repository Structs
 type VBRRepositoryAccount struct {
@@ -209,7 +226,6 @@ type VBRRepositoryImmutability struct {
 	DaysCount        *int    `json:"daysCount,omitempty"`
 	ImmutabilityMode *string `json:"immutabilityMode,omitempty"`
 }
-
 
 // Azure Blob Structs
 type VBRRepositoryAzureBlobContainer struct {
@@ -271,7 +287,7 @@ type VBRRepositoryProxyAppliance struct {
 }
 
 type VBRRepositoryResult struct {
-	Result 		string 	`json:"result"`
-	Message	 	*string `json:"message,omitempty"`
-	IsCancelled *bool 	`json:"isCancelled,omitempty"`
+	Result      string  `json:"result"`
+	Message     *string `json:"message,omitempty"`
+	IsCancelled *bool   `json:"isCancelled,omitempty"`
 }

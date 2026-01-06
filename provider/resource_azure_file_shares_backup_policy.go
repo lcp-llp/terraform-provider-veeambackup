@@ -17,28 +17,28 @@ import (
 // Request
 
 type AzureFileShareBackupPolicyRequest struct {
-	BackupType					string										`json:"backupType"`
-	IsEnabled					bool										`json:"isEnabled"`
-	Name						string										`json:"name"`
-	Regions     				[]PolicyRegion 								`json:"regions"`
-	TenantId					string										`json:"tenantId"`
-	ServiceAccountId 			string 										`json:"serviceAccountId"`
-	SelectedItems  				*[]AzureFileShareBackupPolicySelectedItems 	`json:"selectedItems,omitempty"`
-	ExclusionItems 				*[]AzureFileShareBackupPolicyExclusionItems `json:"exclusionItems,omitempty"`
-	Description					string										`json:"description,omitempty"`
-	RetrySettings 				*RetrySettings 								`json:"retrySettings,omitempty"`
-	PolicyNotificationSettings 	*PolicyNotificationSettings 				`json:"policyNotificationSettings,omitempty"`
-	EnableIndexing  			bool 										`json:"enableIndexing,omitempty"`
-	DailySchedule 				*FSDailySchedule 							`json:"dailySchedule,omitempty"`
-	WeeklySchedule 				*FSWeeklySchedule 							`json:"weeklySchedule,omitempty"`
-	MonthlySchedule 			*FSMonthlySchedule 							`json:"monthlySchedule,omitempty"`
+	BackupType                 string                                      `json:"backupType"`
+	IsEnabled                  bool                                        `json:"isEnabled"`
+	Name                       string                                      `json:"name"`
+	Regions                    []PolicyRegion                              `json:"regions"`
+	TenantId                   string                                      `json:"tenantId"`
+	ServiceAccountId           string                                      `json:"serviceAccountId"`
+	SelectedItems              *[]AzureFileShareBackupPolicySelectedItems  `json:"selectedItems,omitempty"`
+	ExclusionItems             *[]AzureFileShareBackupPolicyExclusionItems `json:"exclusionItems,omitempty"`
+	Description                string                                      `json:"description,omitempty"`
+	RetrySettings              *RetrySettings                              `json:"retrySettings,omitempty"`
+	PolicyNotificationSettings *PolicyNotificationSettings                 `json:"policyNotificationSettings,omitempty"`
+	EnableIndexing             bool                                        `json:"enableIndexing,omitempty"`
+	DailySchedule              *FSDailySchedule                            `json:"dailySchedule,omitempty"`
+	WeeklySchedule             *FSWeeklySchedule                           `json:"weeklySchedule,omitempty"`
+	MonthlySchedule            *FSMonthlySchedule                          `json:"monthlySchedule,omitempty"`
 }
 
 // SelectedItems and Excluded Array of objects
 type AzureFileShareBackupPolicySelectedItems struct {
-	FileShares 		[]AzureFileShareBackupPolicyFileShares 			`json:"fileShares"`
-	StorageAccounts []AzureFileShareBackupPolicyStorageAccounts 	`json:"storageAccounts"`
-	ResourceGroups 	[]AzureFileShareBackupPolicyResourceGroups 		`json:"resourceGroups"`
+	FileShares      []AzureFileShareBackupPolicyFileShares      `json:"fileShares"`
+	StorageAccounts []AzureFileShareBackupPolicyStorageAccounts `json:"storageAccounts"`
+	ResourceGroups  []AzureFileShareBackupPolicyResourceGroups  `json:"resourceGroups"`
 }
 
 type AzureFileShareBackupPolicyFileShares struct {
@@ -54,66 +54,65 @@ type AzureFileShareBackupPolicyResourceGroups struct {
 }
 
 type AzureFileShareBackupPolicyExclusionItems struct {
-	FileShares 	[]AzureFileShareBackupPolicyFileShares 	`json:"fileShares"`
+	FileShares []AzureFileShareBackupPolicyFileShares `json:"fileShares"`
 }
 
-
 type FSDailySchedule struct {
-	DailyType 			*string 			`json:"dailyType"`
-	SelectedDays 		*[]string 			`json:"selectedDays,omitempty"`
-	RunsPerHour 		*int 				`json:"runsPerHour,omitempty"`
-	SnapshotSchedule 	*FSDailySnapshotSchedule `json:"snapshotSchedule,omitempty"`
+	DailyType        *string                  `json:"dailyType"`
+	SelectedDays     *[]string                `json:"selectedDays,omitempty"`
+	RunsPerHour      *int                     `json:"runsPerHour,omitempty"`
+	SnapshotSchedule *FSDailySnapshotSchedule `json:"snapshotSchedule,omitempty"`
 }
 
 type FSWeeklySchedule struct {
-	StartTime    		*int				`json:"startTime"`
-	SnapshotSchedule 	*FSWeeklySnapshotSchedule `json:"snapshotSchedule,omitempty"`
+	StartTime        *int                      `json:"startTime"`
+	SnapshotSchedule *FSWeeklySnapshotSchedule `json:"snapshotSchedule,omitempty"`
 }
 
 type FSMonthlySchedule struct {
-	StartTime    		*int				`json:"startTime"`
-	Type                *string 			`json:"type"`
-	DayOfMonth 	  		*int 				`json:"dayOfMonth,omitempty"`
-	DayOfWeek   		*string 			`json:"dayOfWeek,omitempty"`
-	MonthlyLastDay 		*bool 				`json:"monthlyLastDay,omitempty"`
-	SnapshotSchedule 	*FSMonthlySnapshotSchedule `json:"snapshotSchedule,omitempty"`
+	StartTime        *int                       `json:"startTime"`
+	Type             *string                    `json:"type"`
+	DayOfMonth       *int                       `json:"dayOfMonth,omitempty"`
+	DayOfWeek        *string                    `json:"dayOfWeek,omitempty"`
+	MonthlyLastDay   *bool                      `json:"monthlyLastDay,omitempty"`
+	SnapshotSchedule *FSMonthlySnapshotSchedule `json:"snapshotSchedule,omitempty"`
 }
 
 type FSDailySnapshotSchedule struct {
-	SnapshotsToKeep 	*int    `json:"snapshotsToKeep"`
-	Hours               *[]int   `json:"hours,omitempty"`
+	SnapshotsToKeep *int   `json:"snapshotsToKeep"`
+	Hours           *[]int `json:"hours,omitempty"`
 }
 
 type FSWeeklySnapshotSchedule struct {
-	SnapshotsToKeep 	*int    `json:"snapshotsToKeep"`
-    SelectedDays        *[]string `json:"selectedDays,omitempty"`
+	SnapshotsToKeep *int      `json:"snapshotsToKeep"`
+	SelectedDays    *[]string `json:"selectedDays,omitempty"`
 }
 
 type FSMonthlySnapshotSchedule struct {
-	SnapshotsToKeep 	*int    `json:"snapshotsToKeep"`
-	SelectedMonths 		*[]string `json:"selectedMonths,omitempty"`
+	SnapshotsToKeep *int      `json:"snapshotsToKeep"`
+	SelectedMonths  *[]string `json:"selectedMonths,omitempty"`
 }
 
 // Response
 type AzureFileShareBackupPolicyResponse struct {
-	Id          				string 						`json:"id"`
-	Priority					int    						`json:"priority"`
-	TenantId					string 						`json:"tenantId"`
-	ServiceAccountID 			string 						`json:"serviceAccountId"`
-	SnapshotStatus				string 						`json:"snapshotStatus"`
-	IndexingStatus				string 						`json:"indexingStatus"`
-	NextExecutionTime			string 						`json:"nextExecutionTime"`
-	Name                		*string  					`json:"name"`
-	Description         		*string  					`json:"description"`
-	IsScheduleConfigured 		*bool    					`json:"isScheduleConfigured"`
-	RetrySettings 		 		*RetrySettings 				`json:"retrySettings,omitempty"`
-	PolicyNotificationSettings 	*PolicyNotificationSettings `json:"policyNotificationSettings,omitempty"`
-	IsEnabled					*bool    					`json:"isEnabled"`
-	EnableIndexing  			*bool   					`json:"enableIndexing"`
-	BackupType					*string 					`json:"backupType"`
-	DailySchedule 				*FSDailySchedule 			`json:"dailySchedule,omitempty"`
-	WeeklySchedule 				*FSWeeklySchedule 			`json:"weeklySchedule,omitempty"`
-	MonthlySchedule 			*FSMonthlySchedule 			`json:"monthlySchedule,omitempty"`
+	Id                         string                      `json:"id"`
+	Priority                   int                         `json:"priority"`
+	TenantId                   string                      `json:"tenantId"`
+	ServiceAccountID           string                      `json:"serviceAccountId"`
+	SnapshotStatus             string                      `json:"snapshotStatus"`
+	IndexingStatus             string                      `json:"indexingStatus"`
+	NextExecutionTime          string                      `json:"nextExecutionTime"`
+	Name                       *string                     `json:"name"`
+	Description                *string                     `json:"description"`
+	IsScheduleConfigured       *bool                       `json:"isScheduleConfigured"`
+	RetrySettings              *RetrySettings              `json:"retrySettings,omitempty"`
+	PolicyNotificationSettings *PolicyNotificationSettings `json:"policyNotificationSettings,omitempty"`
+	IsEnabled                  *bool                       `json:"isEnabled"`
+	EnableIndexing             *bool                       `json:"enableIndexing"`
+	BackupType                 *string                     `json:"backupType"`
+	DailySchedule              *FSDailySchedule            `json:"dailySchedule,omitempty"`
+	WeeklySchedule             *FSWeeklySchedule           `json:"weeklySchedule,omitempty"`
+	MonthlySchedule            *FSMonthlySchedule          `json:"monthlySchedule,omitempty"`
 }
 
 // Schema
@@ -272,7 +271,7 @@ func resourceAzureFileSharesBackupPolicy() *schema.Resource {
 							Optional:    true,
 							Description: "List of selected days for the daily schedule.",
 							Elem: &schema.Schema{
-								Type: schema.TypeString,
+								Type:         schema.TypeString,
 								ValidateFunc: validation.StringInSlice([]string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}, false),
 							},
 						},
@@ -336,7 +335,7 @@ func resourceAzureFileSharesBackupPolicy() *schema.Resource {
 										Optional:    true,
 										Description: "List of selected days for the weekly snapshot schedule.",
 										Elem: &schema.Schema{
-											Type: schema.TypeString,
+											Type:         schema.TypeString,
 											ValidateFunc: validation.StringInSlice([]string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}, false),
 										},
 									},
@@ -358,7 +357,7 @@ func resourceAzureFileSharesBackupPolicy() *schema.Resource {
 							Optional:    true,
 							Description: "Start time for the monthly schedule in hours (0-23).",
 						},
-						"type": {	
+						"type": {
 							Type:         schema.TypeString,
 							Optional:     true,
 							Description:  "Type of monthly schedule. Possible values are 'DayOfMonth' and 'DayOfWeek'.",
@@ -370,9 +369,9 @@ func resourceAzureFileSharesBackupPolicy() *schema.Resource {
 							Description: "Day of the month for the monthly schedule (1-31).",
 						},
 						"day_of_week": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Day of the week for the monthly schedule.",
+							Type:         schema.TypeString,
+							Optional:     true,
+							Description:  "Day of the week for the monthly schedule.",
 							ValidateFunc: validation.StringInSlice([]string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}, false),
 						},
 						"monthly_last_day": {
@@ -397,7 +396,7 @@ func resourceAzureFileSharesBackupPolicy() *schema.Resource {
 										Optional:    true,
 										Description: "List of selected months for the monthly snapshot schedule.",
 										Elem: &schema.Schema{
-											Type: schema.TypeString,
+											Type:         schema.TypeString,
 											ValidateFunc: validation.StringInSlice([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}, false),
 										},
 									},
@@ -540,21 +539,21 @@ func resourceAzureFileSharesBackupPolicyDelete(ctx context.Context, d *schema.Re
 
 func buildFSBackupPolicyRequest(d *schema.ResourceData) AzureFileShareBackupPolicyRequest {
 	request := AzureFileShareBackupPolicyRequest{
-		BackupType: d.Get("backup_type").(string),
-		IsEnabled:  d.Get("is_enabled").(bool),
-		Name:       d.Get("name").(string),
-		Regions:    expandPolicyRegions(d.Get("regions").([]interface{})),
-		TenantId:  d.Get("tenant_id").(string),
-		ServiceAccountId: d.Get("service_account_id").(string),
-		SelectedItems:   expandAzureFileShareBackupPolicySelectedItems(d.Get("selected_items").([]interface{})),
-		ExclusionItems:  expandAzureFileShareBackupPolicyExclusionItems(d.Get("exclusion_items").([]interface{})),
-		Description: d.Get("description").(string),
-		RetrySettings:  expandRetrySettings(d.Get("retry_settings").([]interface{})),
+		BackupType:                 d.Get("backup_type").(string),
+		IsEnabled:                  d.Get("is_enabled").(bool),
+		Name:                       d.Get("name").(string),
+		Regions:                    expandPolicyRegions(d.Get("regions").([]interface{})),
+		TenantId:                   d.Get("tenant_id").(string),
+		ServiceAccountId:           d.Get("service_account_id").(string),
+		SelectedItems:              expandAzureFileShareBackupPolicySelectedItems(d.Get("selected_items").([]interface{})),
+		ExclusionItems:             expandAzureFileShareBackupPolicyExclusionItems(d.Get("exclusion_items").([]interface{})),
+		Description:                d.Get("description").(string),
+		RetrySettings:              expandRetrySettings(d.Get("retry_settings").([]interface{})),
 		PolicyNotificationSettings: expandPolicyNotificationSettings(d.Get("policy_notification_settings").([]interface{})),
-		EnableIndexing: d.Get("enable_indexing").(bool),
-		DailySchedule:  expandFSDailySchedule(d.Get("daily_schedule").([]interface{})),
-		WeeklySchedule:  expandFSWeeklySchedule(d.Get("weekly_schedule").([]interface{})),
-		MonthlySchedule: expandFSMonthlySchedule(d.Get("monthly_schedule").([]interface{})),
+		EnableIndexing:             d.Get("enable_indexing").(bool),
+		DailySchedule:              expandFSDailySchedule(d.Get("daily_schedule").([]interface{})),
+		WeeklySchedule:             expandFSWeeklySchedule(d.Get("weekly_schedule").([]interface{})),
+		MonthlySchedule:            expandFSMonthlySchedule(d.Get("monthly_schedule").([]interface{})),
 	}
 	return request
 }
@@ -567,9 +566,9 @@ func expandAzureFileShareBackupPolicySelectedItems(input []interface{}) *[]Azure
 	for i, v := range input {
 		m := v.(map[string]interface{})
 		result[i] = AzureFileShareBackupPolicySelectedItems{
-			FileShares: 		expandAzureFileShareBackupPolicyFileShares(m["file_shares"].([]interface{})),
-			StorageAccounts: 	expandAzureFileShareBackupPolicyStorageAccounts(m["storage_accounts"].([]interface{})),
-			ResourceGroups: 	expandAzureFileShareBackupPolicyResourceGroups(m["resource_groups"].([]interface{})),
+			FileShares:      expandAzureFileShareBackupPolicyFileShares(m["file_shares"].([]interface{})),
+			StorageAccounts: expandAzureFileShareBackupPolicyStorageAccounts(m["storage_accounts"].([]interface{})),
+			ResourceGroups:  expandAzureFileShareBackupPolicyResourceGroups(m["resource_groups"].([]interface{})),
 		}
 	}
 	return &result
@@ -616,7 +615,7 @@ func expandAzureFileShareBackupPolicyExclusionItems(input []interface{}) *[]Azur
 	for i, v := range input {
 		m := v.(map[string]interface{})
 		result[i] = AzureFileShareBackupPolicyExclusionItems{
-			FileShares: 	expandAzureFileShareBackupPolicyFileShares(m["file_shares"].([]interface{})),
+			FileShares: expandAzureFileShareBackupPolicyFileShares(m["file_shares"].([]interface{})),
 		}
 	}
 	return &result
@@ -628,9 +627,9 @@ func expandFSDailySchedule(input []interface{}) *FSDailySchedule {
 	}
 	m := input[0].(map[string]interface{})
 	return &FSDailySchedule{
-		DailyType:      getStringPtr(m["daily_type"]),
-		SelectedDays:   getStringListPtr(m["selected_days"]),
-		RunsPerHour:    getIntPtr(m["runs_per_hour"]),
+		DailyType:        getStringPtr(m["daily_type"]),
+		SelectedDays:     getStringListPtr(m["selected_days"]),
+		RunsPerHour:      getIntPtr(m["runs_per_hour"]),
 		SnapshotSchedule: expandFSDailySnapshotSchedule(m["snapshot_schedule"].([]interface{})),
 	}
 }
@@ -641,7 +640,7 @@ func expandFSWeeklySchedule(input []interface{}) *FSWeeklySchedule {
 	}
 	m := input[0].(map[string]interface{})
 	return &FSWeeklySchedule{
-		StartTime:      getIntPtr(m["start_time"]),
+		StartTime:        getIntPtr(m["start_time"]),
 		SnapshotSchedule: expandFSWeeklySnapshotSchedule(m["snapshot_schedule"].([]interface{})),
 	}
 }
@@ -652,11 +651,11 @@ func expandFSMonthlySchedule(input []interface{}) *FSMonthlySchedule {
 	}
 	m := input[0].(map[string]interface{})
 	return &FSMonthlySchedule{
-		StartTime:      getIntPtr(m["start_time"]),
-		Type:           getStringPtr(m["type"]),
-		DayOfMonth:     getIntPtr(m["day_of_month"]),
-		DayOfWeek:      getStringPtr(m["day_of_week"]),
-		MonthlyLastDay: getBoolPtr(m["monthly_last_day"]),
+		StartTime:        getIntPtr(m["start_time"]),
+		Type:             getStringPtr(m["type"]),
+		DayOfMonth:       getIntPtr(m["day_of_month"]),
+		DayOfWeek:        getStringPtr(m["day_of_week"]),
+		MonthlyLastDay:   getBoolPtr(m["monthly_last_day"]),
 		SnapshotSchedule: expandFSMonthlySnapshotSchedule(m["snapshot_schedule"].([]interface{})),
 	}
 }

@@ -33,6 +33,59 @@ resource "veeambackup_azure_vm_backup_policy" "example" {
 }
 ```
 
+### Policy with User Scripts
+
+```hcl
+resource "veeambackup_azure_vm_backup_policy" "with_scripts" {
+  backup_type          = "SelectedItems"
+  is_enabled           = true
+  name                 = "vm-policy-with-scripts"
+  tenant_id            = "12345678-1234-5678-9012-123456789012"
+  service_account_id   = "87654321-4321-8765-2109-876543210987"
+  
+  regions {
+    name = "East US"
+  }
+
+  snapshot_settings {
+    copy_original_tags         = true
+    application_aware_snapshot = true
+    
+    additional_tags {
+      name  = "Backup"
+      value = "Automated"
+    }
+    
+    additional_tags {
+      name  = "Environment"
+      value = "Production"
+    }
+    
+    user_scripts {
+      windows {
+        scripts_enabled            = true
+        pre_script_path           = "C:\\Scripts\\pre-backup.ps1"
+        pre_script_arguments      = "-Verbose"
+        post_script_path          = "C:\\Scripts\\post-backup.ps1"
+        post_script_arguments     = "-LogPath C:\\Logs"
+        repository_snapshots_only = false
+        ignore_exit_codes         = false
+        ignore_missing_scripts    = false
+      }
+      
+      linux {
+        scripts_enabled            = true
+        pre_script_path           = "/opt/scripts/pre-backup.sh"
+        post_script_path          = "/opt/scripts/post-backup.sh"
+        repository_snapshots_only = false
+        ignore_exit_codes         = false
+        ignore_missing_scripts    = true
+      }
+    }
+  }
+}
+```
+
 ### Complete VM Backup Policy with All Schedules
 
 ```hcl
@@ -272,6 +325,40 @@ The following arguments are supported:
 * `copy_original_tags` - (Optional) Defines whether to assign to the snapshots tags of virtual disks. Defaults to `false`.
 
 * `application_aware_snapshot` - (Optional) Defines whether to enable application-aware processing. Defaults to `false`.
+
+* `additional_tags` - (Optional) Specifies a list of additional tags to assign to the snapshots created by the backup policy. See [Additional Tags](#additional_tags) below.
+
+* `user_scripts` - (Optional) Specifies user script settings for the backup policy. See [User Scripts](#user_scripts) below.
+
+### additional_tags
+
+* `name` - (Required) Tag name.
+
+* `value` - (Required) Tag value.
+
+### user_scripts
+
+* `windows` - (Optional) Specifies user script settings for Windows VMs. See [Script Settings](#script_settings) below.
+
+* `linux` - (Optional) Specifies user script settings for Linux VMs. See [Script Settings](#script_settings) below.
+
+### script_settings
+
+* `scripts_enabled` - (Required) Defines whether to enable user scripts execution.
+
+* `pre_script_path` - (Optional) Specifies the path to the pre-backup script.
+
+* `pre_script_arguments` - (Optional) Specifies arguments for the pre-backup script.
+
+* `post_script_path` - (Optional) Specifies the path to the post-backup script.
+
+* `post_script_arguments` - (Optional) Specifies arguments for the post-backup script.
+
+* `repository_snapshots_only` - (Optional) Defines whether to run the scripts only during repository snapshot creation. Defaults to `false`.
+
+* `ignore_exit_codes` - (Optional) Defines whether to ignore script exit codes. Defaults to `false`.
+
+* `ignore_missing_scripts` - (Optional) Defines whether to ignore missing scripts. Defaults to `false`.
 
 ### selected_items
 

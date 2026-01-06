@@ -15,122 +15,148 @@ import (
 )
 
 type VMBackupPolicyRequest struct {
-    ID               			*string                  `json:"id,omitempty"`
-    BackupType       			string                   `json:"backupType"`
-    IsEnabled        			bool                     `json:"isEnabled"`
-    Name             			string                   `json:"name"`
-    TenantID         			string                   `json:"tenantId"`
-    ServiceAccountID 			string                   `json:"serviceAccountId"`
-    Description      			*string                  `json:"description,omitempty"`
-    Regions          			[]PolicyRegion         `json:"regions"`
-    SelectedItems    			*VMPolicySelectedItems   `json:"selectedItems,omitempty"`
-    ExcludedItems   		 	*VMPolicySelectedItems   `json:"excludedItems,omitempty"`
-	RetrySettings    			*RetrySettings          `json:"retrySettings,omitempty"`
-	DailySchedule    			*DailySchedule          `json:"dailySchedule,omitempty"`
-	WeeklySchedule   			*WeeklySchedule         `json:"weeklySchedule,omitempty"`
-	MonthlySchedule  			*MonthlySchedule        `json:"monthlySchedule,omitempty"`
-	YearlySchedule   			*YearlySchedule         `json:"yearlySchedule,omitempty"`
-	SnapshotSettings 			*VMSnapshotSettings      `json:"snapshotSettings,omitempty"`
-	PolicyNotificationSettings 	*PolicyNotificationSettings `json:"policyNotificationSettings,omitempty"`
-	HealthCheckSchedule 		*HealthCheckSchedule    `json:"healthCheckSchedule,omitempty"`
+	ID                         *string                     `json:"id,omitempty"`
+	BackupType                 string                      `json:"backupType"`
+	IsEnabled                  bool                        `json:"isEnabled"`
+	Name                       string                      `json:"name"`
+	TenantID                   string                      `json:"tenantId"`
+	ServiceAccountID           string                      `json:"serviceAccountId"`
+	Description                *string                     `json:"description,omitempty"`
+	Regions                    []PolicyRegion              `json:"regions"`
+	SelectedItems              *VMPolicySelectedItems      `json:"selectedItems,omitempty"`
+	ExcludedItems              *VMPolicyExcludedItems      `json:"excludedItems,omitempty"`
+	RetrySettings              *RetrySettings              `json:"retrySettings,omitempty"`
+	DailySchedule              *DailySchedule              `json:"dailySchedule,omitempty"`
+	WeeklySchedule             *WeeklySchedule             `json:"weeklySchedule,omitempty"`
+	MonthlySchedule            *MonthlySchedule            `json:"monthlySchedule,omitempty"`
+	YearlySchedule             *YearlySchedule             `json:"yearlySchedule,omitempty"`
+	SnapshotSettings           *VMSnapshotSettings         `json:"snapshotSettings,omitempty"`
+	PolicyNotificationSettings *PolicyNotificationSettings `json:"policyNotificationSettings,omitempty"`
+	HealthCheckSchedule        *HealthCheckSchedule        `json:"healthCheckSchedule,omitempty"`
 }
 
 type VMBackupPolicyResponse struct {
-    ID               string                   `json:"id"`
-    BackupType       string                   `json:"backupType"`
-    IsEnabled        bool                     `json:"isEnabled"`
-    Name             string                   `json:"name"`
-    TenantID         string                   `json:"tenantId"`
-    ServiceAccountID string                   `json:"serviceAccountId"`
-    Description      *string                   `json:"description"`
-    Regions          []PolicyRegion         `json:"regions"`
-	DailySchedule    *DailySchedule          `json:"dailySchedule,omitempty"`
-	WeeklySchedule   *WeeklySchedule         `json:"weeklySchedule,omitempty"`
-	MonthlySchedule  *MonthlySchedule        `json:"monthlySchedule,omitempty"`
-	YearlySchedule   *YearlySchedule         `json:"yearlySchedule,omitempty"`
-	SnapshotSettings *VMSnapshotSettings      `json:"snapshotSettings,omitempty"`
+	ID                         string                      `json:"id"`
+	BackupType                 string                      `json:"backupType"`
+	IsEnabled                  bool                        `json:"isEnabled"`
+	Name                       string                      `json:"name"`
+	TenantID                   string                      `json:"tenantId"`
+	ServiceAccountID           string                      `json:"serviceAccountId"`
+	Description                *string                     `json:"description"`
+	Regions                    []PolicyRegion              `json:"regions"`
+	DailySchedule              *DailySchedule              `json:"dailySchedule,omitempty"`
+	WeeklySchedule             *WeeklySchedule             `json:"weeklySchedule,omitempty"`
+	MonthlySchedule            *MonthlySchedule            `json:"monthlySchedule,omitempty"`
+	YearlySchedule             *YearlySchedule             `json:"yearlySchedule,omitempty"`
+	SnapshotSettings           *VMSnapshotSettings         `json:"snapshotSettings,omitempty"`
 	PolicyNotificationSettings *PolicyNotificationSettings `json:"policyNotificationSettings,omitempty"`
-	HealthCheckSchedule *HealthCheckSchedule    `json:"healthCheckSchedule,omitempty"`
+	HealthCheckSchedule        *HealthCheckSchedule        `json:"healthCheckSchedule,omitempty"`
 }
 
 type VMPolicySelectedItems struct {
-    VirtualMachines []VMPolicyVirtualMachine `json:"virtualMachines"`
+	VirtualMachines []VMPolicyVirtualMachine `json:"virtualMachines"`
+	AdditionalTags  *[]Tags                  `json:"additionalTags,omitempty"`
+	Subscriptions   *[]AzureSubscriptions    `json:"subscriptions,omitempty"`
+	ResourceGroups  *[]AzureResourceGroups   `json:"resourceGroups,omitempty"`
+	TagGroups       *[]AzureTagGroups        `json:"tagGroups,omitempty"`
+}
+
+type VMPolicyExcludedItems struct {
+	VirtualMachines *[]VMPolicyVirtualMachine `json:"virtualMachines,omitempty"`
+	Tags            *[]Tags                   `json:"tags,omitempty"`
 }
 
 type VMPolicyVirtualMachine struct {
-    ID *string `json:"id"`
+	ID *string `json:"id"`
 }
 
 type VMSnapshotSettings struct {
-    CopyOriginalTags         bool `json:"copyOriginalTags"`
-    ApplicationAwareSnapshot bool `json:"applicationAwareSnapshot"`
+	CopyOriginalTags         bool         `json:"copyOriginalTags"`
+	ApplicationAwareSnapshot bool         `json:"applicationAwareSnapshot"`
+	AdditionalTags           *[]Tags      `json:"additionalTags,omitempty"`
+	UserScripts              *UserScripts `json:"userScripts,omitempty"`
+}
+
+type UserScripts struct {
+	Windows *ScriptSettings `json:"windows,omitempty"`
+	Linux   *ScriptSettings `json:"linux,omitempty"`
+}
+
+type ScriptSettings struct {
+	ScriptsEnabled          bool    `json:"scriptsEnabled"`
+	PreScriptPath           *string `json:"preScriptPath,omitempty"`
+	PreScriptArguments      *string `json:"preScriptArguments,omitempty"`
+	PostScriptPath          *string `json:"postScriptPath,omitempty"`
+	PostScriptArguments     *string `json:"postScriptArguments,omitempty"`
+	RepositorySnapshotsOnly bool    `json:"repositorySnapshotsOnly"`
+	IgnoreExitCodes         bool    `json:"ignoreExitCodes"`
+	IgnoreMissingScripts    bool    `json:"ignoreMissingScripts"`
 }
 
 // Schedule and settings structs
 
 type DailySchedule struct {
-    DailyType        *string             `json:"dailyType,omitempty"`
-    SelectedDays     []string            `json:"selectedDays,omitempty"`
-    RunsPerHour      *int                `json:"runsPerHour,omitempty"`
-    SnapshotSchedule *SnapshotSchedule   `json:"snapshotSchedule,omitempty"`
-    BackupSchedule   *BackupSchedule     `json:"backupSchedule,omitempty"`
+	DailyType        *string           `json:"dailyType,omitempty"`
+	SelectedDays     []string          `json:"selectedDays,omitempty"`
+	RunsPerHour      *int              `json:"runsPerHour,omitempty"`
+	SnapshotSchedule *SnapshotSchedule `json:"snapshotSchedule,omitempty"`
+	BackupSchedule   *BackupSchedule   `json:"backupSchedule,omitempty"`
 }
 
 type WeeklySchedule struct {
-    StartTime        *int              `json:"startTime,omitempty"`
-    SnapshotSchedule *SnapshotSchedule `json:"snapshotSchedule,omitempty"`
-    BackupSchedule   *BackupSchedule   `json:"backupSchedule,omitempty"`
+	StartTime        *int              `json:"startTime,omitempty"`
+	SnapshotSchedule *SnapshotSchedule `json:"snapshotSchedule,omitempty"`
+	BackupSchedule   *BackupSchedule   `json:"backupSchedule,omitempty"`
 }
 
 type MonthlySchedule struct {
-    StartTime        *int              `json:"startTime,omitempty"`
-    Type             *string           `json:"type,omitempty"`
-    DayOfWeek        *string           `json:"dayOfWeek,omitempty"`
-    DayOfMonth       *int              `json:"dayOfMonth,omitempty"`
-    MonthlyLastDay   *bool             `json:"monthlyLastDay,omitempty"`
-    SnapshotSchedule *SnapshotSchedule `json:"snapshotSchedule,omitempty"`
-    BackupSchedule   *BackupSchedule   `json:"backupSchedule,omitempty"`
+	StartTime        *int              `json:"startTime,omitempty"`
+	Type             *string           `json:"type,omitempty"`
+	DayOfWeek        *string           `json:"dayOfWeek,omitempty"`
+	DayOfMonth       *int              `json:"dayOfMonth,omitempty"`
+	MonthlyLastDay   *bool             `json:"monthlyLastDay,omitempty"`
+	SnapshotSchedule *SnapshotSchedule `json:"snapshotSchedule,omitempty"`
+	BackupSchedule   *BackupSchedule   `json:"backupSchedule,omitempty"`
 }
 
 type YearlySchedule struct {
-    StartTime            *int    `json:"startTime,omitempty"`
-    Month                *string `json:"month,omitempty"`
-    DayOfWeek            *string `json:"dayOfWeek,omitempty"`
-    DayOfMonth           *int    `json:"dayOfMonth,omitempty"`
-    YearlyLastDay        *bool   `json:"yearlyLastDay,omitempty"`
-    RetentionYearsCount  *int    `json:"retentionYearsCount,omitempty"`
-    TargetRepositoryID   *string `json:"targetRepositoryId,omitempty"`
+	StartTime           *int    `json:"startTime,omitempty"`
+	Month               *string `json:"month,omitempty"`
+	DayOfWeek           *string `json:"dayOfWeek,omitempty"`
+	DayOfMonth          *int    `json:"dayOfMonth,omitempty"`
+	YearlyLastDay       *bool   `json:"yearlyLastDay,omitempty"`
+	RetentionYearsCount *int    `json:"retentionYearsCount,omitempty"`
+	TargetRepositoryID  *string `json:"targetRepositoryId,omitempty"`
 }
 
 type SnapshotSchedule struct {
-    Hours            []int    `json:"hours,omitempty"`
-    SelectedDays     []string `json:"selectedDays,omitempty"`
-    SelectedMonths   []string `json:"selectedMonths,omitempty"`
-    SnapshotsToKeep  *int     `json:"snapshotsToKeep,omitempty"`
+	Hours           []int    `json:"hours,omitempty"`
+	SelectedDays    []string `json:"selectedDays,omitempty"`
+	SelectedMonths  []string `json:"selectedMonths,omitempty"`
+	SnapshotsToKeep *int     `json:"snapshotsToKeep,omitempty"`
 }
 
 type BackupSchedule struct {
-    Hours              []int       `json:"hours,omitempty"`
-    SelectedDays       []string    `json:"selectedDays,omitempty"`
-    SelectedMonths     []string    `json:"selectedMonths,omitempty"`
-    Retention          *Retention  `json:"retention,omitempty"`
-    TargetRepositoryID *string     `json:"targetRepositoryId,omitempty"`
+	Hours              []int      `json:"hours,omitempty"`
+	SelectedDays       []string   `json:"selectedDays,omitempty"`
+	SelectedMonths     []string   `json:"selectedMonths,omitempty"`
+	Retention          *Retention `json:"retention,omitempty"`
+	TargetRepositoryID *string    `json:"targetRepositoryId,omitempty"`
 }
 
 type Retention struct {
-    TimeRetentionDuration   *int    `json:"timeRetentionDuration,omitempty"`
-    RetentionDurationType   *string `json:"retentionDurationType,omitempty"`
+	TimeRetentionDuration *int    `json:"timeRetentionDuration,omitempty"`
+	RetentionDurationType *string `json:"retentionDurationType,omitempty"`
 }
 
 type HealthCheckSchedule struct {
-    HealthCheckEnabled *bool    `json:"healthCheckEnabled,omitempty"`
-    LocalTime          *string  `json:"localTime,omitempty"`
-    DayNumberInMonth   *string  `json:"dayNumberInMonth,omitempty"`
-    DayOfWeek          *string  `json:"dayOfWeek,omitempty"`
-    DayOfMonth         *int     `json:"dayOfMonth,omitempty"`
-    Months             []string `json:"months,omitempty"`
+	HealthCheckEnabled *bool    `json:"healthCheckEnabled,omitempty"`
+	LocalTime          *string  `json:"localTime,omitempty"`
+	DayNumberInMonth   *string  `json:"dayNumberInMonth,omitempty"`
+	DayOfWeek          *string  `json:"dayOfWeek,omitempty"`
+	DayOfMonth         *int     `json:"dayOfMonth,omitempty"`
+	Months             []string `json:"months,omitempty"`
 }
-
 
 // resourceAzureVMBackupPolicy returns the resource for Azure VM backup policies
 func resourceAzureVMBackupPolicy() *schema.Resource {
@@ -188,6 +214,141 @@ func resourceAzureVMBackupPolicy() *schema.Resource {
 							Default:     false,
 							Description: "Defines whether to enable application-aware processing.",
 						},
+						"additional_tags": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: "Specifies a list of additional tags to assign to the snapshots created by the backup policy.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"name": {
+										Type:        schema.TypeString,
+										Required:    true,
+										Description: "Tag name.",
+									},
+									"value": {
+										Type:        schema.TypeString,
+										Required:    true,
+										Description: "Tag value.",
+									},
+								},
+							},
+						},
+						"user_scripts": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							MaxItems:    1,
+							Description: "Specifies user script settings for the backup policy.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"windows": {
+										Type:        schema.TypeList,
+										Optional:    true,
+										MaxItems:    1,
+										Description: "Specifies user script settings for Windows VMs.",
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"scripts_enabled": {
+													Type:        schema.TypeBool,
+													Required:    true,
+													Description: "Defines whether to enable user scripts execution.",
+												},
+												"pre_script_path": {
+													Type:        schema.TypeString,
+													Optional:    true,
+													Description: "Specifies the path to the pre-backup script.",
+												},
+												"pre_script_arguments": {
+													Type:        schema.TypeString,
+													Optional:    true,
+													Description: "Specifies arguments for the pre-backup script.",
+												},
+												"post_script_path": {
+													Type:        schema.TypeString,
+													Optional:    true,
+													Description: "Specifies the path to the post-backup script.",
+												},
+												"post_script_arguments": {
+													Type:        schema.TypeString,
+													Optional:    true,
+													Description: "Specifies arguments for the post-backup script.",
+												},
+												"repository_snapshots_only": {
+													Type:        schema.TypeBool,
+													Optional:    true,
+													Default:     false,
+													Description: "Defines whether to run the scripts only during repository snapshot creation.",
+												},
+												"ignore_exit_codes": {
+													Type:        schema.TypeBool,
+													Optional:    true,
+													Default:     false,
+													Description: "Defines whether to ignore script exit codes.",
+												},
+												"ignore_missing_scripts": {
+													Type:        schema.TypeBool,
+													Optional:    true,
+													Default:     false,
+													Description: "Defines whether to ignore missing scripts.",
+												},
+											},
+										},
+									},
+									"linux": {
+										Type:        schema.TypeList,
+										Optional:    true,
+										MaxItems:    1,
+										Description: "Specifies user script settings for Windows VMs.",
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"scripts_enabled": {
+													Type:        schema.TypeBool,
+													Required:    true,
+													Description: "Defines whether to enable user scripts execution.",
+												},
+												"pre_script_path": {
+													Type:        schema.TypeString,
+													Optional:    true,
+													Description: "Specifies the path to the pre-backup script.",
+												},
+												"pre_script_arguments": {
+													Type:        schema.TypeString,
+													Optional:    true,
+													Description: "Specifies arguments for the pre-backup script.",
+												},
+												"post_script_path": {
+													Type:        schema.TypeString,
+													Optional:    true,
+													Description: "Specifies the path to the post-backup script.",
+												},
+												"post_script_arguments": {
+													Type:        schema.TypeString,
+													Optional:    true,
+													Description: "Specifies arguments for the post-backup script.",
+												},
+												"repository_snapshots_only": {
+													Type:        schema.TypeBool,
+													Optional:    true,
+													Default:     false,
+													Description: "Defines whether to run the scripts only during repository snapshot creation.",
+												},
+												"ignore_exit_codes": {
+													Type:        schema.TypeBool,
+													Optional:    true,
+													Default:     false,
+													Description: "Defines whether to ignore script exit codes.",
+												},
+												"ignore_missing_scripts": {
+													Type:        schema.TypeBool,
+													Optional:    true,
+													Default:     false,
+													Description: "Defines whether to ignore missing scripts.",
+												},
+											},
+										},
+									},
+								},
+							},
+						},							
 					},
 				},
 			},
@@ -510,6 +671,12 @@ func resourceAzureVMBackupPolicy() *schema.Resource {
 													Optional:    true,
 													Description: "Specifies the duration (in days) to retain daily backups.",
 												},
+												"retention_duration_type": {
+													Type:         schema.TypeString,
+													Optional:     true,
+													Description:  "Specifies the type of retention duration.",
+													ValidateFunc: validation.StringInSlice([]string{"Days", "Months", "Years", "Unknown"}, false),
+												},
 											},
 										},
 									},
@@ -764,15 +931,15 @@ func resourceAzureVMBackupPolicy() *schema.Resource {
 							Default:     false,
 							Description: "Defines whether health checks are enabled for the backup policy.",
 						},
-							"local_time": {
-								Type:        schema.TypeString,
-								Optional:    true,
-								Description: "Specifies the date and time when the health check will run.",
-							},
-						"day_number_in_month": {
+						"local_time": {
 							Type:        schema.TypeString,
 							Optional:    true,
-							Description: "Specifies the day number in the month when the health check will run.",
+							Description: "Specifies the date and time when the health check will run.",
+						},
+						"day_number_in_month": {
+							Type:         schema.TypeString,
+							Optional:     true,
+							Description:  "Specifies the day number in the month when the health check will run.",
 							ValidateFunc: validation.StringInSlice([]string{"First", "Second", "Third", "Fourth", "Last", "OnDay", "EveryDay", "EverySelectedDay", "Unknown"}, false),
 						},
 						"day_of_week": {
