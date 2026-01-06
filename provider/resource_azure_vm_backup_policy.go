@@ -37,8 +37,10 @@ type VMBackupPolicyRequest struct {
 
 type VMBackupPolicyResponse struct {
 	ID                         string                      `json:"id"`
+	IsBackupConfigured         bool                        `json:"isBackupConfigured"`
 	BackupType                 string                      `json:"backupType"`
 	IsEnabled                  bool                        `json:"isEnabled"`
+	IsScheduleConfigured       bool                        `json:"isScheduleConfigured"`
 	Name                       string                      `json:"name"`
 	TenantID                   string                      `json:"tenantId"`
 	ServiceAccountID           string                      `json:"serviceAccountId"`
@@ -348,7 +350,7 @@ func resourceAzureVMBackupPolicy() *schema.Resource {
 									},
 								},
 							},
-						},							
+						},
 					},
 				},
 			},
@@ -964,6 +966,16 @@ func resourceAzureVMBackupPolicy() *schema.Resource {
 						},
 					},
 				},
+			}, // computed fields
+			"is_backup_configured": {
+				Type:        schema.TypeBool,
+				Computed:    true,
+				Description: "Indicates whether backup is configured for the policy.",
+			},
+			"is_schedule_configured": {
+				Type:        schema.TypeBool,
+				Computed:    true,
+				Description: "Indicates whether a backup schedule is configured for the policy.",
 			},
 		},
 		Timeouts: &schema.ResourceTimeout{
@@ -1038,6 +1050,9 @@ func resourceVMBackupPolicyRead(ctx context.Context, d *schema.ResourceData, met
 	d.Set("service_account_id", policyResponse.ServiceAccountID)
 	d.Set("description", policyResponse.Description)
 	d.Set("backup_type", policyResponse.BackupType)
+	// Set computed fields
+	d.Set("is_backup_configured", policyResponse.IsBackupConfigured)
+	d.Set("is_schedule_configured", policyResponse.IsScheduleConfigured)
 
 	// Set regions
 	if len(policyResponse.Regions) > 0 {
@@ -1151,7 +1166,158 @@ func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
 				}
 			}
 
+			// Handle subscriptions
+			if subs, ok := selectedItemsMap["subscriptions"]; ok && subs != nil {
+				subsList := subs.([]interface{})
+				if len(subsList) > 0 {
+					subscriptions := []AzureSubscriptions{}
+					for _, sub := range subsList {
+						subMap := sub.(map[string]interface{})
+						subscription := AzureSubscriptions{
+							SubscriptionID: subMap["subscription_id"].(string),
+						}
+						subscriptions = append(subscriptions, subscription)
+					}
+					selectedItems.Subscriptions = &subscriptions
+				}
+			}
+
+			// Handle tags
+			if tags, ok := selectedItemsMap["tags"]; ok && tags != nil {
+				tagsList := tags.([]interface{})
+				if len(tagsList) > 0 {
+					tagsArray := []Tags{}
+					for _, tag := range tagsList {
+						tagMap := tag.(map[string]interface{})
+						tagObj := Tags{
+							Name:  tagMap["name"].(string),
+							Value: tagMap["value"].(string),
+						}
+						tagsArray = append(tagsArray, tagObj)
+					}
+					selectedItems.AdditionalTags = &tagsArray
+				}
+			}
+
+			// Handle resource groups
+			if rgs, ok := selectedItemsMap["resource_groups"]; ok && rgs != nil {
+				rgsList := rgs.([]interface{})
+				if len(rgsList) > 0 {
+					resourceGroups := []AzureResourceGroups{}
+					for _, rg := range rgsList {
+						rgMap := rg.(map[string]interface{})
+						resourceGroup := AzureResourceGroups{
+							ID: rgMap["id"].(string),
+						}
+						resourceGroups = append(resourceGroups, resourceGroup)
+					}
+					selectedItems.ResourceGroups = &resourceGroups
+				}
+			}
+
+			// Handle tag groups
+			if tgs, ok := selectedItemsMap["tag_groups"]; ok && tgs != nil {
+				tgsList := tgs.([]interface{})
+				if len(tgsList) > 0 {
+					tagGroups := []AzureTagGroups{}
+					for _, tg := range tgsList {
+						tgMap := tg.(map[string]interface{})
+						tagGroup := AzureTagGroups{
+							Name: tgMap["name"].(string),
+						}
+
+						// Handle subscription in tag group (singular)
+						if tgSubs, ok := tgMap["subsciption"]; ok && tgSubs != nil {
+							tgSubsList := tgSubs.([]interface{})
+							if len(tgSubsList) > 0 && len(tgSubsList[0].(map[string]interface{})) > 0 {
+								subMap := tgSubsList[0].(map[string]interface{})
+								subscription := &AzureSubscriptions{
+									SubscriptionID: subMap["subscription_id"].(string),
+								}
+								tagGroup.Subscription = subscription
+							}
+						}
+
+						// Handle resource groups in tag group (singular)
+						if tgRgs, ok := tgMap["resource_groups"]; ok && tgRgs != nil {
+							tgRgsList := tgRgs.([]interface{})
+							if len(tgRgsList) > 0 && len(tgRgsList[0].(map[string]interface{})) > 0 {
+								rgMap := tgRgsList[0].(map[string]interface{})
+								resourceGroup := &AzureResourceGroups{
+									ID: rgMap["id"].(string),
+								}
+								tagGroup.ResourceGroups = resourceGroup
+							}
+						}
+
+						// Handle tags in tag group
+						if tgTags, ok := tgMap["tags"]; ok && tgTags != nil {
+							tgTagsList := tgTags.([]interface{})
+							if len(tgTagsList) > 0 {
+								tags := []Tags{}
+								for _, tag := range tgTagsList {
+									tagMap := tag.(map[string]interface{})
+									tagObj := Tags{
+										Name:  tagMap["name"].(string),
+										Value: tagMap["value"].(string),
+									}
+									tags = append(tags, tagObj)
+								}
+								tagGroup.Tags = tags
+							}
+						}
+
+						tagGroups = append(tagGroups, tagGroup)
+					}
+					selectedItems.TagGroups = &tagGroups
+				}
+			}
+
 			request.SelectedItems = &selectedItems
+		}
+	}
+
+	// Build excluded items
+	if excludedItemsData, ok := d.GetOk("excluded_items"); ok {
+		excludedItemsList := excludedItemsData.([]interface{})
+		if len(excludedItemsList) > 0 {
+			excludedItemsMap := excludedItemsList[0].(map[string]interface{})
+			excludedItems := VMPolicyExcludedItems{}
+
+			// Handle virtual machines
+			if vms, ok := excludedItemsMap["virtual_machines"]; ok && vms != nil {
+				vmsList := vms.([]interface{})
+				if len(vmsList) > 0 {
+					virtualMachines := []VMPolicyVirtualMachine{}
+					for _, vm := range vmsList {
+						vmMap := vm.(map[string]interface{})
+						virtualMachine := VMPolicyVirtualMachine{
+							ID: stringPtr(vmMap["id"].(string)),
+						}
+						virtualMachines = append(virtualMachines, virtualMachine)
+					}
+					excludedItems.VirtualMachines = &virtualMachines
+				}
+			}
+
+			// Handle tags
+			if tags, ok := excludedItemsMap["tags"]; ok && tags != nil {
+				tagsList := tags.([]interface{})
+				if len(tagsList) > 0 {
+					tagsArray := []Tags{}
+					for _, tag := range tagsList {
+						tagMap := tag.(map[string]interface{})
+						tagObj := Tags{
+							Name:  tagMap["name"].(string),
+							Value: tagMap["value"].(string),
+						}
+						tagsArray = append(tagsArray, tagObj)
+					}
+					excludedItems.Tags = &tagsArray
+				}
+			}
+
+			request.ExcludedItems = &excludedItems
 		}
 	}
 
@@ -1165,7 +1331,475 @@ func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
 				ApplicationAwareSnapshot: snapshot["application_aware_snapshot"].(bool),
 			}
 
+			// Handle additional tags
+			if addTags, ok := snapshot["additional_tags"]; ok && addTags != nil {
+				addTagsList := addTags.([]interface{})
+				if len(addTagsList) > 0 {
+					tagsArray := []Tags{}
+					for _, tag := range addTagsList {
+						tagMap := tag.(map[string]interface{})
+						tagObj := Tags{
+							Name:  tagMap["name"].(string),
+							Value: tagMap["value"].(string),
+						}
+						tagsArray = append(tagsArray, tagObj)
+					}
+					snapshotSettings.AdditionalTags = &tagsArray
+				}
+			}
+
+			// Handle user scripts
+			if userScripts, ok := snapshot["user_scripts"]; ok && userScripts != nil {
+				userScriptsList := userScripts.([]interface{})
+				if len(userScriptsList) > 0 {
+					userScriptsMap := userScriptsList[0].(map[string]interface{})
+					scripts := UserScripts{}
+
+					// Handle Windows scripts
+					if winScripts, ok := userScriptsMap["windows"]; ok && winScripts != nil {
+						winScriptsList := winScripts.([]interface{})
+						if len(winScriptsList) > 0 {
+							winScriptsMap := winScriptsList[0].(map[string]interface{})
+							windowsSettings := ScriptSettings{
+								ScriptsEnabled:          winScriptsMap["scripts_enabled"].(bool),
+								RepositorySnapshotsOnly: winScriptsMap["repository_snapshots_only"].(bool),
+								IgnoreExitCodes:         winScriptsMap["ignore_exit_codes"].(bool),
+								IgnoreMissingScripts:    winScriptsMap["ignore_missing_scripts"].(bool),
+							}
+							if prePath, ok := winScriptsMap["pre_script_path"]; ok && prePath != "" {
+								prePathStr := prePath.(string)
+								windowsSettings.PreScriptPath = &prePathStr
+							}
+							if preArgs, ok := winScriptsMap["pre_script_arguments"]; ok && preArgs != "" {
+								preArgsStr := preArgs.(string)
+								windowsSettings.PreScriptArguments = &preArgsStr
+							}
+							if postPath, ok := winScriptsMap["post_script_path"]; ok && postPath != "" {
+								postPathStr := postPath.(string)
+								windowsSettings.PostScriptPath = &postPathStr
+							}
+							if postArgs, ok := winScriptsMap["post_script_arguments"]; ok && postArgs != "" {
+								postArgsStr := postArgs.(string)
+								windowsSettings.PostScriptArguments = &postArgsStr
+							}
+							scripts.Windows = &windowsSettings
+						}
+					}
+
+					// Handle Linux scripts
+					if linScripts, ok := userScriptsMap["linux"]; ok && linScripts != nil {
+						linScriptsList := linScripts.([]interface{})
+						if len(linScriptsList) > 0 {
+							linScriptsMap := linScriptsList[0].(map[string]interface{})
+							linuxSettings := ScriptSettings{
+								ScriptsEnabled:          linScriptsMap["scripts_enabled"].(bool),
+								RepositorySnapshotsOnly: linScriptsMap["repository_snapshots_only"].(bool),
+								IgnoreExitCodes:         linScriptsMap["ignore_exit_codes"].(bool),
+								IgnoreMissingScripts:    linScriptsMap["ignore_missing_scripts"].(bool),
+							}
+							if prePath, ok := linScriptsMap["pre_script_path"]; ok && prePath != "" {
+								prePathStr := prePath.(string)
+								linuxSettings.PreScriptPath = &prePathStr
+							}
+							if preArgs, ok := linScriptsMap["pre_script_arguments"]; ok && preArgs != "" {
+								preArgsStr := preArgs.(string)
+								linuxSettings.PreScriptArguments = &preArgsStr
+							}
+							if postPath, ok := linScriptsMap["post_script_path"]; ok && postPath != "" {
+								postPathStr := postPath.(string)
+								linuxSettings.PostScriptPath = &postPathStr
+							}
+							if postArgs, ok := linScriptsMap["post_script_arguments"]; ok && postArgs != "" {
+								postArgsStr := postArgs.(string)
+								linuxSettings.PostScriptArguments = &postArgsStr
+							}
+							scripts.Linux = &linuxSettings
+						}
+					}
+
+					snapshotSettings.UserScripts = &scripts
+				}
+			}
+
 			request.SnapshotSettings = &snapshotSettings
+		}
+	}
+
+	// Build retry settings
+	if retryData, ok := d.GetOk("retry_settings"); ok {
+		retryList := retryData.([]interface{})
+		if len(retryList) > 0 {
+			retryMap := retryList[0].(map[string]interface{})
+			retryCount := retryMap["retry_count"].(int)
+			request.RetrySettings = &RetrySettings{
+				RetryCount: retryCount,
+			}
+		}
+	}
+
+	// Build policy notification settings
+	if notifData, ok := d.GetOk("policy_notification_settings"); ok {
+		notifList := notifData.([]interface{})
+		if len(notifList) > 0 {
+			notifMap := notifList[0].(map[string]interface{})
+			notifyOnSuccess := notifMap["notify_on_success"].(bool)
+			notifyOnWarning := notifMap["notify_on_warning"].(bool)
+			notifyOnFailure := notifMap["notify_on_failure"].(bool)
+			notifSettings := PolicyNotificationSettings{
+				NotifyOnSuccess: &notifyOnSuccess,
+				NotifyOnWarning: &notifyOnWarning,
+				NotifyOnFailure: &notifyOnFailure,
+			}
+			if recipient, ok := notifMap["recipient"]; ok && recipient != "" {
+				recipientStr := recipient.(string)
+				notifSettings.Recipient = &recipientStr
+			}
+			request.PolicyNotificationSettings = &notifSettings
+		}
+	}
+
+	// Build daily schedule
+	if dailyData, ok := d.GetOk("daily_schedule"); ok {
+		dailyList := dailyData.([]interface{})
+		if len(dailyList) > 0 {
+			dailyMap := dailyList[0].(map[string]interface{})
+			dailySchedule := DailySchedule{}
+
+			if dailyType, ok := dailyMap["daily_type"]; ok && dailyType != "" {
+				dailyTypeStr := dailyType.(string)
+				dailySchedule.DailyType = &dailyTypeStr
+			}
+			if selectedDays, ok := dailyMap["selected_days"]; ok && selectedDays != nil {
+				daysList := selectedDays.([]interface{})
+				days := []string{}
+				for _, day := range daysList {
+					days = append(days, day.(string))
+				}
+				dailySchedule.SelectedDays = days
+			}
+			if runsPerHour, ok := dailyMap["runs_per_hour"]; ok {
+				runs := runsPerHour.(int)
+				dailySchedule.RunsPerHour = &runs
+			}
+
+			// Handle snapshot schedule
+			if snapSched, ok := dailyMap["snapshot_schedule"]; ok && snapSched != nil {
+				snapSchedList := snapSched.([]interface{})
+				if len(snapSchedList) > 0 {
+					snapSchedMap := snapSchedList[0].(map[string]interface{})
+					snapshotSchedule := SnapshotSchedule{}
+
+					if hours, ok := snapSchedMap["hours"]; ok && hours != nil {
+						hoursList := hours.([]interface{})
+						hoursArray := []int{}
+						for _, hour := range hoursList {
+							hoursArray = append(hoursArray, hour.(int))
+						}
+						snapshotSchedule.Hours = hoursArray
+					}
+					if snapsToKeep, ok := snapSchedMap["snapshots_to_keep"]; ok {
+						snaps := snapsToKeep.(int)
+						snapshotSchedule.SnapshotsToKeep = &snaps
+					}
+					dailySchedule.SnapshotSchedule = &snapshotSchedule
+				}
+			}
+
+			// Handle backup schedule
+			if backupSched, ok := dailyMap["backup_schedule"]; ok && backupSched != nil {
+				backupSchedList := backupSched.([]interface{})
+				if len(backupSchedList) > 0 {
+					backupSchedMap := backupSchedList[0].(map[string]interface{})
+					backupSchedule := BackupSchedule{}
+
+					if hours, ok := backupSchedMap["hours"]; ok && hours != nil {
+						hoursList := hours.([]interface{})
+						hoursArray := []int{}
+						for _, hour := range hoursList {
+							hoursArray = append(hoursArray, hour.(int))
+						}
+						backupSchedule.Hours = hoursArray
+					}
+					if targetRepoID, ok := backupSchedMap["target_repository_id"]; ok && targetRepoID != "" {
+						repoID := targetRepoID.(string)
+						backupSchedule.TargetRepositoryID = &repoID
+					}
+					// Handle retention
+					if retention, ok := backupSchedMap["retention"]; ok && retention != nil {
+						retentionList := retention.([]interface{})
+						if len(retentionList) > 0 {
+							retentionMap := retentionList[0].(map[string]interface{})
+							retentionObj := Retention{}
+							if timeDuration, ok := retentionMap["time_retention_duration"]; ok {
+								duration := timeDuration.(int)
+								retentionObj.TimeRetentionDuration = &duration
+							}
+							if durationType, ok := retentionMap["retention_duration_type"]; ok && durationType != "" {
+								typeStr := durationType.(string)
+								retentionObj.RetentionDurationType = &typeStr
+							}
+							backupSchedule.Retention = &retentionObj
+						}
+					}
+					dailySchedule.BackupSchedule = &backupSchedule
+				}
+			}
+
+			request.DailySchedule = &dailySchedule
+		}
+	}
+
+	// Build weekly schedule
+	if weeklyData, ok := d.GetOk("weekly_schedule"); ok {
+		weeklyList := weeklyData.([]interface{})
+		if len(weeklyList) > 0 {
+			weeklyMap := weeklyList[0].(map[string]interface{})
+			weeklySchedule := WeeklySchedule{}
+
+			if startTime, ok := weeklyMap["start_time"]; ok {
+				time := startTime.(int)
+				weeklySchedule.StartTime = &time
+			}
+
+			// Handle snapshot schedule
+			if snapSched, ok := weeklyMap["snapshot_schedule"]; ok && snapSched != nil {
+				snapSchedList := snapSched.([]interface{})
+				if len(snapSchedList) > 0 {
+					snapSchedMap := snapSchedList[0].(map[string]interface{})
+					snapshotSchedule := SnapshotSchedule{}
+
+					if selectedDays, ok := snapSchedMap["selected_days"]; ok && selectedDays != nil {
+						daysList := selectedDays.([]interface{})
+						days := []string{}
+						for _, day := range daysList {
+							days = append(days, day.(string))
+						}
+						snapshotSchedule.SelectedDays = days
+					}
+					if snapsToKeep, ok := snapSchedMap["snapshots_to_keep"]; ok {
+						snaps := snapsToKeep.(int)
+						snapshotSchedule.SnapshotsToKeep = &snaps
+					}
+					weeklySchedule.SnapshotSchedule = &snapshotSchedule
+				}
+			}
+
+			// Handle backup schedule
+			if backupSched, ok := weeklyMap["backup_schedule"]; ok && backupSched != nil {
+				backupSchedList := backupSched.([]interface{})
+				if len(backupSchedList) > 0 {
+					backupSchedMap := backupSchedList[0].(map[string]interface{})
+					backupSchedule := BackupSchedule{}
+
+					if selectedDays, ok := backupSchedMap["selected_days"]; ok && selectedDays != nil {
+						daysList := selectedDays.([]interface{})
+						days := []string{}
+						for _, day := range daysList {
+							days = append(days, day.(string))
+						}
+						backupSchedule.SelectedDays = days
+					}
+					if targetRepoID, ok := backupSchedMap["target_repository_id"]; ok && targetRepoID != "" {
+						repoID := targetRepoID.(string)
+						backupSchedule.TargetRepositoryID = &repoID
+					}
+					// Handle retention
+					if retention, ok := backupSchedMap["retention"]; ok && retention != nil {
+						retentionList := retention.([]interface{})
+						if len(retentionList) > 0 {
+							retentionMap := retentionList[0].(map[string]interface{})
+							retentionObj := Retention{}
+							if timeDuration, ok := retentionMap["time_retention_duration"]; ok {
+								duration := timeDuration.(int)
+								retentionObj.TimeRetentionDuration = &duration
+							}
+							if durationType, ok := retentionMap["retention_duration_type"]; ok && durationType != "" {
+								typeStr := durationType.(string)
+								retentionObj.RetentionDurationType = &typeStr
+							}
+							backupSchedule.Retention = &retentionObj
+						}
+					}
+					weeklySchedule.BackupSchedule = &backupSchedule
+				}
+			}
+
+			request.WeeklySchedule = &weeklySchedule
+		}
+	}
+
+	// Build monthly schedule
+	if monthlyData, ok := d.GetOk("monthly_schedule"); ok {
+		monthlyList := monthlyData.([]interface{})
+		if len(monthlyList) > 0 {
+			monthlyMap := monthlyList[0].(map[string]interface{})
+			monthlySchedule := MonthlySchedule{}
+
+			if startTime, ok := monthlyMap["start_time"]; ok {
+				time := startTime.(int)
+				monthlySchedule.StartTime = &time
+			}
+			if schedType, ok := monthlyMap["type"]; ok && schedType != "" {
+				typeStr := schedType.(string)
+				monthlySchedule.Type = &typeStr
+			}
+			if dayOfWeek, ok := monthlyMap["day_of_week"]; ok && dayOfWeek != "" {
+				dow := dayOfWeek.(string)
+				monthlySchedule.DayOfWeek = &dow
+			}
+			if dayOfMonth, ok := monthlyMap["day_of_month"]; ok {
+				dom := dayOfMonth.(int)
+				monthlySchedule.DayOfMonth = &dom
+			}
+			if lastDay, ok := monthlyMap["monthly_last_day"]; ok {
+				ld := lastDay.(bool)
+				monthlySchedule.MonthlyLastDay = &ld
+			}
+
+			// Handle snapshot schedule
+			if snapSched, ok := monthlyMap["snapshot_schedule"]; ok && snapSched != nil {
+				snapSchedList := snapSched.([]interface{})
+				if len(snapSchedList) > 0 {
+					snapSchedMap := snapSchedList[0].(map[string]interface{})
+					snapshotSchedule := SnapshotSchedule{}
+
+					if selectedMonths, ok := snapSchedMap["selected_months"]; ok && selectedMonths != nil {
+						monthsList := selectedMonths.([]interface{})
+						months := []string{}
+						for _, month := range monthsList {
+							months = append(months, month.(string))
+						}
+						snapshotSchedule.SelectedMonths = months
+					}
+					if snapsToKeep, ok := snapSchedMap["snapshots_to_keep"]; ok {
+						snaps := snapsToKeep.(int)
+						snapshotSchedule.SnapshotsToKeep = &snaps
+					}
+					monthlySchedule.SnapshotSchedule = &snapshotSchedule
+				}
+			}
+
+			// Handle backup schedule
+			if backupSched, ok := monthlyMap["backup_schedule"]; ok && backupSched != nil {
+				backupSchedList := backupSched.([]interface{})
+				if len(backupSchedList) > 0 {
+					backupSchedMap := backupSchedList[0].(map[string]interface{})
+					backupSchedule := BackupSchedule{}
+
+					if selectedMonths, ok := backupSchedMap["selected_months"]; ok && selectedMonths != nil {
+						monthsList := selectedMonths.([]interface{})
+						months := []string{}
+						for _, month := range monthsList {
+							months = append(months, month.(string))
+						}
+						backupSchedule.SelectedMonths = months
+					}
+					if targetRepoID, ok := backupSchedMap["target_repository_id"]; ok && targetRepoID != "" {
+						repoID := targetRepoID.(string)
+						backupSchedule.TargetRepositoryID = &repoID
+					}
+					// Handle retention
+					if retention, ok := backupSchedMap["retention"]; ok && retention != nil {
+						retentionList := retention.([]interface{})
+						if len(retentionList) > 0 {
+							retentionMap := retentionList[0].(map[string]interface{})
+							retentionObj := Retention{}
+							if timeDuration, ok := retentionMap["time_retention_duration"]; ok {
+								duration := timeDuration.(int)
+								retentionObj.TimeRetentionDuration = &duration
+							}
+							if durationType, ok := retentionMap["retention_duration_type"]; ok && durationType != "" {
+								typeStr := durationType.(string)
+								retentionObj.RetentionDurationType = &typeStr
+							}
+							backupSchedule.Retention = &retentionObj
+						}
+					}
+					monthlySchedule.BackupSchedule = &backupSchedule
+				}
+			}
+
+			request.MonthlySchedule = &monthlySchedule
+		}
+	}
+
+	// Build yearly schedule
+	if yearlyData, ok := d.GetOk("yearly_schedule"); ok {
+		yearlyList := yearlyData.([]interface{})
+		if len(yearlyList) > 0 {
+			yearlyMap := yearlyList[0].(map[string]interface{})
+			yearlySchedule := YearlySchedule{}
+
+			if startTime, ok := yearlyMap["start_time"]; ok {
+				time := startTime.(int)
+				yearlySchedule.StartTime = &time
+			}
+			if month, ok := yearlyMap["month"]; ok && month != "" {
+				monthStr := month.(string)
+				yearlySchedule.Month = &monthStr
+			}
+			if dayOfWeek, ok := yearlyMap["day_of_week"]; ok && dayOfWeek != "" {
+				dow := dayOfWeek.(string)
+				yearlySchedule.DayOfWeek = &dow
+			}
+			if dayOfMonth, ok := yearlyMap["day_of_month"]; ok {
+				dom := dayOfMonth.(int)
+				yearlySchedule.DayOfMonth = &dom
+			}
+			if lastDay, ok := yearlyMap["yearly_last_day"]; ok {
+				ld := lastDay.(bool)
+				yearlySchedule.YearlyLastDay = &ld
+			}
+			if retentionYears, ok := yearlyMap["retention_years_count"]; ok {
+				years := retentionYears.(int)
+				yearlySchedule.RetentionYearsCount = &years
+			}
+			if targetRepoID, ok := yearlyMap["target_repository_id"]; ok && targetRepoID != "" {
+				repoID := targetRepoID.(string)
+				yearlySchedule.TargetRepositoryID = &repoID
+			}
+
+			request.YearlySchedule = &yearlySchedule
+		}
+	}
+
+	// Build health check settings
+	if healthData, ok := d.GetOk("health_check_settings"); ok {
+		healthList := healthData.([]interface{})
+		if len(healthList) > 0 {
+			healthMap := healthList[0].(map[string]interface{})
+			healthSchedule := HealthCheckSchedule{}
+
+			if enabled, ok := healthMap["health_check_enabled"]; ok {
+				enabledBool := enabled.(bool)
+				healthSchedule.HealthCheckEnabled = &enabledBool
+			}
+			if localTime, ok := healthMap["local_time"]; ok && localTime != "" {
+				timeStr := localTime.(string)
+				healthSchedule.LocalTime = &timeStr
+			}
+			if dayNumberInMonth, ok := healthMap["day_number_in_month"]; ok && dayNumberInMonth != "" {
+				dayNum := dayNumberInMonth.(string)
+				healthSchedule.DayNumberInMonth = &dayNum
+			}
+			if dayOfWeek, ok := healthMap["day_of_week"]; ok && dayOfWeek != "" {
+				dow := dayOfWeek.(string)
+				healthSchedule.DayOfWeek = &dow
+			}
+			if dayOfMonth, ok := healthMap["day_of_month"]; ok {
+				dom := dayOfMonth.(int)
+				healthSchedule.DayOfMonth = &dom
+			}
+			if months, ok := healthMap["months"]; ok && months != nil {
+				monthsList := months.([]interface{})
+				monthsArray := []string{}
+				for _, month := range monthsList {
+					monthsArray = append(monthsArray, month.(string))
+				}
+				healthSchedule.Months = monthsArray
+			}
+
+			request.HealthCheckSchedule = &healthSchedule
 		}
 	}
 
