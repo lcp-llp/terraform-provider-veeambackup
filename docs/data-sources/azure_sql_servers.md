@@ -23,13 +23,35 @@ data "veeambackup_azure_sql_servers" "filtered" {
   offset            = 0
 }
 
-# Decode a single server from the map
+# Decode a single server from the map by name
 locals {
   sql_server = jsondecode(data.veeambackup_azure_sql_servers.filtered.sql_servers["prod-sql-01"])
 }
 
 output "sql_server_subscription" {
   value = local.sql_server.subscriptionId
+}
+
+# Access structured data from the detailed list
+output "first_server_name" {
+  value = data.veeambackup_azure_sql_servers.all.sql_server_details[0].name
+}
+
+# Iterate over all servers in the detailed list
+output "all_server_names" {
+  value = [for server in data.veeambackup_azure_sql_servers.all.sql_server_details : server.name]
+}
+
+# Parse all servers from the map
+locals {
+  all_servers = {
+    for name, json_str in data.veeambackup_azure_sql_servers.all.sql_servers :
+    name => jsondecode(json_str)
+  }
+}
+
+output "all_server_regions" {
+  value = [for name, server in local.all_servers : server.regionId]
 }
 ```
 
@@ -50,14 +72,14 @@ output "sql_server_subscription" {
 
 ### Read-Only
 
-- `results` (List of Object) Detailed list of SQL servers. Each object contains:
-  - `id` (String) Server ID.
-  - `name` (String) Server name.
-  - `resource_id` (String) Azure resource ID.
-  - `subscription_id` (String) Subscription ID.
-  - `region_id` (String) Region ID.
-  - `server_type` (String) Server type.
-- `sql_servers` (Map of String) Map keyed by server name (falls back to ID if name is missing) with each value as a JSON string of the server object. Decode with `jsondecode()` to access fields.
+- `sql_server_details` (List of Object) Detailed list of SQL servers. Each object contains:
+  - `veeam_id` (String) The Veeam ID of the Azure SQL Server.
+  - `name` (String) The name of the Azure SQL Server.
+  - `resource_id` (String) The Azure resource ID of the SQL Server.
+  - `subscription_id` (String) The subscription ID of the SQL Server.
+  - `region_id` (String) The region ID of the SQL Server.
+  - `server_type` (String) The server type of the SQL Server.
+- `sql_servers` (Map of String) Map keyed by server **name** with each value as a JSON string of the complete server object. Decode with `jsondecode()` to access all fields including `id`, `name`, `resourceId`, `subscriptionId`, `regionId`, and `serverType`.
 
 ## API Endpoint
 

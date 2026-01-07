@@ -29,12 +29,12 @@ type AzureSQLServersDataSourceModel struct {
 }
 
 type AzureSQLServer struct {
-	ID             *string `json:"id,omitempty"`
-	Name           *string `json:"name,omitempty"`
-	ResourceID     *string `json:"resourceId,omitempty"`
-	SubscriptionID *string `json:"subscriptionId,omitempty"`
-	RegionID       *string `json:"regionId,omitempty"`
-	ServerType     *string `json:"serverType,omitempty"`
+	VeeamID        string `json:"id"`
+	Name           string `json:"name"`
+	ResourceID     string `json:"resourceId"`
+	SubscriptionID string `json:"subscriptionId"`
+	RegionID       string `json:"regionId"`
+	ServerType     string `json:"serverType"`
 }
 
 type AzureSQLServersDataSourceResponse struct {
@@ -100,13 +100,13 @@ func dataSourceAzureSqlServers() *schema.Resource {
 				Optional:    true,
 				Description: "The server types to filter SQL servers.",
 			},
-			"results": {
+			"sql_server_details": {
 				Type:        schema.TypeList,
 				Computed:    true,
-				Description: "List of Azure SQL Servers.",
+				Description: "Detailed list of Azure SQL Servers matching the specified criteria.",
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						"id": {
+						"veeam_id": {
 							Type:        schema.TypeString,
 							Computed:    true,
 							Description: "The ID of the Azure SQL Server.",
@@ -228,56 +228,43 @@ func dataSourceAzureSqlServersRead(ctx context.Context, d *schema.ResourceData, 
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	// Set the results in the Terraform state
-	if err := d.Set("results", flattenAzureSQLServersDataSourceResults(response.Results)); err != nil {
-		return diag.FromErr(err)
+
+	// Create both a rich map and detailed list representation of the results
+	sqlServersMap := make(map[string]interface{}, len(response.Results))
+	sqlServersList := make([]interface{}, 0, len(response.Results))
+
+	for _, sqlServer := range response.Results {
+		sqlServerDetails := map[string]interface{}{
+			"veeam_id":        sqlServer.VeeamID,
+			"name":            sqlServer.Name,
+			"resource_id":     sqlServer.ResourceID,
+			"subscription_id": sqlServer.SubscriptionID,
+			"region_id":       sqlServer.RegionID,
+			"server_type":     sqlServer.ServerType,
+		}
+
+		// add to detailed list
+		sqlServersList = append(sqlServersList, sqlServerDetails)
+
+		// add to map as JSON string
+		sqlServerJson, err := json.Marshal(sqlServer)
+		if err != nil {
+			return diag.FromErr(fmt.Errorf("failed to marshal SQL server details: %w", err))
+		}
+		sqlServersMap[sqlServer.Name] = string(sqlServerJson)
 	}
-	if err := d.Set("sql_servers", flattenAzureSQLServersDataSourceResultsMap(response.Results)); err != nil {
-		return diag.FromErr(err)
+	
+	if err := d.Set("sql_server_details", sqlServersList); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to set sql_server_details: %w", err))
+	}
+	if err := d.Set("sql_servers", sqlServersMap); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to set sql_servers: %w", err))
 	}
 
 	// Set the resource ID to a static value since this is a data source
 	d.SetId("azure_sql_servers_data_source")
 	return diags
 }
-
-// flattenAzureSQLServersDataSourceResults converts the API results into a list of maps for the data source schema
-func flattenAzureSQLServersDataSourceResults(results []AzureSQLServer) []map[string]interface{} {
-	flattened := make([]map[string]interface{}, 0, len(results))
-	for _, r := range results {
-		item := map[string]interface{}{
-			"id":              stringPtrVal(r.ID),
-			"name":            stringPtrVal(r.Name),
-			"resource_id":     stringPtrVal(r.ResourceID),
-			"subscription_id": stringPtrVal(r.SubscriptionID),
-			"region_id":       stringPtrVal(r.RegionID),
-			"server_type":     stringPtrVal(r.ServerType),
-		}
-		flattened = append(flattened, item)
-	}
-	return flattened
-}
-
-// flattenAzureSQLServersDataSourceResultsMap builds a map keyed by server name (or ID if name is missing) to a JSON string of the server
-func flattenAzureSQLServersDataSourceResultsMap(results []AzureSQLServer) map[string]string {
-	m := make(map[string]string, len(results))
-	for _, r := range results {
-		key := stringPtrVal(r.Name)
-		if key == "" {
-			key = stringPtrVal(r.ID)
-		}
-		if key == "" {
-			continue
-		}
-		b, err := json.Marshal(r)
-		if err != nil {
-			continue
-		}
-		m[key] = string(b)
-	}
-	return m
-}
-
 // stringPtrVal safely dereferences a *string, returning an empty string if nil
 func stringPtrVal(s *string) string {
 	if s == nil {

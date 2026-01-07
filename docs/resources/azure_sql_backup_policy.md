@@ -46,21 +46,21 @@ resource "veeambackup_azure_sql_backup_policy" "with_selection" {
 
   selected_items {
     databases {
-      id = "/subscriptions/12345678-1234-5678-9012-123456789012/resourceGroups/rg-prod/providers/Microsoft.Sql/servers/sql-server-01/databases/db-prod"
+      id = 
     }
     
     databases {
-      id = "/subscriptions/12345678-1234-5678-9012-123456789012/resourceGroups/rg-prod/providers/Microsoft.Sql/servers/sql-server-01/databases/db-staging"
+      id = 
     }
     
     sql_servers {
-      id = "/subscriptions/12345678-1234-5678-9012-123456789012/resourceGroups/rg-prod/providers/Microsoft.Sql/servers/sql-server-02"
+      id = 
     }
   }
 
   excluded_items {
     databases {
-      id = "/subscriptions/12345678-1234-5678-9012-123456789012/resourceGroups/rg-prod/providers/Microsoft.Sql/servers/sql-server-01/databases/db-test"
+      id = 
     }
   }
 }
@@ -114,7 +114,7 @@ resource "veeambackup_azure_sql_backup_policy" "complete" {
 
   selected_items {
     sql_servers {
-      id = "/subscriptions/12345678-1234-5678-9012-123456789012/resourceGroups/rg-prod/providers/Microsoft.Sql/servers/sql-server-01"
+      id = 
     }
   }
 
@@ -252,16 +252,16 @@ Required:
 Optional:
 
 - `databases` (Block List) - List of SQL Databases to include in the backup policy. Each block contains:
-  - `id` (String, Required) - The Azure resource ID of the SQL database.
+  - `id` (String, Required) - The Veeam ID of the SQL database.
 - `sql_servers` (Block List) - List of SQL Servers to include in the backup policy. Each block contains:
-  - `id` (String, Required) - The Azure resource ID of the SQL server.
+  - `id` (String, Required) - The Veeam ID of the SQL server.
 
 ### Excluded Items
 
 Optional:
 
 - `databases` (Block List) - List of SQL Databases to exclude from the backup policy. Each block contains:
-  - `id` (String, Required) - The Azure resource ID of the SQL database.
+  - `id` (String, Required) - The Veeam ID of the SQL database.
 
 ### Retry Settings
 
