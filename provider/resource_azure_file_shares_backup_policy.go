@@ -705,8 +705,25 @@ func getIntPtr(input interface{}) *int {
 	if input == nil {
 		return nil
 	}
-	val := int(input.(int64))
-	return &val
+	switch v := input.(type) {
+	case int:
+		val := v
+		return &val
+	case int64:
+		val := int(v)
+		return &val
+	case float64:
+		val := int(v)
+		return &val
+	case json.Number:
+		if n, err := v.Int64(); err == nil {
+			val := int(n)
+			return &val
+		}
+	default:
+		return nil
+	}
+	return nil
 }
 
 func getBoolPtr(input interface{}) *bool {

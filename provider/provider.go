@@ -119,6 +119,8 @@ func Provider() *schema.Provider {
 			"veeambackup_azure_service_accounts":    dataSourceAzureServiceAccounts(),
 			"veeambackup_azure_service_account":     dataSourceAzureServiceAccount(),
 			"veeambackup_azure_vms":                 dataSourceAzureVMs(),
+			"veeambackup_azure_subscriptions":        dataSourceAzureSubscriptions(),
+			"veeambackup_azure_resource_groups":    dataSourceAzureResourceGroups(),
 			"veeambackup_azure_sql_servers":         dataSourceAzureSqlServers(),
 			"veeambackup_azure_storage_accounts":    dataSourceAzureStorageAccounts(),
 			"veeambackup_azure_file_shares":     	 dataSourceAzureFileShares(),
