@@ -95,70 +95,7 @@ type ScriptSettings struct {
 	IgnoreMissingScripts    bool    `json:"ignoreMissingScripts"`
 }
 
-// Schedule and settings structs
 
-type DailySchedule struct {
-	DailyType        *string           `json:"dailyType,omitempty"`
-	SelectedDays     []string          `json:"selectedDays,omitempty"`
-	RunsPerHour      *int              `json:"runsPerHour,omitempty"`
-	SnapshotSchedule *SnapshotSchedule `json:"snapshotSchedule,omitempty"`
-	BackupSchedule   *BackupSchedule   `json:"backupSchedule,omitempty"`
-}
-
-type WeeklySchedule struct {
-	StartTime        *int              `json:"startTime,omitempty"`
-	SnapshotSchedule *SnapshotSchedule `json:"snapshotSchedule,omitempty"`
-	BackupSchedule   *BackupSchedule   `json:"backupSchedule,omitempty"`
-}
-
-type MonthlySchedule struct {
-	StartTime        *int              `json:"startTime,omitempty"`
-	Type             *string           `json:"type,omitempty"`
-	DayOfWeek        *string           `json:"dayOfWeek,omitempty"`
-	DayOfMonth       *int              `json:"dayOfMonth,omitempty"`
-	MonthlyLastDay   *bool             `json:"monthlyLastDay,omitempty"`
-	SnapshotSchedule *SnapshotSchedule `json:"snapshotSchedule,omitempty"`
-	BackupSchedule   *BackupSchedule   `json:"backupSchedule,omitempty"`
-}
-
-type YearlySchedule struct {
-	StartTime           *int    `json:"startTime,omitempty"`
-	Month               *string `json:"month,omitempty"`
-	DayOfWeek           *string `json:"dayOfWeek,omitempty"`
-	DayOfMonth          *int    `json:"dayOfMonth,omitempty"`
-	YearlyLastDay       *bool   `json:"yearlyLastDay,omitempty"`
-	RetentionYearsCount *int    `json:"retentionYearsCount,omitempty"`
-	TargetRepositoryID  *string `json:"targetRepositoryId,omitempty"`
-}
-
-type SnapshotSchedule struct {
-	Hours           []int    `json:"hours,omitempty"`
-	SelectedDays    []string `json:"selectedDays,omitempty"`
-	SelectedMonths  []string `json:"selectedMonths,omitempty"`
-	SnapshotsToKeep *int     `json:"snapshotsToKeep,omitempty"`
-}
-
-type BackupSchedule struct {
-	Hours              []int      `json:"hours,omitempty"`
-	SelectedDays       []string   `json:"selectedDays,omitempty"`
-	SelectedMonths     []string   `json:"selectedMonths,omitempty"`
-	Retention          *Retention `json:"retention,omitempty"`
-	TargetRepositoryID *string    `json:"targetRepositoryId,omitempty"`
-}
-
-type Retention struct {
-	TimeRetentionDuration *int    `json:"timeRetentionDuration,omitempty"`
-	RetentionDurationType *string `json:"retentionDurationType,omitempty"`
-}
-
-type HealthCheckSchedule struct {
-	HealthCheckEnabled *bool    `json:"healthCheckEnabled,omitempty"`
-	LocalTime          *string  `json:"localTime,omitempty"`
-	DayNumberInMonth   *string  `json:"dayNumberInMonth,omitempty"`
-	DayOfWeek          *string  `json:"dayOfWeek,omitempty"`
-	DayOfMonth         *int     `json:"dayOfMonth,omitempty"`
-	Months             []string `json:"months,omitempty"`
-}
 
 // resourceAzureVMBackupPolicy returns the resource for Azure VM backup policies
 func resourceAzureVMBackupPolicy() *schema.Resource {
