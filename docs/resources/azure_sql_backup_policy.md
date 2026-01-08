@@ -46,21 +46,21 @@ resource "veeambackup_azure_sql_backup_policy" "with_selection" {
 
   selected_items {
     databases {
-      id = 
+      id = "database-veeam-id-1"
     }
     
     databases {
-      id = 
+      id = "database-veeam-id-2"
     }
     
     sql_servers {
-      id = 
+      id = "sql-server-veeam-id-1"
     }
   }
 
   excluded_items {
     databases {
-      id = 
+      id = "database-veeam-id-to-exclude"
     }
   }
 }
@@ -114,20 +114,30 @@ resource "veeambackup_azure_sql_backup_policy" "complete" {
 
   selected_items {
     sql_servers {
-      id = 
+      id = "sql-server-veeam-id"
     }
   }
 
   # Daily backup schedule
-  backup_schedule {
-    hours = [2, 14]
+  daily_schedule {
+    daily_type     = "Weekdays"
+    runs_per_hour  = 2
     
-    retention {
-      time_retention_duration = 30
-      retention_duration_type = "Days"
+    snapshot_schedule {
+      hours             = [2, 14]
+      snapshots_to_keep = 7
     }
     
-    target_repository_id = "repo-123"
+    backup_schedule {
+      hours = [3]
+      
+      retention {
+        time_retention_duration = 30
+        retention_duration_type = "Days"
+      }
+      
+      target_repository_id = "repo-123"
+    }
   }
 
   # Weekly schedule
@@ -229,7 +239,7 @@ resource "veeambackup_azure_sql_backup_policy" "complete" {
 - `excluded_items` (Block List, Max: 1) - Specifies the SQL Databases to be excluded from the backup policy. See [Excluded Items](#excluded-items) below.
 - `retry_settings` (Block List, Max: 1) - Retry settings for the backup policy. See [Retry Settings](#retry-settings) below.
 - `policy_notification_settings` (Block List, Max: 1) - Specifies notification settings for the backup policy. See [Policy Notification Settings](#policy-notification-settings) below.
-- `backup_schedule` (Block List, Max: 1) - Specifies backup schedule settings for daily backups. See [Backup Schedule](#backup-schedule) below.
+- `daily_schedule` (Block List, Max: 1) - Specifies daily backup schedule settings. See [Daily Schedule](#daily-schedule) below.
 - `weekly_schedule` (Block List, Max: 1) - Specifies weekly backup schedule settings. See [Weekly Schedule](#weekly-schedule) below.
 - `monthly_schedule` (Block List, Max: 1) - Specifies monthly backup schedule settings. See [Monthly Schedule](#monthly-schedule) below.
 - `yearly_schedule` (Block List, Max: 1) - Specifies yearly backup schedule settings. See [Yearly Schedule](#yearly-schedule) below.
@@ -278,15 +288,22 @@ Optional:
 - `notify_on_warning` (Boolean) - Defines whether to send notifications on backup jobs with warnings. Default: `true`.
 - `notify_on_failure` (Boolean) - Defines whether to send notifications on failed backup jobs. Default: `true`.
 
-### Backup Schedule
+### Daily Schedule
 
 Optional:
 
-- `hours` (List of Number) - Specifies the hours when backups should be performed (0-23).
-- `retention` (Block List, Max: 1) - Specifies retention settings for daily backups:
-  - `time_retention_duration` (Number) - Specifies the duration to retain daily backups.
-  - `retention_duration_type` (String) - Specifies the type of retention duration. Valid values: `Days`, `Months`, `Years`, `Unknown`.
-- `target_repository_id` (String) - Specifies the system ID of the target repository for daily backups.
+- `daily_type` (String) - Specifies the type of daily backup schedule. Valid values: `EveryDay`, `Weekdays`, `SelectedDays`, `Unknown`.
+- `selected_days` (List of String) - Specifies the days of the week when backups should be performed if the daily type is `SelectedDays`. Valid values: `Sunday`, `Monday`, `Tuesday`, `Wednesday`, `Thursday`, `Friday`, `Saturday`.
+- `runs_per_hour` (Number) - Specifies the number of backup runs per hour (1-24).
+- `snapshot_schedule` (Block List, Max: 1) - Specifies snapshot schedule settings for daily backups:
+  - `hours` (List of Number) - Specifies the hours when snapshots should be taken (0-23).
+  - `snapshots_to_keep` (Number) - Specifies the number of snapshots to retain.
+- `backup_schedule` (Block List, Max: 1) - Specifies backup schedule settings for daily backups:
+  - `hours` (List of Number) - Specifies the hours when backups should be performed (0-23).
+  - `retention` (Block List, Max: 1) - Specifies retention settings:
+    - `time_retention_duration` (Number) - Specifies the duration to retain backups.
+    - `retention_duration_type` (String) - Specifies the type of retention duration. Valid values: `Days`, `Months`, `Years`, `Unknown`.
+  - `target_repository_id` (String) - Specifies the system ID of the target repository for daily backups.
 
 ### Weekly Schedule
 
@@ -298,7 +315,9 @@ Optional:
   - `snapshots_to_keep` (Number) - Specifies the number of snapshots to retain.
 - `backup_schedule` (Block List, Max: 1) - Specifies backup schedule settings:
   - `selected_days` (List of String) - Specifies the days of the week when backups should be performed.
-  - `retention` (Block List, Max: 1) - Retention settings (same structure as in [Backup Schedule](#backup-schedule)).
+  - `retention` (Block List, Max: 1) - Retention settings:
+    - `time_retention_duration` (Number) - Specifies the duration to retain backups.
+    - `retention_duration_type` (String) - Specifies the type of retention duration. Valid values: `Days`, `Months`, `Years`, `Unknown`.
   - `target_repository_id` (String) - Target repository ID for weekly backups.
 
 ### Monthly Schedule

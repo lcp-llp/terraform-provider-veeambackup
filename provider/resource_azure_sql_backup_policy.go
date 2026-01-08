@@ -20,11 +20,11 @@ type SQLBackupPolicyRequest struct {
 	IsEnabled                                    bool                            `json:"isEnabled"`
 	Name                                         string                          `json:"name"`
 	Regions                                      []PolicyRegion                  `json:"regions"`
-	TenantID                                     *string                         `json:"tenantId,omitempty"`
-	ServiceAccountID                             *string                         `json:"serviceAccountId,omitempty"`
-	SelectedItems                                *[]SQLBackupPolicySelectedItems `json:"selectedItems,omitempty"`
-	ExcludedItems                                *[]SQLBackupPolicyExcludedItems `json:"excludedItems,omitempty"`
-	StagingServerID                              *string                         `json:"stagingServerId,omitempty"`
+	TenantID                                     *string                        `json:"tenantId,omitempty"`
+	ServiceAccountID                             *string                        `json:"serviceAccountId,omitempty"`
+	SelectedItems                                *SQLBackupPolicySelectedItems  `json:"selectedItems,omitempty"`
+	ExcludedItems                                *SQLBackupPolicyExcludedItems  `json:"excludedItems,omitempty"`
+	StagingServerID                              *string                        `json:"stagingServerId,omitempty"`
 	ManagedStagingServerID                       *string                         `json:"managedStagingServerId,omitempty"`
 	Description                                  *string                         `json:"description,omitempty"`
 	RetrySettings                                *RetrySettings                  `json:"retrySettings,omitempty"`
@@ -250,45 +250,98 @@ func resourceAzureSQLBackupPolicy() *schema.Resource {
 				Type:     schema.TypeBool,
 				Optional: true,
 			},
-			"backup_schedule": {
+			"daily_schedule": {
 				Type:        schema.TypeList,
 				Optional:    true,
-				Description: "Specifies backup schedule settings for daily backups.",
+				Description: "Specifies daily backup schedule settings for the backup policy.",
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						"hours": {
+						"daily_type": {
+							Type:         schema.TypeString,
+							Optional:     true,
+							Description:  "Specifies the type of daily backup schedule.",
+							ValidateFunc: validation.StringInSlice([]string{"EveryDay", "Weekdays", "SelectedDays", "Unknown"}, false),
+						},
+						"selected_days": {
 							Type:        schema.TypeList,
 							Optional:    true,
-							Description: "Specifies the hours when backups should be performed.",
+							Description: "Specifies the days of the week when backups should be performed if the daily type is SelectedDays.",
 							Elem: &schema.Schema{
-								Type:         schema.TypeInt,
-								ValidateFunc: validation.IntBetween(0, 23),
+								Type:         schema.TypeString,
+								ValidateFunc: validation.StringInSlice([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}, false),
 							},
 						},
-						"retention": {
+						"runs_per_hour": {
+							Type:         schema.TypeInt,
+							Optional:     true,
+							Description:  "Specifies the number of backup runs per hour.",
+							ValidateFunc: validation.IntBetween(1, 24),
+						},
+						"snapshot_schedule": {
 							Type:        schema.TypeList,
 							Optional:    true,
-							Description: "Specifies retention settings for daily backups.",
+							Description: "Specifies snapshot schedule settings for daily backups.",
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
-									"time_retention_duration": {
+									"hours": {
+										Type:        schema.TypeList,
+										Optional:    true,
+										Description: "Specifies the hours when snapshots should be taken.",
+										Elem: &schema.Schema{
+											Type:         schema.TypeInt,
+											ValidateFunc: validation.IntBetween(0, 23),
+										},
+									},
+									"snapshots_to_keep": {
 										Type:        schema.TypeInt,
 										Optional:    true,
-										Description: "Specifies the duration (in days) to retain daily backups.",
-									},
-									"retention_duration_type": {
-										Type:         schema.TypeString,
-										Optional:     true,
-										Description:  "Specifies the type of retention duration.",
-										ValidateFunc: validation.StringInSlice([]string{"Days", "Months", "Years", "Unknown"}, false),
+										Description: "Specifies the number of snapshots to retain.",
 									},
 								},
 							},
 						},
-						"target_repository_id": {
-							Type:        schema.TypeString,
+						"backup_schedule": {
+							Type:        schema.TypeList,
 							Optional:    true,
-							Description: "Specifies the system ID of the target repository for daily backups.",
+							Description: "Specifies backup schedule settings for daily backups.",
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"hours": {
+										Type:        schema.TypeList,
+										Optional:    true,
+										Description: "Specifies the hours when backups should be performed.",
+										Elem: &schema.Schema{
+											Type:         schema.TypeInt,
+											ValidateFunc: validation.IntBetween(0, 23),
+										},
+									},
+									"retention": {
+										Type:        schema.TypeList,
+										Optional:    true,
+										Description: "Specifies retention settings for daily backups.",
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"time_retention_duration": {
+													Type:        schema.TypeInt,
+													Optional:    true,
+													Description: "Specifies the duration (in days) to retain daily backups.",
+												},
+												"retention_duration_type": {
+													Type:         schema.TypeString,
+													Optional:     true,
+													Description:  "Specifies the type of retention duration.",
+													ValidateFunc: validation.StringInSlice([]string{"Days", "Months", "Years", "Unknown"}, false),
+												},
+											},
+										},
+									},
+									"target_repository_id": {
+										Type:        schema.TypeString,
+										Optional:    true,
+										Description: "Specifies the system ID of the target repository for daily backups.",
+									},
+								},
+							},
 						},
 					},
 				},
@@ -781,8 +834,7 @@ func buildSQLBackupPolicyRequest(d *schema.ResourceData) *SQLBackupPolicyRequest
 				}
 				selectedItems.SQLServers = &sqlServers
 			}
-			itemsSlice := []SQLBackupPolicySelectedItems{*selectedItems}
-			policyRequest.SelectedItems = &itemsSlice
+			policyRequest.SelectedItems = selectedItems
 		}
 	}
 	// Excluded Items
@@ -803,8 +855,7 @@ func buildSQLBackupPolicyRequest(d *schema.ResourceData) *SQLBackupPolicyRequest
 				}
 				excludedItems.Databases = &databases
 			}
-			excludedSlice := []SQLBackupPolicyExcludedItems{*excludedItems}
-			policyRequest.ExcludedItems = &excludedSlice
+			policyRequest.ExcludedItems = excludedItems
 		}
 	}
 
