@@ -127,96 +127,118 @@ func dataSourceAzureResourceGroups() *schema.Resource {
 
 func dataSourceAzureResourceGroupsRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*AzureBackupClient)
+	request := AzureResourceGroupsDataModel{}
 
-	params := url.Values{}
-
+	// Handle optional values - only set if provided
 	if v, ok := d.GetOk("subscription_id"); ok {
-		params.Set("subscriptionId", v.(string))
+		subscriptionID := v.(string)
+		request.SubscriptionID = &subscriptionID
 	}
 	if v, ok := d.GetOk("tenant_id"); ok {
-		params.Set("tenantId", v.(string))
+		tenantID := v.(string)
+		request.TenantID = &tenantID
 	}
 	if v, ok := d.GetOk("service_account_id"); ok {
-		params.Set("serviceAccountId", v.(string))
+		serviceAccountID := v.(string)
+		request.ServiceAccountID = &serviceAccountID
 	}
 	if v, ok := d.GetOk("search_pattern"); ok {
-		params.Set("searchPattern", v.(string))
-	}
-	if v, ok := d.GetOk("region_ids"); ok {
-		ids := v.([]interface{})
-		regionIDs := make([]string, len(ids))
-		for i, id := range ids {
-			regionIDs[i] = id.(string)
-		}
-		encoded, err := json.Marshal(regionIDs)
-		if err != nil {
-			return diag.FromErr(err)
-		}
-		params.Set("regionIds", string(encoded))
+		searchPattern := v.(string)
+		request.SearchPattern = &searchPattern
 	}
 	if v, ok := d.GetOk("offset"); ok {
-		params.Set("offset", strconv.Itoa(v.(int)))
+		offset := v.(int)
+		request.Offset = &offset
 	}
 	if v, ok := d.GetOk("limit"); ok {
-		params.Set("limit", strconv.Itoa(v.(int)))
+		limit := v.(int)
+		request.Limit = &limit
+	}
+	if v, ok := d.GetOk("region_ids"); ok {
+		regionIDsInterface := v.([]interface{})
+		regionIDs := make([]string, len(regionIDsInterface))
+		for i, id := range regionIDsInterface {
+			regionIDs[i] = id.(string)
+		}
+		request.RegionIDs = &regionIDs
 	}
 
-	apiURL := client.BuildAPIURL("/azure/resourceGroups")
-	if len(params) > 0 {
-		apiURL += "?" + params.Encode()
-	}
-
-	resp, err := client.MakeAuthenticatedRequest("GET", apiURL, nil)
+	// Build query parameters
+	params := buildAzureResourceGroupsQueryParams(request)
+	apiUrl := client.BuildAPIURL(fmt.Sprintf("/cloudInfrastructure/resourceGroups?%s", params))
+	// Make API request
+	resp, err := client.MakeAuthenticatedRequest("GET", apiUrl, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to retrieve Azure resource groups: %w", err))
+		return diag.FromErr(fmt.Errorf("error retrieving Azure Resource Groups: %s", err))
 	}
 	defer resp.Body.Close()
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(err)
+		return diag.FromErr(fmt.Errorf("error reading response body: %s", err))
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return diag.FromErr(fmt.Errorf("failed to retrieve Azure resource groups: status %d: %s", resp.StatusCode, string(body)))
+	// Parse response
+	var responseModel AzureResourceGroupsResponseModel
+	if err := json.Unmarshal(body, &responseModel); err != nil {
+		return diag.FromErr(fmt.Errorf("error parsing response JSON: %s", err))
 	}
 
-	var rgResponse AzureResourceGroupsResponseModel
-	if err := json.Unmarshal(body, &rgResponse); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to parse response: %w", err))
-	}
-
-	results := make([]interface{}, 0)
-	if rgResponse.Results != nil {
-		for _, rg := range *rgResponse.Results {
-			item := map[string]interface{}{
-				"id":                rg.ID,
-				"azure_environment": rg.AzureEnvironment,
+	// Set results in schema
+	if responseModel.Results != nil {
+		results := make([]map[string]interface{}, len(*responseModel.Results))
+		for i, result := range *responseModel.Results {
+			resultMap := map[string]interface{}{
+				"id":                 result.ID,
+				"resource_id":        result.ResourceID,
+				"name":               result.Name,
+				"azure_environment":  result.AzureEnvironment,
+				"subscription_id":    result.SubscriptionID,
+				"tenant_id":          result.TenantID,
+				"region_id":          result.RegionID,
 			}
-			if rg.ResourceID != nil {
-				item["resource_id"] = *rg.ResourceID
-			}
-			if rg.Name != nil {
-				item["name"] = *rg.Name
-			}
-			if rg.SubscriptionID != nil {
-				item["subscription_id"] = *rg.SubscriptionID
-			}
-			if rg.TenantID != nil {
-				item["tenant_id"] = *rg.TenantID
-			}
-			if rg.RegionID != nil {
-				item["region_id"] = *rg.RegionID
-			}
-
-			results = append(results, item)
+			results[i] = resultMap
+		}
+		if err := d.Set("results", results); err != nil {
+			return diag.FromErr(fmt.Errorf("error setting results: %s", err))
+		}
+	} else {
+		if err := d.Set("results", []map[string]interface{}{}); err != nil {
+			return diag.FromErr(fmt.Errorf("error setting results: %s", err))
 		}
 	}
 
-	if err := d.Set("results", results); err != nil {
-		return diag.FromErr(err)
+	// Set ID for the data source
+	d.SetId(strconv.FormatInt(int64(client.GetUnixTime()), 10))
+
+	return nil
+}
+
+func buildAzureResourceGroupsQueryParams(request AzureResourceGroupsDataModel) string {
+	params := url.Values{}
+
+	if request.SubscriptionID != nil {
+		params.Add("subscriptionId", *request.SubscriptionID)
+	}
+	if request.TenantID != nil {
+		params.Add("tenantId", *request.TenantID)
+	}
+	if request.ServiceAccountID != nil {
+		params.Add("serviceAccountId", *request.ServiceAccountID)
+	}
+	if request.SearchPattern != nil {
+		params.Add("searchPattern", *request.SearchPattern)
+	}
+	if request.Offset != nil {
+		params.Add("offset", strconv.Itoa(*request.Offset))
+	}
+	if request.Limit != 0 {
+		params.Add("limit", strconv.Itoa(request.Limit))
+	}
+	if request.RegionIDs != nil && len(*request.RegionIDs) > 0 {
+		for _, regionID := range *request.RegionIDs {
+			params.Add("regionIds", regionID)
+		}
 	}
 
-	d.SetId("azure_resource_groups")
-	return nil
+	return params.Encode()
 }
