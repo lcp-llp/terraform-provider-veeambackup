@@ -114,8 +114,8 @@ func dataSourceAzureSubscriptions() *schema.Resource {
 	}
 }
 
-func dataSourceAzureSubscriptionsRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*AzureBackupClient) // Build request from schema inputs
+func dataSourceAzureSubscriptionsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	client := meta.(*AzureBackupClient) // Build request from schema inputs
 	// Build query parameters
 	params := url.Values{}
 

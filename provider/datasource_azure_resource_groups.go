@@ -125,8 +125,8 @@ func dataSourceAzureResourceGroups() *schema.Resource {
 	}
 }
 
-func dataSourceAzureResourceGroupsRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*AzureBackupClient)
+func dataSourceAzureResourceGroupsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	client := meta.(*AzureBackupClient)
 	request := AzureResourceGroupsDataModel{}
 
 	// Handle optional values - only set if provided
@@ -184,31 +184,28 @@ func dataSourceAzureResourceGroupsRead(ctx context.Context, d *schema.ResourceDa
 	}
 
 	// Set results in schema
+	results := make([]map[string]interface{}, 0)
 	if responseModel.Results != nil {
-		results := make([]map[string]interface{}, len(*responseModel.Results))
+		results = make([]map[string]interface{}, len(*responseModel.Results))
 		for i, result := range *responseModel.Results {
 			resultMap := map[string]interface{}{
-				"id":                 result.ID,
-				"resource_id":        result.ResourceID,
-				"name":               result.Name,
-				"azure_environment":  result.AzureEnvironment,
-				"subscription_id":    result.SubscriptionID,
-				"tenant_id":          result.TenantID,
-				"region_id":          result.RegionID,
+				"id":                result.ID,
+				"resource_id":       result.ResourceID,
+				"name":              result.Name,
+				"azure_environment": result.AzureEnvironment,
+				"subscription_id":   result.SubscriptionID,
+				"tenant_id":         result.TenantID,
+				"region_id":         result.RegionID,
 			}
 			results[i] = resultMap
 		}
-		if err := d.Set("results", results); err != nil {
-			return diag.FromErr(fmt.Errorf("error setting results: %s", err))
-		}
-	} else {
-		if err := d.Set("results", []map[string]interface{}{}); err != nil {
-			return diag.FromErr(fmt.Errorf("error setting results: %s", err))
-		}
+	}
+	if err := d.Set("results", results); err != nil {
+		return diag.FromErr(fmt.Errorf("error setting results: %s", err))
 	}
 
 	// Set ID for the data source
-	d.SetId(strconv.FormatInt(int64(client.GetUnixTime()), 10))
+	d.SetId(fmt.Sprintf("azure-resource-groups-%d", len(results)))
 
 	return nil
 }
@@ -231,8 +228,8 @@ func buildAzureResourceGroupsQueryParams(request AzureResourceGroupsDataModel) s
 	if request.Offset != nil {
 		params.Add("offset", strconv.Itoa(*request.Offset))
 	}
-	if request.Limit != 0 {
-		params.Add("limit", strconv.Itoa(request.Limit))
+	if request.Limit != nil {
+		params.Add("limit", strconv.Itoa(*request.Limit))
 	}
 	if request.RegionIDs != nil && len(*request.RegionIDs) > 0 {
 		for _, regionID := range *request.RegionIDs {
