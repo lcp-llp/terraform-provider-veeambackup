@@ -106,29 +106,30 @@ func Provider() *schema.Provider {
 			},
 		},
 		ResourcesMap: map[string]*schema.Resource{
-    		"veeambackup_azure_service_account": resourceAzureServiceAccount(),
-			"veeambackup_azure_vm_backup_policy": resourceAzureVMBackupPolicy(),
+			"veeambackup_azure_service_account":           resourceAzureServiceAccount(),
+			"veeambackup_azure_vm_backup_policy":          resourceAzureVMBackupPolicy(),
 			"veeambackup_azure_file_shares_backup_policy": resourceAzureFileSharesBackupPolicy(),
-			"veeambackup_azure_sql_backup_policy": resourceAzureSQLBackupPolicy(),
-			"veeambackup_vbr_unstructured_data_server": resourceVbrUnstructuredDataServer(),
-			"veeambackup_vbr_azure_cloud_credential": resourceVbrAzureCloudCredential(),
-			"veeambackup_vbr_object_storage_backup_job": resourceVbrObjectStorageBackupJob(),
-			"veeambackup_vbr_repository": resourceVbrRepository(),
-	},
+			"veeambackup_azure_sql_backup_policy":         resourceAzureSQLBackupPolicy(),
+			"veeambackup_vbr_unstructured_data_server":    resourceVbrUnstructuredDataServer(),
+			"veeambackup_vbr_azure_cloud_credential":      resourceVbrAzureCloudCredential(),
+			"veeambackup_vbr_object_storage_backup_job":   resourceVbrObjectStorageBackupJob(),
+			"veeambackup_vbr_repository":                  resourceVbrRepository(),
+		},
 		DataSourcesMap: map[string]*schema.Resource{
-			"veeambackup_azure_backup_repositories": dataSourceAzureBackupRepositories(),
-			"veeambackup_azure_service_accounts":    dataSourceAzureServiceAccounts(),
-			"veeambackup_azure_service_account":     dataSourceAzureServiceAccount(),
-			"veeambackup_azure_vms":                 dataSourceAzureVMs(),
-			"veeambackup_azure_subscriptions":        dataSourceAzureSubscriptions(),
-			"veeambackup_azure_resource_groups":    dataSourceAzureResourceGroups(),
-			"veeambackup_azure_sql_servers":         dataSourceAzureSqlServers(),
-			"veeambackup_azure_storage_accounts":    dataSourceAzureStorageAccounts(),
-			"veeambackup_azure_file_shares":     	 dataSourceAzureFileShares(),
+			"veeambackup_azure_backup_repositories":     dataSourceAzureBackupRepositories(),
+			"veeambackup_azure_service_accounts":        dataSourceAzureServiceAccounts(),
+			"veeambackup_azure_service_account":         dataSourceAzureServiceAccount(),
+			"veeambackup_azure_vms":                     dataSourceAzureVMs(),
+			"veeambackup_azure_subscriptions":           dataSourceAzureSubscriptions(),
+			"veeambackup_azure_resource_groups":         dataSourceAzureResourceGroups(),
+			"veeambackup_azure_sql_servers":             dataSourceAzureSqlServers(),
+			"veeambackup_azure_sql_databases":           dataSourceAzureSqlDatabases(),
+			"veeambackup_azure_storage_accounts":        dataSourceAzureStorageAccounts(),
+			"veeambackup_azure_file_shares":             dataSourceAzureFileShares(),
 			"veeambackup_vbr_unstructured_data_servers": dataSourceVbrUnstructuredDataServers(),
-			"veeambackup_vbr_cloud_credentials":        dataSourceVbrCloudCredentials(),
-			"veeambackup_vbr_cloud_credential":         dataSourceVbrCloudCredential(),
-			"veeambackup_vbr_repositories":            dataSourceVBRRepositories(),
+			"veeambackup_vbr_cloud_credentials":         dataSourceVbrCloudCredentials(),
+			"veeambackup_vbr_cloud_credential":          dataSourceVbrCloudCredential(),
+			"veeambackup_vbr_repositories":              dataSourceVBRRepositories(),
 		},
 		ConfigureFunc: providerConfigure,
 	}
@@ -139,51 +140,51 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 	// Check for service-specific configurations
 	azureConfig := d.Get("azure").([]interface{})
 	vbrConfig := d.Get("vbr").([]interface{})
-	
+
 	config := ClientConfig{}
-	
+
 	// Handle Azure configuration
 	if len(azureConfig) > 0 {
 		azureMap := azureConfig[0].(map[string]interface{})
 		config.Azure = &AzureConfig{
-			Hostname:            azureMap["hostname"].(string),
-			Username:            azureMap["username"].(string),
-			Password:            azureMap["password"].(string),
-			APIVersion:          azureMap["api_version"].(string),
-			InsecureSkipVerify:  azureMap["insecure_skip_verify"].(bool),
+			Hostname:           azureMap["hostname"].(string),
+			Username:           azureMap["username"].(string),
+			Password:           azureMap["password"].(string),
+			APIVersion:         azureMap["api_version"].(string),
+			InsecureSkipVerify: azureMap["insecure_skip_verify"].(bool),
 		}
 	}
-	
+
 	// Handle VBR configuration
 	if len(vbrConfig) > 0 {
 		vbrMap := vbrConfig[0].(map[string]interface{})
 		config.VBR = &VBRConfig{
-			Hostname:            vbrMap["hostname"].(string),
-			Port:                vbrMap["port"].(string),
-			Username:            vbrMap["username"].(string),
-			Password:            vbrMap["password"].(string),
-			APIVersion:          vbrMap["api_version"].(string),
-			InsecureSkipVerify:  vbrMap["insecure_skip_verify"].(bool),
+			Hostname:           vbrMap["hostname"].(string),
+			Port:               vbrMap["port"].(string),
+			Username:           vbrMap["username"].(string),
+			Password:           vbrMap["password"].(string),
+			APIVersion:         vbrMap["api_version"].(string),
+			InsecureSkipVerify: vbrMap["insecure_skip_verify"].(bool),
 		}
 	}
-	
+
 	// Validate that at least one service is configured
 	if config.Azure == nil && config.VBR == nil {
 		return nil, fmt.Errorf("at least one service configuration (azure, vbr) must be provided")
 	}
-	
+
 	// Create the unified client
 	veeamClient, err := NewVeeamClient(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Veeam client: %w", err)
 	}
-	
+
 	// If only Azure is configured, return Azure client for resource compatibility
 	// This maintains the existing resource interface expectations
 	if veeamClient.AzureClient != nil && veeamClient.VBRClient == nil && veeamClient.AWSClient == nil {
 		return veeamClient.AzureClient, nil
 	}
-	
+
 	// Return unified client for multi-service scenarios
 	return veeamClient, nil
 }
