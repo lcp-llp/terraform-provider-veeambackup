@@ -31,7 +31,7 @@ type AzureSqlDatabasesDataSourceModel struct {
 	DBFromProtectedRegions   *bool     `json:"DbFromProtectedRegions,omitempty"`
 }
 
-// AzureSqlDatabasesDataSourceResponse represents the api request
+// AzureSqlDatabasesDataSourceResponse represents the api response
 type AzureSqlDatabasesDataSourceResponse struct {
 	Offset  int                 `json:"offset"`
 	Limit   int                 `json:"limit"`
