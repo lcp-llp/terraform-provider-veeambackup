@@ -149,7 +149,7 @@ func dataSourceAzureSubscriptionsRead(ctx context.Context, d *schema.ResourceDat
 		params.Set("onlyIds", string(onlyIDsJson))
 	}
 	// Make API request
-	apiURL := client.BuildAPIURL("/azure/subscriptions")
+	apiURL := client.BuildAPIURL("/cloudInfrastructure/subscriptions")
 	if len(params) > 0 {
 		apiURL += "?" + params.Encode()
 	}
