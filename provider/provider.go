@@ -110,6 +110,7 @@ func Provider() *schema.Provider {
 			"veeambackup_azure_vm_backup_policy":          resourceAzureVMBackupPolicy(),
 			"veeambackup_azure_file_shares_backup_policy": resourceAzureFileSharesBackupPolicy(),
 			"veeambackup_azure_sql_backup_policy":         resourceAzureSQLBackupPolicy(),
+			"veeambackup_azure_cosmos_backup_policy":      resourceAzureCosmosDbBackupPolicy(),
 			"veeambackup_vbr_unstructured_data_server":    resourceVbrUnstructuredDataServer(),
 			"veeambackup_vbr_azure_cloud_credential":      resourceVbrAzureCloudCredential(),
 			"veeambackup_vbr_object_storage_backup_job":   resourceVbrObjectStorageBackupJob(),
