@@ -77,7 +77,7 @@ func dataSourceAzureVMRestorePoints() *schema.Resource {
 				Optional:    true,
 				Description: "Defines whether to return only recently created restore points.",
 			},
-			"data_retrieval_Statuses": {
+			"data_retrieval_statuses": {
 				Type:        schema.TypeSet,
 				Optional:    true,
 				Description: "Returns only restore points with the specified data retrieval status.",
