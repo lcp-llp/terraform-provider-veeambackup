@@ -1,3 +1,7 @@
+---
+subcategory: "Veeam Backup for Azure"
+---
+
 # veeambackup_azure_cosmos_db_backup_policy
 
 Manages an Azure Cosmos DB backup policy in Veeam Backup for Microsoft Azure.
