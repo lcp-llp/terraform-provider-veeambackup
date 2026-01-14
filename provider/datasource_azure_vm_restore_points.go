@@ -220,6 +220,11 @@ func dataSourceAzureVMRestorePoints() *schema.Resource {
 							Computed:    true,
 							Description: "Size of the latest backup in an incremental backup chain",
 						},
+						"immutable_till": {
+							Type: 		schema.TypeString,
+							Computed:	true,
+							Description: "Date and time when immutability will be automatically disabled for the restore point."
+						}
 					},
 				},
 			},
