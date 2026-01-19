@@ -34,30 +34,6 @@ type AzureVMRestorePointsResponse struct {
 	Results    []AzureVMRestorePointsResults `json:"results"`
 }
 
-type AzureVMRestorePointsResults struct {
-	ID                                       string  `json:"id"`
-	BackupDestination                        string  `json:"backupDestination"`
-	Type                                     string  `json:"type"`
-	VbrID                                    *string `json:"vbrId"`
-	PointInTime                              *string `json:"PointInTime,omitempty"`
-	PointInTimeLocalTime                     *string `json:"PointInTimeLocalTime,omitempty"`
-	BackupSizeBytes                          int     `json:"backupSizeBytes"`
-	IsCorrupted                              *bool   `json:"isCorrupted,omitempty"`
-	VMName                                   string  `json:"vmName"`
-	ResourceHashID                           string  `json:"resourceHashId"`
-	RegionID                                 *string `json:"regionId,omitempty"`
-	RegionName                               *string `json:"regionName,omitempty"`
-	State                                    string  `json:"state"`
-	GfsFlags                                 string  `json:"gfsFlags"`
-	JobSessionID                             *string `json:"jobSessionId,omitempty"`
-	DataRetrievalStatus                      *string `json:DataRetrievalStatus,omitempty`
-	RetrievedDataExpirationDate              *string `json:"retrievedDataExpirationDate,omitempty"`
-	NotifyBeforeRetrievedDataExpirationHours *int    `json:notifyBeforeRetrievedDataExpirationHours,omitempty`
-	ImmutableTill                            *string `json:"immutableTill,omitempty"`
-	AccessTier                               *string `json:"accessTier,omitempty"`
-	LatestChainSizeBytes                     *int    `json:latestChainSizeBytes,omitempty`
-}
-
 func dataSourceAzureVMRestorePoints() *schema.Resource {
 	return &schema.Resource{
 		ReadContext: dataSourceAzureVMRestorePointsRead,
@@ -221,10 +197,10 @@ func dataSourceAzureVMRestorePoints() *schema.Resource {
 							Description: "Size of the latest backup in an incremental backup chain",
 						},
 						"immutable_till": {
-							Type: 		schema.TypeString,
-							Computed:	true,
-							Description: "Date and time when immutability will be automatically disabled for the restore point."
-						}
+							Type:        schema.TypeString,
+							Computed:    true,
+							Description: "Date and time when immutability will be automatically disabled for the restore point.",
+						},
 					},
 				},
 			},
