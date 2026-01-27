@@ -135,6 +135,7 @@ func Provider() *schema.Provider {
 			"veeambackup_vbr_cloud_credentials":         dataSourceVbrCloudCredentials(),
 			"veeambackup_vbr_cloud_credential":          dataSourceVbrCloudCredential(),
 			"veeambackup_vbr_repositories":              dataSourceVBRRepositories(),
+			"veeambackup_vbr_proxies":                   dataSourceVbrProxies(),
 		},
 		ConfigureFunc: providerConfigure,
 	}

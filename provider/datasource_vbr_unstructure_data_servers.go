@@ -30,6 +30,7 @@ type PaginationResponse struct {
 	Skip  int `json:"skip"`
 	Limit int `json:"limit"`
 	Total int `json:"total"`
+	Count int `json:"count"`
 }
 
 type UnstructuredDataServersResponseData struct {
