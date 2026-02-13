@@ -1003,7 +1003,10 @@ func resourceVbrObjectStorageBackupJob() *schema.Resource {
 
 // CRUD function (Create)
 func resourceVBRObjectStorageBackupJobCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*VeeamClient).VBRClient
+	client, err := getVBRClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	// Build the job payload
 	job := VbrObjectStorageBackupJob{
@@ -1047,7 +1050,10 @@ func resourceVBRObjectStorageBackupJobCreate(ctx context.Context, d *schema.Reso
 // CRUD function (Read)
 func resourceVBRObjectStorageBackupJobRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
-	client := m.(*VeeamClient).VBRClient
+	client, err := getVBRClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	jobID := d.Id()
 	url := client.BuildAPIURL("/api/v1/jobs/" + jobID)
 	respBodyBytes, err := client.DoRequest(ctx, "GET", url, nil)
@@ -1077,7 +1083,10 @@ func resourceVBRObjectStorageBackupJobRead(ctx context.Context, d *schema.Resour
 
 // CRUD function (Update)
 func resourceVBRObjectStorageBackupJobUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*VeeamClient).VBRClient
+	client, err := getVBRClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	jobID := d.Id()
 
 	// Build the job payload
@@ -1117,7 +1126,10 @@ func resourceVBRObjectStorageBackupJobUpdate(ctx context.Context, d *schema.Reso
 // CRUD function (Delete)
 func resourceVBRObjectStorageBackupJobDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
-	client := m.(*VeeamClient).VBRClient
+	client, err := getVBRClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	jobID := d.Id()
 	url := client.BuildAPIURL("/api/v1/jobs/" + jobID)
 	_, err := client.DoRequest(ctx, "DELETE", url, nil)

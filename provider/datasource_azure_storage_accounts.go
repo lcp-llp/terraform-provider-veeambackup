@@ -212,7 +212,10 @@ func dataSourceAzureStorageAccounts() *schema.Resource {
 }
 
 func dataSourceAzureStorageAccountsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)	// Build request from schema inputs
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	request := AzureStorageAccountsDataSourceModel{
 		SubscriptionID:     d.Get("subscription_id").(string),
 		AccountId:          d.Get("account_id").(string),

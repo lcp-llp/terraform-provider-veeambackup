@@ -690,7 +690,10 @@ func resourceAzureCosmosDbBackupPolicy() *schema.Resource {
 
 
 func resourceAzureCosmosBackupPolicyCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	policyRequest := buildCosmosBackupPolicyRequest(d)
 
 	jsonData, err := json.Marshal(policyRequest)
@@ -721,7 +724,10 @@ func resourceAzureCosmosBackupPolicyCreate(ctx context.Context, d *schema.Resour
 }
 
 func resourceAzureCosmosBackupPolicyRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	url := client.BuildAPIURL(fmt.Sprintf("/policies/cosmosDb/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("GET", url, nil)
 	if err != nil {
@@ -757,7 +763,10 @@ func resourceAzureCosmosBackupPolicyRead(ctx context.Context, d *schema.Resource
 }
 
 func resourceAzureCosmosBackupPolicyUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	policyRequest := buildCosmosBackupPolicyRequest(d)
 
 	jsonData, err := json.Marshal(policyRequest)
@@ -782,7 +791,10 @@ func resourceAzureCosmosBackupPolicyUpdate(ctx context.Context, d *schema.Resour
 }
 
 func resourceAzureCosmosBackupPolicyDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	url := client.BuildAPIURL(fmt.Sprintf("/policies/cosmosDb/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("DELETE", url, nil)

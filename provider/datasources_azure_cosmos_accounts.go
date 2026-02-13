@@ -228,7 +228,10 @@ func dataSourceAzureCosmosDbAccounts() *schema.Resource {
 }
 
 func dataSourceAzureCosmosDbAccountsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	request := AzureCosmosDBAccountsDataSourceModel{}
 
 	// Handle optional values - only set if provided

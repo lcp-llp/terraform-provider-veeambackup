@@ -573,7 +573,10 @@ func resourceVbrRepository() *schema.Resource {
 // CRUD function (Create)
 func resourceVBRRepositoryCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
-	client := m.(*VeeamClient).VBRClient
+	client, err := getVBRClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	// Build the repository payload
 	repository := VBRRepository{
@@ -649,7 +652,10 @@ func resourceVBRRepositoryCreate(ctx context.Context, d *schema.ResourceData, m 
 // CRUD function (Read)
 func resourceVBRRepositoryRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
-	client := m.(*VeeamClient).VBRClient
+	client, err := getVBRClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	repositoryID := d.Id()
 
 	url := client.BuildAPIURL("/api/v1/backupInfrastructure/repositories/" + repositoryID)
@@ -690,7 +696,10 @@ func resourceVBRRepositoryRead(ctx context.Context, d *schema.ResourceData, m in
 
 // CRUD function (Update)
 func resourceVBRRepositoryUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*VeeamClient).VBRClient
+	client, err := getVBRClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	repositoryID := d.Id()
 
 	// Build the repository payload
@@ -765,7 +774,10 @@ func resourceVBRRepositoryUpdate(ctx context.Context, d *schema.ResourceData, m 
 // CRUD function (Delete)
 func resourceVBRRepositoryDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
-	client := m.(*VeeamClient).VBRClient
+	client, err := getVBRClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	repositoryID := d.Id()
 
 	url := client.BuildAPIURL("/api/v1/backupInfrastructure/repositories/" + repositoryID)

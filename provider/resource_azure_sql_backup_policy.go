@@ -625,7 +625,10 @@ func resourceAzureSQLBackupPolicy() *schema.Resource {
 }
 
 func resourceAzureSQLBackupPolicyCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	policyRequest := buildSQLBackupPolicyRequest(d)
 
 	jsonData, err := json.Marshal(policyRequest)
@@ -655,7 +658,10 @@ func resourceAzureSQLBackupPolicyCreate(ctx context.Context, d *schema.ResourceD
 }
 
 func resourceAzureSQLBackupPolicyRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	url := client.BuildAPIURL(fmt.Sprintf("/policies/sql/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("GET", url, nil)
 	if err != nil {
@@ -695,7 +701,10 @@ func resourceAzureSQLBackupPolicyRead(ctx context.Context, d *schema.ResourceDat
 }
 
 func resourceAzureSQLBackupPolicyUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	policyRequest := buildSQLBackupPolicyRequest(d)
 
 	jsonData, err := json.Marshal(policyRequest)
@@ -719,7 +728,10 @@ func resourceAzureSQLBackupPolicyUpdate(ctx context.Context, d *schema.ResourceD
 }
 
 func resourceAzureSQLBackupPolicyDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	url := client.BuildAPIURL(fmt.Sprintf("/policies/sql/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("DELETE", url, nil)
 	if err != nil {

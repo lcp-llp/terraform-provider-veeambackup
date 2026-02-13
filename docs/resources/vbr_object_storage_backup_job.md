@@ -135,58 +135,58 @@ resource "veeambackup_vbr_object_storage_backup_job" "complete" {
   }
   
   archive_repository {
-    backup_repository_id = "archive-repo-789"
-    
-    retention_policy {
+    archive_repository_id          = "archive-repo-789"
+    archive_recent_file_versions   = true
+    archive_previous_file_versions = false
+
+    archive_retention_policy {
       type     = "Months"
       quantity = 12
     }
-    
-    schedule {
-      daily {
-        days                = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
-        local_time          = "23:00"
-        type                = "EveryNHours"
-        every_n_hours_period = 12
-      }
+
+    file_archive_settings {
+      archival_type  = "IncludeMask"
+      inclusion_mask = ["*.log", "*.txt"]
+      exclusion_mask = ["tmp/*"]
     }
   }
   
   schedule {
+    run_automatically = true
+    
     daily {
-      days                = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
-      local_time          = "01:00"
-      type                = "EveryNHours"
-      every_n_hours_period = 6
+      is_enabled = true
+      days       = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+      local_time = "01:00"
+      daily_kind = "Everyday"
     }
     
     monthly {
-      day_of_month         = 1
-      local_time           = "02:00"
-      months               = ["January", "April", "July", "October"]
-      type                 = "EveryNHours"
-      every_n_hours_period = 24
+      is_enabled   = true
+      day_of_month = 1
+      local_time   = "02:00"
+      months       = ["January", "April", "July", "October"]
     }
     
     retry {
-      is_enabled          = true
-      retry_count         = 3
-      retry_wait_interval = 10
+      is_enabled    = true
+      retry_count   = 3
+      await_minutes = 10
     }
     
     backup_window {
       is_enabled = true
       
       backup_window {
-        day_of_week = "Monday"
-        start_time  = "22:00"
-        end_time    = "06:00"
-      }
-      
-      backup_window {
-        day_of_week = "Friday"
-        start_time  = "22:00"
-        end_time    = "06:00"
+        days {
+          day   = "Monday"
+          hours = "22:00-06:00"
+        }
+        
+        days {
+          day   = "Friday"
+          hours = "22:00-06:00"
+        }
       }
     }
   }
@@ -209,11 +209,13 @@ resource "veeambackup_vbr_object_storage_backup_job" "daily" {
   }
   
   schedule {
+    run_automatically = true
+    
     daily {
-      days                = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
-      local_time          = "02:00"
-      type                = "EveryNHours"
-      every_n_hours_period = 4
+      is_enabled = true
+      days       = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+      local_time = "02:00"
+      daily_kind = "Everyday"
     }
   }
 }
@@ -235,11 +237,12 @@ resource "veeambackup_vbr_object_storage_backup_job" "periodic" {
   }
   
   schedule {
+    run_automatically = true
+    
     periodically {
-      type                = "Hours"
-      period              = 2
-      full_backup_schedule_kind = "Weekly"
-      full_backup_days    = ["Sunday"]
+      is_enabled         = true
+      periodically_kind  = "Hours"
+      frequency          = 2
     }
   }
 }
@@ -261,8 +264,10 @@ resource "veeambackup_vbr_object_storage_backup_job" "continuous" {
   }
   
   schedule {
+    run_automatically = true
+    
     continuously {
-      schedule_kind = "Continuously"
+      is_enabled = true
     }
   }
 }
@@ -277,6 +282,7 @@ The following arguments are supported:
 * `backup_repository` - (Required) Backup repository configuration. See [Backup Repository](#backup-repository) below.
 * `description` - (Optional) Description of the backup job.
 * `is_high_priority` - (Optional) Whether the job should run with high priority. Defaults to `false`.
+* `is_disabled` - (Optional) Whether the backup job is disabled. Required when updating an existing job.
 * `archive_repository` - (Optional) Archive repository configuration for long-term retention. See [Archive Repository](#archive-repository) below.
 * `schedule` - (Optional) Job schedule configuration. See [Schedule](#schedule) below.
 
@@ -354,7 +360,7 @@ The `encryption` block supports:
 
 The `backup_health` block supports:
 
-* `is_enabled` - (Optional) Whether health checks are enabled.
+* `is_enabled` - (Required) Whether health checks are enabled.
 * `weekly` - (Optional) Weekly health check schedule. See [Weekly Health Check](#weekly-health-check) below.
 * `monthly` - (Optional) Monthly health check schedule. See [Monthly Health Check](#monthly-health-check) below.
 
@@ -427,14 +433,32 @@ The `custom_notification_settings` block supports:
 
 The `archive_repository` block supports:
 
-* `backup_repository_id` - (Required) ID of the archive repository.
-* `retention_policy` - (Optional) Archive retention policy. See [Retention Policy](#retention-policy) above.
-* `schedule` - (Optional) Archive schedule. See [Schedule](#schedule) below.
+* `archive_repository_id` - (Required) ID of the archive repository.
+* `archive_recent_file_versions` - (Optional) Whether to archive recent file versions.
+* `archive_previous_file_versions` - (Optional) Whether to archive previous file versions.
+* `archive_retention_policy` - (Optional) Archive retention policy. See [Archive Retention Policy](#archive-retention-policy) below.
+* `file_archive_settings` - (Optional) File archive filters. See [File Archive Settings](#file-archive-settings) below.
+
+### Archive Retention Policy
+
+The `archive_retention_policy` block supports:
+
+* `type` - (Required) Retention type. Valid values: `Days`, `Weeks`, `Months`, `Years`.
+* `quantity` - (Required) Number of retention periods to keep.
+
+### File Archive Settings
+
+The `file_archive_settings` block supports:
+
+* `archival_type` - (Optional) Archival type.
+* `inclusion_mask` - (Optional) List of inclusion masks for file archiving.
+* `exclusion_mask` - (Optional) List of exclusion masks for file archiving.
 
 ### Schedule
 
 The `schedule` block supports:
 
+* `run_automatically` - (Required) Whether the job runs automatically on a schedule.
 * `daily` - (Optional) Daily schedule settings. See [Daily Schedule](#daily-schedule) below.
 * `monthly` - (Optional) Monthly schedule settings. See [Monthly Schedule](#monthly-schedule) below.
 * `periodically` - (Optional) Periodic schedule settings. See [Periodically Schedule](#periodically-schedule) below.
@@ -447,41 +471,46 @@ The `schedule` block supports:
 
 The `daily` block supports:
 
-* `days` - (Required) Days of the week to run the job.
-* `local_time` - (Required) Time to run the job (HH:MM format).
-* `type` - (Required) Schedule type. Valid values: `EveryNHours`, `Once`.
-* `every_n_hours_period` - (Optional) Run every N hours (when type is `EveryNHours`).
+* `is_enabled` - (Required) Whether daily schedule is enabled.
+* `local_time` - (Optional) Time to run the job (HH:MM format).
+* `daily_kind` - (Optional) The kind of daily schedule.
+* `days` - (Optional) Days of the week to run the job.
 
 ### Monthly Schedule
 
 The `monthly` block supports:
 
-* `day_of_month` - (Required) Day of the month to run (1-31).
-* `local_time` - (Required) Time to run the job (HH:MM format).
-* `months` - (Required) Months to run the job.
-* `type` - (Required) Schedule type. Valid values: `EveryNHours`, `Once`.
-* `every_n_hours_period` - (Optional) Run every N hours (when type is `EveryNHours`).
+* `is_enabled` - (Required) Whether monthly schedule is enabled.
+* `day_of_week` - (Optional) Day of the week for monthly schedule.
+* `day_number_in_month` - (Optional) Week number in month. Valid values: `First`, `Second`, `Third`, `Fourth`, `Last`.
+* `day_of_month` - (Optional) Specific day of month (1-31).
+* `months` - (Optional) Months to run the job.
+* `local_time` - (Optional) Time to run the job (HH:MM format).
+* `is_last_day_of_month` - (Optional) Run on the last day of the month.
 
 ### Periodically Schedule
 
 The `periodically` block supports:
 
-* `type` - (Required) Period type. Valid values: `Hours`, `Minutes`.
-* `period` - (Required) Period value.
-* `full_backup_schedule_kind` - (Optional) When to run full backups. Valid values: `Daily`, `Weekly`, `Monthly`.
-* `full_backup_days` - (Optional) Days for full backups (when kind is `Weekly`).
+* `is_enabled` - (Required) Whether periodically schedule is enabled.
+* `periodically_kind` - (Optional) The kind of periodically schedule.
+* `frequency` - (Optional) The frequency for periodically schedule.
+* `start_time_within_hour` - (Optional) Start time within hour for periodically schedule.
+* `backup_window` - (Optional) Backup window for periodically schedule. See [Backup Window Structure](#backup-window-structure) below.
 
 ### Continuously Schedule
 
 The `continuously` block supports:
 
-* `schedule_kind` - (Required) Schedule kind. Value: `Continuously`.
+* `is_enabled` - (Required) Whether continuously schedule is enabled.
+* `backup_window` - (Optional) Backup window for continuously schedule. See [Backup Window Structure](#backup-window-structure) below.
 
 ### After This Job
 
 The `after_this_job` block supports:
 
-* `job_id` - (Required) ID of the job to run after.
+* `is_enabled` - (Required) Whether after this job schedule is enabled.
+* `job_name` - (Optional) Name of the job to run after.
 
 ### Retry Settings
 
@@ -489,22 +518,22 @@ The `retry` block supports:
 
 * `is_enabled` - (Required) Whether retry is enabled.
 * `retry_count` - (Optional) Number of retry attempts.
-* `retry_wait_interval` - (Optional) Wait time between retries in minutes.
+* `await_minutes` - (Optional) Wait time between retries in minutes.
 
 ### Backup Window
 
 The `backup_window` block supports:
 
 * `is_enabled` - (Required) Whether backup window restrictions are enabled.
-* `backup_window` - (Optional) List of backup windows. See [Backup Window Entry](#backup-window-entry) below.
+* `backup_window` - (Optional) Backup window configuration. See [Backup Window Structure](#backup-window-structure) below.
 
-### Backup Window Entry
+### Backup Window Structure
 
-The `backup_window` nested block supports:
+The nested `backup_window` block supports:
 
-* `day_of_week` - (Required) Day of the week.
-* `start_time` - (Required) Window start time (HH:MM format).
-* `end_time` - (Required) Window end time (HH:MM format).
+* `days` - (Required) List of backup window days. Each entry contains:
+  * `day` - (Required) Day of the week.
+  * `hours` - (Required) Hours range in format "HH:MM-HH:MM".
 
 ## Attributes Reference
 

@@ -925,7 +925,10 @@ func resourceAzureVMBackupPolicy() *schema.Resource {
 }
 
 func resourceVMBackupPolicyCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	policyRequest := buildVMBackupPolicyRequest(d)
 
@@ -956,7 +959,10 @@ func resourceVMBackupPolicyCreate(ctx context.Context, d *schema.ResourceData, m
 }
 
 func resourceVMBackupPolicyRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	url := client.BuildAPIURL(fmt.Sprintf("/policies/virtualMachines/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("GET", url, nil)
@@ -1006,7 +1012,10 @@ func resourceVMBackupPolicyRead(ctx context.Context, d *schema.ResourceData, met
 }
 
 func resourceVMBackupPolicyUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	policyRequest := buildVMBackupPolicyRequest(d)
 
@@ -1031,7 +1040,10 @@ func resourceVMBackupPolicyUpdate(ctx context.Context, d *schema.ResourceData, m
 }
 
 func resourceVMBackupPolicyDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	url := client.BuildAPIURL(fmt.Sprintf("/policies/virtualMachines/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("DELETE", url, nil)

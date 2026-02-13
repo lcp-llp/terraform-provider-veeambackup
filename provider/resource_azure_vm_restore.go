@@ -1149,7 +1149,10 @@ func resourceAzureVMRestore() *schema.Resource {
 // Resource function - Create
 
 func resourceAzureVMRestoreCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	restoreRequest := buildAzureVMRestoreRequest(d)
 	restorePointID := d.Get("restore_point_id").(string)
 
@@ -1184,7 +1187,10 @@ func resourceAzureVMRestoreCreate(ctx context.Context, d *schema.ResourceData, m
 // Resource function - Read
 
 func resourceAzureVMRestoreRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	url := client.BuildAPIURL(fmt.Sprintf("/jobSessions/%s/restoredItems", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("GET", url, nil)
 	if err != nil {

@@ -219,7 +219,10 @@ func resourceVbrAzureCloudCredential() *schema.Resource {
 }
 
 func resourceVbrAzureCloudCredentialCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*VeeamClient).VBRClient
+	client, err := getVBRClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	// Build the request payload
 	azureCloudCredential, err := buildVbrAzureCloudCredentialPayload(d)
 	if err != nil {
@@ -384,7 +387,10 @@ func buildVbrAzureNewAccount(data map[string]interface{}) (*VBRCloudCredentialAz
 	return newAccount, nil
 }
 func resourceVbrAzureCloudCredentialRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*VeeamClient).VBRClient
+	client, err := getVBRClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	var diags diag.Diagnostics
 	apiUrl := client.BuildAPIURL(fmt.Sprintf("/api/v1/cloudCredentials/%s", d.Id()))
 	respBodyBytes, err := client.DoRequest(ctx, "GET", apiUrl, nil)
@@ -545,7 +551,10 @@ func buildVbrAzureCloudCredentialUpdatePayload(d *schema.ResourceData) (*VbrClou
 }
 
 func resourceVbrAzureCloudCredentialUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*VeeamClient).VBRClient
+	client, err := getVBRClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	apiUrl := client.BuildAPIURL(fmt.Sprintf("/api/v1/cloudCredentials/%s", d.Id()))
 
 	// Build the update-specific payload
@@ -575,7 +584,10 @@ func resourceVbrAzureCloudCredentialUpdate(ctx context.Context, d *schema.Resour
 }
 
 func resourceVbrAzureCloudCredentialDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*VeeamClient).VBRClient
+	client, err := getVBRClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	var diags diag.Diagnostics
 	apiUrl := client.BuildAPIURL(fmt.Sprintf("/api/v1/cloudCredentials/%s", d.Id()))
 	_, err := client.DoRequest(ctx, "DELETE", apiUrl, nil)

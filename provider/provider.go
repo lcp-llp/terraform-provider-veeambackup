@@ -185,12 +185,6 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 		return nil, fmt.Errorf("failed to create Veeam client: %w", err)
 	}
 
-	// If only Azure is configured, return Azure client for resource compatibility
-	// This maintains the existing resource interface expectations
-	if veeamClient.AzureClient != nil && veeamClient.VBRClient == nil && veeamClient.AWSClient == nil {
-		return veeamClient.AzureClient, nil
-	}
-
-	// Return unified client for multi-service scenarios
+	// Return unified client for all scenarios
 	return veeamClient, nil
 }

@@ -181,7 +181,10 @@ func dataSourceVbrUnstructuredDataServers() *schema.Resource {
 }
 
 	func dataSourceVbrUnstructuredDataServersRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-		client := m.(*VeeamClient).VBRClient
+		client, err := getVBRClient(m)
+		if err != nil {
+			return diag.FromErr(err)
+		}
 	var diags diag.Diagnostics
 
 	// Build query parameters
