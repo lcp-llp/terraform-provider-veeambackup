@@ -181,7 +181,10 @@ func dataSourceAzureFileShares() *schema.Resource {
 }
 
 func dataSourceAzureFileSharesRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*AzureBackupClient)  // Use 'm' since that's the parameter name
+	client, err := getAzureClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	// Build request from schema inputs
 	request := AzureFileSharesDataSourceModel{
 		Offset:                        d.Get("offset").(int),

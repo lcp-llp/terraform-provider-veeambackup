@@ -167,7 +167,10 @@ func resourceAzureServiceAccount() *schema.Resource {
 }
 
 func resourceAzureServiceAccountCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	// Extract account info
 	accountInfoList := d.Get("account_info").([]interface{})
@@ -290,7 +293,10 @@ func resourceAzureServiceAccountCreate(ctx context.Context, d *schema.ResourceDa
 }
 
 func resourceAzureServiceAccountRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	accountID := d.Id()
 
@@ -334,7 +340,10 @@ func resourceAzureServiceAccountRead(ctx context.Context, d *schema.ResourceData
 }
 
 func resourceAzureServiceAccountUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-    client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
     accountID := d.Id()
 
@@ -454,7 +463,10 @@ func resourceAzureServiceAccountUpdate(ctx context.Context, d *schema.ResourceDa
 }
 
 func resourceAzureServiceAccountDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	accountID := d.Id()
 

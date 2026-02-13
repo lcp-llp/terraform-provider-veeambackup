@@ -115,7 +115,10 @@ func dataSourceAzureSubscriptions() *schema.Resource {
 }
 
 func dataSourceAzureSubscriptionsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient) // Build request from schema inputs
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	// Build query parameters
 	params := url.Values{}
 

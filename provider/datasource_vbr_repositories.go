@@ -546,7 +546,10 @@ func dataSourceVBRRepositories() *schema.Resource {
 
 func dataSourceVBRRepositoriesRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
-	client := m.(*VeeamClient).VBRClient
+	client, err := getVBRClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	apiUrl := "/api/v1/backupInfrastructure/repositories"
 	// Build query parameters
 	queryParams := url.Values{}

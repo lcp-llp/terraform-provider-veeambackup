@@ -173,7 +173,10 @@ func dataSourceAzureServiceAccount() *schema.Resource {
 }
 
 func dataSourceAzureServiceAccountRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	accountID := d.Get("account_id").(string)
 

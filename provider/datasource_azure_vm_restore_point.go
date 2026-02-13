@@ -132,7 +132,10 @@ func dataSourceAzureVMRestorePoint() *schema.Resource {
 
 // Provider function - Read
 func dataSourceAzureVMRestorePointRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)
+	client, err := getAzureClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	restorePointID := d.Get("restore_point_id").(string)
 
 	// Construct the API URL

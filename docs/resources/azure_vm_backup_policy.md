@@ -11,19 +11,15 @@ Manages an Azure VM backup policy in Veeam Backup for Microsoft Azure.
 ### Basic VM Backup Policy
 
 ```hcl
-resource "veeambackup_azure_vm_backup_policy" "example" {
-  backup_type          = "SelectedItems"
-  is_enabled           = true
-  name                 = "production-vm-policy"
-  tenant_id            = "12345678-1234-5678-9012-123456789012"
-  service_account_id   = "87654321-4321-8765-2109-876543210987"
-  
+resource "veeambackup_azure_vm_backup_policy" "basic" {
+  backup_type        = "SelectedItems"
+  is_enabled         = true
+  name               = "production-vm-policy"
+  tenant_id          = "12345678-1234-5678-9012-123456789012"
+  service_account_id = "87654321-4321-8765-2109-876543210987"
+
   regions {
     name = "East US"
-  }
-  
-  regions {
-    name = "West US 2"
   }
 
   snapshot_settings {
@@ -33,245 +29,54 @@ resource "veeambackup_azure_vm_backup_policy" "example" {
 }
 ```
 
-### Policy with User Scripts
+### Policy with Scope, Tags, and Scripts
 
 ```hcl
-resource "veeambackup_azure_vm_backup_policy" "with_scripts" {
-  backup_type          = "SelectedItems"
-  is_enabled           = true
-  name                 = "vm-policy-with-scripts"
-  tenant_id            = "12345678-1234-5678-9012-123456789012"
-  service_account_id   = "87654321-4321-8765-2109-876543210987"
-  
+resource "veeambackup_azure_vm_backup_policy" "scoped" {
+  backup_type        = "SelectedItems"
+  is_enabled         = true
+  name               = "vm-policy-with-scripts"
+  tenant_id          = "12345678-1234-5678-9012-123456789012"
+  service_account_id = "87654321-4321-8765-2109-876543210987"
+
   regions {
-    name = "East US"
+    name = "West US 2"
+  }
+
+  selected_items {
+    subscriptions {
+      subscription_id = "sub-12345"
+    }
+
+    resource_groups {
+      id = "rg-production"
+    }
+
+    tags {
+      name  = "Environment"
+      value = "Production"
+    }
   }
 
   snapshot_settings {
     copy_original_tags         = true
     application_aware_snapshot = true
-    
+
     additional_tags {
       name  = "Backup"
       value = "Automated"
     }
-    
-    additional_tags {
-      name  = "Environment"
-      value = "Production"
-    }
-    
+
     user_scripts {
       windows {
-        scripts_enabled            = true
-        pre_script_path           = "C:\\Scripts\\pre-backup.ps1"
-        pre_script_arguments      = "-Verbose"
-        post_script_path          = "C:\\Scripts\\post-backup.ps1"
-        post_script_arguments     = "-LogPath C:\\Logs"
+        scripts_enabled         = true
+        pre_script_path         = "C:\\Scripts\\pre-backup.ps1"
+        post_script_path        = "C:\\Scripts\\post-backup.ps1"
+        ignore_exit_codes       = false
+        ignore_missing_scripts  = false
         repository_snapshots_only = false
-        ignore_exit_codes         = false
-        ignore_missing_scripts    = false
-      }
-      
-      linux {
-        scripts_enabled            = true
-        pre_script_path           = "/opt/scripts/pre-backup.sh"
-        post_script_path          = "/opt/scripts/post-backup.sh"
-        repository_snapshots_only = false
-        ignore_exit_codes         = false
-        ignore_missing_scripts    = true
       }
     }
-  }
-}
-```
-
-### Complete VM Backup Policy with All Schedules
-
-```hcl
-resource "veeambackup_azure_vm_backup_policy" "complete" {
-  backup_type          = "SelectedItems"
-  is_enabled           = true
-  name                 = "comprehensive-vm-policy"
-  tenant_id            = "12345678-1234-5678-9012-123456789012"
-  service_account_id   = "87654321-4321-8765-2109-876543210987"
-  description          = "Comprehensive backup policy for production virtual machines"
-  
-  regions {
-    name = "East US"
-  }
-  
-  regions {
-    name = "West US 2"
-  }
-
-  selected_items {
-    virtual_machines {
-      id = "vm-12345"
-    }
-    
-    virtual_machines {
-      id = "vm-67890"
-    }
-    
-    tags {
-      name  = "Environment"
-      value = "Production"
-    }
-    
-    resource_groups {
-      id = "rg-production"
-    }
-  }
-
-  excluded_items {
-    virtual_machines {
-      id = "vm-exclude-123"
-    }
-    
-    tags {
-      name  = "BackupExclude"
-      value = "true"
-    }
-  }
-
-  snapshot_settings {
-    copy_original_tags         = true
-    application_aware_snapshot = true
-  }
-
-  retry_settings {
-    retry_count = 3
-  }
-
-  policy_notification_settings {
-    recipient           = "admin@company.com"
-    notify_on_success   = false
-    notify_on_warning   = true
-    notify_on_failure   = true
-  }
-
-  daily_schedule {
-    daily_type      = "SelectedDays"
-    selected_days   = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
-    runs_per_hour   = 1
-
-    snapshot_schedule {
-      hours           = [2, 14]
-      snapshots_to_keep = 7
-    }
-
-    backup_schedule {
-      hours = [3]
-      
-      retention {
-        time_retention_duration = 30
-      }
-      
-      target_repository_id = "repo-123"
-    }
-  }
-
-  weekly_schedule {
-    start_time = 2200
-
-    snapshot_schedule {
-      selected_days     = ["Saturday"]
-      snapshots_to_keep = 4
-    }
-
-    backup_schedule {
-      selected_days = ["Sunday"]
-      
-      retention {
-        time_retention_duration   = 12
-        retention_duration_type   = "Months"
-      }
-      
-      target_repository_id = "repo-weekly-123"
-    }
-  }
-
-  monthly_schedule {
-    start_time       = 2300
-    type            = "First"
-    day_of_week     = "Sunday"
-    monthly_last_day = false
-
-    snapshot_schedule {
-      selected_months   = ["January", "April", "July", "October"]
-      snapshots_to_keep = 12
-    }
-
-    backup_schedule {
-      selected_months = ["December"]
-      
-      retention {
-        time_retention_duration   = 7
-        retention_duration_type   = "Years"
-      }
-      
-      target_repository_id = "repo-monthly-123"
-    }
-  }
-
-  yearly_schedule {
-    start_time            = 0100
-    month                = "December"
-    day_of_week          = "Sunday"
-    day_of_month         = 31
-    yearly_last_day      = true
-    retention_years_count = 10
-    target_repository_id = "repo-yearly-123"
-  }
-
-  health_check_settings {
-    health_check_enabled = true
-    local_time          = "2023-12-01T02:00:00Z"
-    day_number_in_month = "First"
-    day_of_week         = "Sunday"
-    day_of_month        = 1
-    months              = ["January", "July"]
-  }
-}
-```
-
-### Policy with Tag Groups
-
-```hcl
-resource "veeambackup_azure_vm_backup_policy" "tag_groups" {
-  backup_type          = "SelectedItems"
-  is_enabled           = true
-  name                 = "tag-group-policy"
-  tenant_id            = "12345678-1234-5678-9012-123456789012"
-  service_account_id   = "87654321-4321-8765-2109-876543210987"
-  
-  regions {
-    name = "East US"
-  }
-
-  selected_items {
-    tag_groups {
-      name = "production-group"
-      
-      subsciption {
-        subscriptionId = "sub-12345"
-      }
-      
-      resource_groups {
-        id = "rg-production"
-      }
-      
-      tags {
-        name  = "Environment"
-        value = "Production"
-      }
-    }
-  }
-
-  snapshot_settings {
-    copy_original_tags         = true
-    application_aware_snapshot = false
   }
 }
 ```
@@ -281,38 +86,27 @@ resource "veeambackup_azure_vm_backup_policy" "tag_groups" {
 The following arguments are supported:
 
 * `backup_type` - (Required) Defines whether you want to include to the backup scope all resources residing in the specified Azure regions. Valid values: `AllSubscriptions`, `SelectedItems`, `Unknown`.
-
 * `is_enabled` - (Required) Defines whether the policy is enabled.
-
 * `name` - (Required) Specifies a name for the backup policy. Must be between 1 and 255 characters.
-
-* `regions` - (Required) Specifies Azure regions where the resources that will be backed up reside. See [Regions](#regions) below.
-
-* `snapshot_settings` - (Required) Specifies cloud-native snapshot settings for the backup policy. See [Snapshot Settings](#snapshot_settings) below.
-
+* `regions` - (Required) Specifies Azure regions where the resources that will be backed up reside. See [regions](#regions) below.
+* `snapshot_settings` - (Required) Specifies cloud-native snapshot settings for the backup policy. See [snapshot_settings](#snapshot_settings) below.
 * `tenant_id` - (Required) Specifies a Microsoft Azure ID assigned to a tenant.
-
 * `service_account_id` - (Required) Specifies the system ID assigned to the service account. Must be a valid UUID.
-
 * `description` - (Optional) Specifies a description for the backup policy.
-
-* `selected_items` - (Optional) Specifies Azure resources to protect by the backup policy. See [Selected Items](#selected_items) below.
-
-* `excluded_items` - (Optional) Specifies Azure resources to exclude from the backup policy. See [Excluded Items](#excluded_items) below.
-
-* `retry_settings` - (Optional) Specifies retry settings for the backup policy. See [Retry Settings](#retry_settings) below.
-
-* `policy_notification_settings` - (Optional) Specifies notification settings for the backup policy. See [Policy Notification Settings](#policy_notification_settings) below.
-
-* `daily_schedule` - (Optional) Specifies daily backup schedule settings for the backup policy. See [Daily Schedule](#daily_schedule) below.
-
-* `weekly_schedule` - (Optional) Specifies weekly backup schedule settings for the backup policy. See [Weekly Schedule](#weekly_schedule) below.
-
-* `monthly_schedule` - (Optional) Specifies monthly backup schedule settings for the backup policy. See [Monthly Schedule](#monthly_schedule) below.
-
+* `selected_items` - (Optional) Specifies Azure resources to protect by the backup policy. See [selected_items](#selected_items) below.
+* `excluded_items` - (Optional) Specifies Azure resources to exclude from the backup policy. See [excluded_items](#excluded_items) below.
+* `retry_settings` - (Optional) Specifies retry settings for the backup policy. See [retry_settings](#retry_settings) below.
+* `policy_notification_settings` - (Optional) Specifies notification settings for the backup policy. See [policy_notification_settings](#policy_notification_settings) below.
+* `daily_schedule` - (Optional) Specifies daily backup schedule settings for the backup policy. See [daily_schedule](#daily_schedule) below.
+* `weekly_schedule` - (Optional) Specifies weekly backup schedule settings for the backup policy. See [weekly_schedule](#weekly_schedule) below.
+* `monthly_schedule` - (Optional) Specifies monthly backup schedule settings for the backup policy. See [monthly_schedule](#monthly_schedule) below.
 * `yearly_schedule` - (Optional) Specifies yearly backup schedule settings for the backup policy. See [yearly_schedule](#yearly_schedule) below.
+* `health_check_settings` - (Optional) Specifies health check settings for the backup policy. See [health_check_settings](#health_check_settings) below.
 
-* `health_check_settings` - (Optional) Specifies health check settings for the backup policy. See [Health Check Settings](#health_check_settings) below.
+## Attributes Reference
+
+* `is_backup_configured` - Indicates whether backup is configured for the policy.
+* `is_schedule_configured` - Indicates whether a backup schedule is configured for the policy.
 
 ## Nested Schema Reference
 
@@ -323,69 +117,51 @@ The following arguments are supported:
 ### snapshot_settings
 
 * `copy_original_tags` - (Optional) Defines whether to assign to the snapshots tags of virtual disks. Defaults to `false`.
-
 * `application_aware_snapshot` - (Optional) Defines whether to enable application-aware processing. Defaults to `false`.
-
-* `additional_tags` - (Optional) Specifies a list of additional tags to assign to the snapshots created by the backup policy. See [Additional Tags](#additional_tags) below.
-
-* `user_scripts` - (Optional) Specifies user script settings for the backup policy. See [User Scripts](#user_scripts) below.
+* `additional_tags` - (Optional) Specifies a list of additional tags to assign to the snapshots created by the backup policy. See [additional_tags](#additional_tags) below.
+* `user_scripts` - (Optional) Specifies user script settings for the backup policy. See [user_scripts](#user_scripts) below.
 
 ### additional_tags
 
 * `name` - (Required) Tag name.
-
 * `value` - (Required) Tag value.
 
 ### user_scripts
 
-* `windows` - (Optional) Specifies user script settings for Windows VMs. See [Script Settings](#script_settings) below.
-
-* `linux` - (Optional) Specifies user script settings for Linux VMs. See [Script Settings](#script_settings) below.
+* `windows` - (Optional) Specifies user script settings for Windows VMs. See [script_settings](#script_settings) below.
+* `linux` - (Optional) Specifies user script settings for Linux VMs. See [script_settings](#script_settings) below.
 
 ### script_settings
 
 * `scripts_enabled` - (Required) Defines whether to enable user scripts execution.
-
 * `pre_script_path` - (Optional) Specifies the path to the pre-backup script.
-
 * `pre_script_arguments` - (Optional) Specifies arguments for the pre-backup script.
-
 * `post_script_path` - (Optional) Specifies the path to the post-backup script.
-
 * `post_script_arguments` - (Optional) Specifies arguments for the post-backup script.
-
 * `repository_snapshots_only` - (Optional) Defines whether to run the scripts only during repository snapshot creation. Defaults to `false`.
-
 * `ignore_exit_codes` - (Optional) Defines whether to ignore script exit codes. Defaults to `false`.
-
 * `ignore_missing_scripts` - (Optional) Defines whether to ignore missing scripts. Defaults to `false`.
 
 ### selected_items
 
-* `subscriptions` - (Optional) Specifies a list of Azure subscription IDs to include in the backup scope. See [Subscriptions](#subscriptions) below.
-
-* `tags` - (Optional) Specifies a list of tags assigned to Azure resources to include in the backup scope. See [Tags](#tags) below.
-
-* `resource_groups` - (Optional) Specifies a list of Azure resource groups to include in the backup scope. See [Resource Groups](#resource_groups) below.
-
-* `virtual_machines` - (Optional) Specifies a list of protected Azure VMs. See [Virtual Machines](#virtual_machines) below.
-
-* `tag_groups` - (Optional) Specifies a list of tag groups assigned to Azure resources to include in the backup scope. See [Tag Groups](#tag_groups) below.
+* `subscriptions` - (Optional) Specifies a list of Azure subscription IDs to include in the backup scope. See [subscriptions](#subscriptions) below.
+* `tags` - (Optional) Specifies a list of tags assigned to Azure resources to include in the backup scope. See [tags](#tags) below.
+* `resource_groups` - (Optional) Specifies a list of Azure resource groups to include in the backup scope. See [resource_groups](#resource_groups) below.
+* `virtual_machines` - (Optional) Specifies a list of protected Azure VMs. See [virtual_machines](#virtual_machines) below.
+* `tag_groups` - (Optional) Specifies a list of tag groups assigned to Azure resources to include in the backup scope. See [tag_groups](#tag_groups) below.
 
 ### excluded_items
 
-* `virtual_machines` - (Optional) Specifies a list of protected Azure VMs to exclude from the backup policy. See [Virtual Machines](#virtual_machines) below.
-
-* `tags` - (Optional) Specifies a list of tags assigned to Azure resources to exclude from the backup policy. See [Tags](#tags) below.
+* `virtual_machines` - (Optional) Specifies a list of protected Azure VMs to exclude from the backup policy. See [virtual_machines](#virtual_machines) below.
+* `tags` - (Optional) Specifies a list of tags assigned to Azure resources to exclude from the backup policy. See [tags](#tags) below.
 
 ### subscriptions
 
-* `subscriptionId` - (Required) Azure subscription ID.
+* `subscription_id` - (Required) Azure subscription ID.
 
 ### tags
 
 * `name` - (Required) Tag name.
-
 * `value` - (Required) Tag value.
 
 ### resource_groups
@@ -397,6 +173,111 @@ The following arguments are supported:
 * `id` - (Required) VM system ID.
 
 ### tag_groups
+
+* `name` - (Required) Tag group name.
+* `subsciption` - (Optional) Specifies a single subscription for the tag group. See [tag_group_subscription](#tag_group_subscription) below.
+* `resource_groups` - (Optional) Specifies a single resource group for the tag group. See [tag_group_resource_group](#tag_group_resource_group) below.
+* `tags` - (Optional) Specifies a list of tags for the tag group. See [tags](#tags) below.
+
+### tag_group_subscription
+
+* `subscription_id` - (Required) Azure subscription ID.
+
+### tag_group_resource_group
+
+* `id` - (Required) Resource group system ID.
+
+### retry_settings
+
+* `retry_count` - (Optional) Number of retry attempts for failed backup tasks. Defaults to `3`.
+
+### policy_notification_settings
+
+* `recipient` - (Optional) Email address of the notification recipient.
+* `notify_on_success` - (Optional) Send notifications on successful backup jobs. Defaults to `false`.
+* `notify_on_warning` - (Optional) Send notifications on backup jobs with warnings. Defaults to `true`.
+* `notify_on_failure` - (Optional) Send notifications on failed backup jobs. Defaults to `true`.
+
+### daily_schedule
+
+* `daily_type` - (Optional) Type of daily backup schedule. Valid values: `EveryDay`, `Weekdays`, `SelectedDays`, `Unknown`.
+* `selected_days` - (Optional) Days of the week when backups should be performed if `daily_type` is `SelectedDays`.
+* `runs_per_hour` - (Optional) Number of backup runs per hour. Valid values: 1-24.
+* `snapshot_schedule` - (Optional) Snapshot schedule for daily backups. See [daily_snapshot_schedule](#daily_snapshot_schedule) below.
+* `backup_schedule` - (Optional) Backup schedule for daily backups. See [daily_backup_schedule](#daily_backup_schedule) below.
+
+### daily_snapshot_schedule
+
+* `hours` - (Optional) Hours when snapshots should be taken. Valid values: 0-23.
+* `snapshots_to_keep` - (Optional) Number of snapshots to retain.
+
+### daily_backup_schedule
+
+* `hours` - (Optional) Hours when backups should be performed. Valid values: 0-23.
+* `retention` - (Optional) Retention settings for daily backups. See [retention](#retention) below.
+* `target_repository_id` - (Optional) System ID of the target repository for daily backups.
+
+### weekly_schedule
+
+* `start_time` - (Optional) Start time for weekly backups.
+* `snapshot_schedule` - (Optional) Snapshot schedule for weekly backups. See [weekly_snapshot_schedule](#weekly_snapshot_schedule) below.
+* `backup_schedule` - (Optional) Backup schedule for weekly backups. See [weekly_backup_schedule](#weekly_backup_schedule) below.
+
+### weekly_snapshot_schedule
+
+* `selected_days` - (Optional) Days of the week when snapshots should be taken.
+* `snapshots_to_keep` - (Optional) Number of snapshots to retain.
+
+### weekly_backup_schedule
+
+* `selected_days` - (Optional) Days of the week when backups should be performed.
+* `retention` - (Optional) Retention settings for weekly backups. See [retention](#retention) below.
+* `target_repository_id` - (Optional) System ID of the target repository for weekly backups.
+
+### monthly_schedule
+
+* `start_time` - (Optional) Start time for monthly backups.
+* `type` - (Optional) Day of the month when the backup policy will run. Valid values: `First`, `Second`, `Third`, `Fourth`, `Last`, `SelectedDay`, `Unknown`.
+* `day_of_week` - (Optional) Day of week when the backup policy will run if `type` is one of `First`, `Second`, `Third`, `Fourth`, `Last`.
+* `day_of_month` - (Optional) Day of month when the backup policy will run if `type` is `SelectedDay`.
+* `monthly_last_day` - (Optional) Run on the last day of the month.
+* `snapshot_schedule` - (Optional) Snapshot schedule for monthly backups. See [monthly_snapshot_schedule](#monthly_snapshot_schedule) below.
+* `backup_schedule` - (Optional) Backup schedule for monthly backups. See [monthly_backup_schedule](#monthly_backup_schedule) below.
+
+### monthly_snapshot_schedule
+
+* `selected_months` - (Optional) Months when snapshots should be taken.
+* `snapshots_to_keep` - (Optional) Number of snapshots to retain.
+
+### monthly_backup_schedule
+
+* `selected_months` - (Optional) Months when backups should be performed.
+* `retention` - (Optional) Retention settings for monthly backups. See [retention](#retention) below.
+* `target_repository_id` - (Optional) System ID of the target repository for monthly backups.
+
+### yearly_schedule
+
+* `start_time` - (Optional) Start time for yearly backups.
+* `month` - (Optional) Month when the backup policy will run.
+* `day_of_week` - (Optional) Day of the week when the backup policy will run.
+* `day_of_month` - (Optional) Day of the month when the backup policy will run.
+* `yearly_last_day` - (Optional) Run on the last day of the month.
+* `retention_years_count` - (Optional) Number of years to retain yearly backups.
+* `target_repository_id` - (Optional) System ID of the target repository for yearly backups.
+
+### health_check_settings
+
+* `health_check_enabled` - (Optional) Enables health checks for the backup policy. Defaults to `false`.
+* `local_time` - (Optional) Date and time when the health check will run.
+* `day_number_in_month` - (Optional) Day number in the month when the health check will run. Valid values: `First`, `Second`, `Third`, `Fourth`, `Last`, `OnDay`, `EveryDay`, `EverySelectedDay`, `Unknown`.
+* `day_of_week` - (Optional) Day of the week when the health check will run.
+* `day_of_month` - (Optional) Day of the month when the health check will run.
+* `months` - (Optional) Months when the health check will run.
+
+### retention
+
+* `time_retention_duration` - (Optional) Duration to retain backups.
+* `retention_duration_type` - (Optional) Type of retention duration. Valid values: `Days`, `Months`, `Years`, `Unknown`.
 
 * `name` - (Required) Tag group name.
 

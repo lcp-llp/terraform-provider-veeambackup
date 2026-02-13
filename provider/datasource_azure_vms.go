@@ -260,7 +260,10 @@ func dataSourceAzureVMs() *schema.Resource {
 }
 
 func dataSourceAzureVMRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*AzureBackupClient)	// Build request from schema inputs
+    client, err := getAzureClient(meta)
+    if err != nil {
+        return diag.FromErr(err)
+    }
 	request := AzureVMDataSourceModel{
 		Offset:           d.Get("offset").(int),
 		Limit:            d.Get("limit").(int),

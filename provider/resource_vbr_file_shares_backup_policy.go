@@ -895,7 +895,10 @@ func resourceVbrFileShareBackupJob() *schema.Resource {
 
 // CRUD function (Create)
 func resourceVBRFileShareBackupJobCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*VeeamClient).VBRClient
+	client, err := getVBRClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	// Build the job payload
 	job := VbrFileShareBackupJob{
@@ -939,7 +942,10 @@ func resourceVBRFileShareBackupJobCreate(ctx context.Context, d *schema.Resource
 // CRUD function (Read)
 func resourceVBRFileShareBackupJobRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
-	client := m.(*VeeamClient).VBRClient
+	client, err := getVBRClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	jobID := d.Id()
 	url := client.BuildAPIURL("/api/v1/jobs/" + jobID)
 	respBodyBytes, err := client.DoRequest(ctx, "GET", url, nil)
@@ -970,7 +976,10 @@ func resourceVBRFileShareBackupJobRead(ctx context.Context, d *schema.ResourceDa
 
 // CRUD function (Update)
 func resourceVBRFileShareBackupJobUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*VeeamClient).VBRClient
+	client, err := getVBRClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	jobID := d.Id()
 
 	// Build the job payload
@@ -1010,7 +1019,10 @@ func resourceVBRFileShareBackupJobUpdate(ctx context.Context, d *schema.Resource
 // CRUD function (Delete)
 func resourceVBRFileShareBackupJobDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
-	client := m.(*VeeamClient).VBRClient
+	client, err := getVBRClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	jobID := d.Id()
 	url := client.BuildAPIURL("/api/v1/jobs/" + jobID)
 	_, err := client.DoRequest(ctx, "DELETE", url, nil)

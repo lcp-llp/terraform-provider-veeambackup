@@ -418,7 +418,10 @@ func resourceAzureFileSharesBackupPolicy() *schema.Resource {
 
 // CRUD Operations for Resource (Create)
 func resourceAzureFileSharesBackupPolicyCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*AzureBackupClient)
+	client, err := getAzureClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	policyRequest := buildFSBackupPolicyRequest(d)
 
 	jsonData, err := json.Marshal(policyRequest)
@@ -454,7 +457,10 @@ func resourceAzureFileSharesBackupPolicyCreate(ctx context.Context, d *schema.Re
 
 // CRUD Operations for Resource (READ)
 func resourceAzureFileSharesBackupPolicyRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*AzureBackupClient)
+	client, err := getAzureClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	url := client.BuildAPIURL(fmt.Sprintf("/policies/fileShares/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("GET", url, nil)
 	if err != nil {
@@ -497,7 +503,10 @@ func resourceAzureFileSharesBackupPolicyRead(ctx context.Context, d *schema.Reso
 
 // CRUD Operations for Resource (UPDATE)
 func resourceAzureFileSharesBackupPolicyUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*AzureBackupClient)
+	client, err := getAzureClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	policyRequest := buildFSBackupPolicyRequest(d)
 	jsonData, err := json.Marshal(policyRequest)
 	if err != nil {
@@ -520,7 +529,10 @@ func resourceAzureFileSharesBackupPolicyUpdate(ctx context.Context, d *schema.Re
 
 // CRUD Operations for Resource (Delete)
 func resourceAzureFileSharesBackupPolicyDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	client := m.(*AzureBackupClient)
+	client, err := getAzureClient(m)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	url := client.BuildAPIURL(fmt.Sprintf("/policies/fileShares/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("DELETE", url, nil)
 	if err != nil {
