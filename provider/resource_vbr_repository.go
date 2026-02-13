@@ -781,7 +781,7 @@ func resourceVBRRepositoryDelete(ctx context.Context, d *schema.ResourceData, m 
 	repositoryID := d.Id()
 
 	url := client.BuildAPIURL("/api/v1/backupInfrastructure/repositories/" + repositoryID)
-	_, err := client.DoRequest(ctx, "DELETE", url, nil)
+	_, err = client.DoRequest(ctx, "DELETE", url, nil)
 	if err != nil {
 		if strings.Contains(err.Error(), "404") {
 			d.SetId("")

@@ -476,7 +476,7 @@ func resourceVbrUnstructuredDataServerDelete(ctx context.Context, d *schema.Reso
 	}
 	var diags diag.Diagnostics
 	url := client.BuildAPIURL(fmt.Sprintf("/api/v1/inventory/unstructuredDataServers/%s", url.PathEscape(d.Id())))
-	_, err := client.DoRequest(ctx, "DELETE", url, nil)
+	_, err = client.DoRequest(ctx, "DELETE", url, nil)
 	if err != nil {
 		return diag.FromErr(err)
 	}

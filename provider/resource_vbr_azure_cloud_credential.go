@@ -590,7 +590,7 @@ func resourceVbrAzureCloudCredentialDelete(ctx context.Context, d *schema.Resour
 	}
 	var diags diag.Diagnostics
 	apiUrl := client.BuildAPIURL(fmt.Sprintf("/api/v1/cloudCredentials/%s", d.Id()))
-	_, err := client.DoRequest(ctx, "DELETE", apiUrl, nil)
+	_, err = client.DoRequest(ctx, "DELETE", apiUrl, nil)
 	if err != nil {
 		return diag.FromErr(err)
 	}
