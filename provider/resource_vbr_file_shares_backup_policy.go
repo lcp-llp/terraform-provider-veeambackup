@@ -1025,7 +1025,7 @@ func resourceVBRFileShareBackupJobDelete(ctx context.Context, d *schema.Resource
 	}
 	jobID := d.Id()
 	url := client.BuildAPIURL("/api/v1/jobs/" + jobID)
-	_, err := client.DoRequest(ctx, "DELETE", url, nil)
+	_, err = client.DoRequest(ctx, "DELETE", url, nil)
 	if err != nil {
 		if !strings.Contains(err.Error(), "404") {
 			return diag.FromErr(err)
