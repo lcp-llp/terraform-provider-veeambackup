@@ -289,7 +289,6 @@ func resourceAzureRepository() *schema.Resource {
 			"repository_job_info": {
 				Type:        schema.TypeList,
 				Computed:    true,
-				MaxItems:    1,
 				Description: "Repository information returned by the operation session.",
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
