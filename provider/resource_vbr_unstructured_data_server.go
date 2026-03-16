@@ -15,6 +15,7 @@ import (
 )
 
 type VbrUnstructuredDataServer struct {
+	ID                        *string                                    `json:"id,omitempty"`
 	Type                      string                                     `json:"type"`
 	Processing                VbrUnstructuredDataServerProcessing        `json:"processing"`
 	HostID                    *string                                    `json:"hostId,omitempty"`                    //Used for type FileServer
@@ -442,6 +443,8 @@ func resourceVbrUnstructuredDataServerUpdate(ctx context.Context, d *schema.Reso
 	if err != nil {
 		return diag.FromErr(err)
 	}
+	resourceID := d.Id()
+	unstructuredDataServer.ID = &resourceID
 	url := client.BuildAPIURL(fmt.Sprintf("/api/v1/inventory/unstructuredDataServers/%s", url.PathEscape(d.Id())))
 	reqBodyBytes, err := json.Marshal(unstructuredDataServer)
 	if err != nil {
