@@ -539,6 +539,12 @@ func resourceAzureSQLBackupPolicy() *schema.Resource {
 							Optional:    true,
 							Description: "Specifies the start time for yearly backups.",
 						},
+						"type": {
+							Type:         schema.TypeString,
+							Optional:     true,
+							Description:  "Specifies the day of the month when the backup policy will run.",
+							ValidateFunc: validation.StringInSlice([]string{"First", "Second", "Third", "Fourth", "Last", "SelectedDay", "Unknown"}, false),
+						},
 						"month": {
 							Type:         schema.TypeString,
 							Optional:     true,
@@ -1088,6 +1094,10 @@ func buildSQLBackupPolicyRequest(d *schema.ResourceData) *SQLBackupPolicyRequest
 			if start, ok := yearlyMap["start_time"]; ok {
 				val := start.(int)
 				sched.StartTime = &val
+			}
+			if schedType, ok := yearlyMap["type"]; ok && schedType != "" {
+				val := schedType.(string)
+				sched.Type = &val
 			}
 			if month, ok := yearlyMap["month"]; ok && month != "" {
 				val := month.(string)

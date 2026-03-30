@@ -598,6 +598,12 @@ func resourceAzureCosmosDbBackupPolicy() *schema.Resource {
 							Optional:    true,
 							Description: "Specifies the start time for yearly backups.",
 						},
+						"type": {
+							Type:         schema.TypeString,
+							Optional:     true,
+							Description:  "Specifies the day of the month when the backup policy will run.",
+							ValidateFunc: validation.StringInSlice([]string{"First", "Second", "Third", "Fourth", "Last", "SelectedDay", "Unknown"}, false),
+						},
 						"month": {
 							Type:         schema.TypeString,
 							Optional:     true,
@@ -1265,6 +1271,10 @@ func buildCosmosBackupPolicyRequest(d *schema.ResourceData) ComsmosDbBackupPolic
 			if startTime, ok := yearlyMap["start_time"]; ok {
 				time := startTime.(int)
 				yearlySchedule.StartTime = &time
+			}
+			if schedType, ok := yearlyMap["type"]; ok && schedType != "" {
+				typeStr := schedType.(string)
+				yearlySchedule.Type = &typeStr
 			}
 			if month, ok := yearlyMap["month"]; ok && month != "" {
 				monthStr := month.(string)
