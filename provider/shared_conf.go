@@ -320,6 +320,7 @@ type MonthlySchedule struct {
 
 type YearlySchedule struct {
 	StartTime           *int    `json:"startTime,omitempty"`
+	Type                *string `json:"type,omitempty"`
 	Month               *string `json:"month,omitempty"`
 	DayOfWeek           *string `json:"dayOfWeek,omitempty"`
 	DayOfMonth          *int    `json:"dayOfMonth,omitempty"`
