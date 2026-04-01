@@ -258,11 +258,13 @@ func resourceVbrUnstructuredDataServer() *schema.Resource {
 
 				switch t {
 				case "FileServer":
-					if v, ok := d.GetOk("host_id"); !ok || v == "" {
-						diags = append(diags, diag.Diagnostic{
-							Severity: diag.Error,
-							Summary:  "host_id is required when type is FileServer",
-						})
+					if d.NewValueKnown("host_id") {
+						if v, ok := d.GetOk("host_id"); !ok || v == "" {
+							diags = append(diags, diag.Diagnostic{
+								Severity: diag.Error,
+								Summary:  "host_id is required when type is FileServer",
+							})
+						}
 					}
 				case "SMBShare":
 					if v, ok := d.GetOk("path"); !ok || v == "" {
@@ -277,11 +279,13 @@ func resourceVbrUnstructuredDataServer() *schema.Resource {
 							Summary:  "access_credentials_required is required when type is SMBShare",
 						})
 					}
-					if v, ok := d.GetOk("access_credentials_id"); !ok || v == "" {
-						diags = append(diags, diag.Diagnostic{
-							Severity: diag.Error,
-							Summary:  "access_credentials_id is required when type is SMBShare",
-						})
+					if d.NewValueKnown("access_credentials_id") {
+						if v, ok := d.GetOk("access_credentials_id"); !ok || v == "" {
+							diags = append(diags, diag.Diagnostic{
+								Severity: diag.Error,
+								Summary:  "access_credentials_id is required when type is SMBShare",
+							})
+						}
 					}
 					if v, ok := d.GetOk("advanced_settings"); !ok || v == nil {
 						diags = append(diags, diag.Diagnostic{
@@ -303,11 +307,13 @@ func resourceVbrUnstructuredDataServer() *schema.Resource {
 							Summary:  "friendly_name is required when type is AzureBlob",
 						})
 					}
-					if v, ok := d.GetOk("credentials_id"); !ok || v == "" {
-						diags = append(diags, diag.Diagnostic{
-							Severity: diag.Error,
-							Summary:  "credentials_id is required when type is AzureBlob",
-						})
+					if d.NewValueKnown("credentials_id") {
+						if v, ok := d.GetOk("credentials_id"); !ok || v == "" {
+							diags = append(diags, diag.Diagnostic{
+								Severity: diag.Error,
+								Summary:  "credentials_id is required when type is AzureBlob",
+							})
+						}
 					}
 					if v, ok := d.GetOk("region_type"); !ok || v == "" {
 						diags = append(diags, diag.Diagnostic{

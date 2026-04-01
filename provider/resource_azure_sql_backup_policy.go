@@ -894,7 +894,7 @@ func buildSQLBackupPolicyRequest(d *schema.ResourceData) *SQLBackupPolicyRequest
 	}
 
 	// Daily (backup) schedule
-	if v, ok := d.GetOk("backup_schedule"); ok {
+	if v, ok := d.GetOk("daily_schedule"); ok {
 		scheduleList := v.([]interface{})
 		if len(scheduleList) > 0 {
 			scheduleMap := scheduleList[0].(map[string]interface{})
@@ -939,7 +939,7 @@ func buildSQLBackupPolicyRequest(d *schema.ResourceData) *SQLBackupPolicyRequest
 			weeklyMap := weeklyList[0].(map[string]interface{})
 			sched := WeeklySchedule{}
 
-			if start, ok := weeklyMap["start_time"]; ok && start.(int) > 0 {
+			if start, ok := weeklyMap["start_time"]; ok {
 				val := start.(int)
 				sched.StartTime = &val
 			}
