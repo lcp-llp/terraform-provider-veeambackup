@@ -3,6 +3,10 @@ package provider
 import (
 	"fmt"
 
+	"terraform-provider-veeambackup/internal/azure"
+	"terraform-provider-veeambackup/internal/client"
+	"terraform-provider-veeambackup/internal/vbr"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -106,37 +110,37 @@ func Provider() *schema.Provider {
 			},
 		},
 		ResourcesMap: map[string]*schema.Resource{
-			"veeambackup_azure_service_account":           resourceAzureServiceAccount(),
-			"veeambackup_azure_repository":                resourceAzureRepository(),
-			"veeambackup_azure_vm_backup_policy":          resourceAzureVMBackupPolicy(),
-			"veeambackup_azure_file_shares_backup_policy": resourceAzureFileSharesBackupPolicy(),
-			"veeambackup_azure_sql_backup_policy":         resourceAzureSQLBackupPolicy(),
-			"veeambackup_azure_cosmos_backup_policy":      resourceAzureCosmosDbBackupPolicy(),
-			"veeambackup_vbr_unstructured_data_server":    resourceVbrUnstructuredDataServer(),
-			"veeambackup_vbr_azure_cloud_credential":      resourceVbrAzureCloudCredential(),
-			"veeambackup_vbr_object_storage_backup_job":   resourceVbrObjectStorageBackupJob(),
-			"veeambackup_vbr_file_share_backup_job":       resourceVbrFileShareBackupJob(),
-			"veeambackup_vbr_repository":                  resourceVbrRepository(),
+			"veeambackup_azure_service_account":           azure.ResourceAzureServiceAccount(),
+			"veeambackup_azure_repository":                azure.ResourceAzureRepository(),
+			"veeambackup_azure_vm_backup_policy":          azure.ResourceAzureVMBackupPolicy(),
+			"veeambackup_azure_file_shares_backup_policy": azure.ResourceAzureFileSharesBackupPolicy(),
+			"veeambackup_azure_sql_backup_policy":         azure.ResourceAzureSQLBackupPolicy(),
+			"veeambackup_azure_cosmos_backup_policy":      azure.ResourceAzureCosmosDbBackupPolicy(),
+			"veeambackup_vbr_unstructured_data_server":    vbr.ResourceVbrUnstructuredDataServer(),
+			"veeambackup_vbr_azure_cloud_credential":      vbr.ResourceVbrAzureCloudCredential(),
+			"veeambackup_vbr_object_storage_backup_job":   vbr.ResourceVbrObjectStorageBackupJob(),
+			"veeambackup_vbr_file_share_backup_job":       vbr.ResourceVbrFileShareBackupJob(),
+			"veeambackup_vbr_repository":                  vbr.ResourceVbrRepository(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
-			"veeambackup_azure_backup_repositories":     dataSourceAzureBackupRepositories(),
-			"veeambackup_azure_service_accounts":        dataSourceAzureServiceAccounts(),
-			"veeambackup_azure_service_account":         dataSourceAzureServiceAccount(),
-			"veeambackup_azure_vms":                     dataSourceAzureVMs(),
-			"veeambackup_azure_subscriptions":           dataSourceAzureSubscriptions(),
-			"veeambackup_azure_resource_groups":         dataSourceAzureResourceGroups(),
-			"veeambackup_azure_sql_servers":             dataSourceAzureSqlServers(),
-			"veeambackup_azure_sql_databases":           dataSourceAzureSqlDatabases(),
-			"veeambackup_azure_cosmos_accounts":         dataSourceAzureCosmosDbAccounts(),
-			"veeambackup_azure_storage_accounts":        dataSourceAzureStorageAccounts(),
-			"veeambackup_azure_file_shares":             dataSourceAzureFileShares(),
-			"veeambackup_azure_vm_restore_points":       dataSourceAzureVMRestorePoints(),
-			"veeambackup_azure_vm_restore_point":        dataSourceAzureVMRestorePoint(),
-			"veeambackup_vbr_unstructured_data_servers": dataSourceVbrUnstructuredDataServers(),
-			"veeambackup_vbr_cloud_credentials":         dataSourceVbrCloudCredentials(),
-			"veeambackup_vbr_cloud_credential":          dataSourceVbrCloudCredential(),
-			"veeambackup_vbr_repositories":              dataSourceVBRRepositories(),
-			"veeambackup_vbr_proxies":                   dataSourceVbrProxies(),
+			"veeambackup_azure_backup_repositories":     azure.DataSourceAzureBackupRepositories(),
+			"veeambackup_azure_service_accounts":        azure.DataSourceAzureServiceAccounts(),
+			"veeambackup_azure_service_account":         azure.DataSourceAzureServiceAccount(),
+			"veeambackup_azure_vms":                     azure.DataSourceAzureVMs(),
+			"veeambackup_azure_subscriptions":           azure.DataSourceAzureSubscriptions(),
+			"veeambackup_azure_resource_groups":         azure.DataSourceAzureResourceGroups(),
+			"veeambackup_azure_sql_servers":             azure.DataSourceAzureSqlServers(),
+			"veeambackup_azure_sql_databases":           azure.DataSourceAzureSqlDatabases(),
+			"veeambackup_azure_cosmos_accounts":         azure.DataSourceAzureCosmosDbAccounts(),
+			"veeambackup_azure_storage_accounts":        azure.DataSourceAzureStorageAccounts(),
+			"veeambackup_azure_file_shares":             azure.DataSourceAzureFileShares(),
+			"veeambackup_azure_vm_restore_points":       azure.DataSourceAzureVMRestorePoints(),
+			"veeambackup_azure_vm_restore_point":        azure.DataSourceAzureVMRestorePoint(),
+			"veeambackup_vbr_unstructured_data_servers": vbr.DataSourceVbrUnstructuredDataServers(),
+			"veeambackup_vbr_cloud_credentials":         vbr.DataSourceVbrCloudCredentials(),
+			"veeambackup_vbr_cloud_credential":          vbr.DataSourceVbrCloudCredential(),
+			"veeambackup_vbr_repositories":              vbr.DataSourceVBRRepositories(),
+			"veeambackup_vbr_proxies":                   vbr.DataSourceVbrProxies(),
 		},
 		ConfigureFunc: providerConfigure,
 	}
@@ -148,12 +152,12 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 	azureConfig := d.Get("azure").([]interface{})
 	vbrConfig := d.Get("vbr").([]interface{})
 
-	config := ClientConfig{}
+	config := client.ClientConfig{}
 
 	// Handle Azure configuration
 	if len(azureConfig) > 0 {
 		azureMap := azureConfig[0].(map[string]interface{})
-		config.Azure = &AzureConfig{
+		config.Azure = &client.AzureConfig{
 			Hostname:           azureMap["hostname"].(string),
 			Username:           azureMap["username"].(string),
 			Password:           azureMap["password"].(string),
@@ -165,7 +169,7 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 	// Handle VBR configuration
 	if len(vbrConfig) > 0 {
 		vbrMap := vbrConfig[0].(map[string]interface{})
-		config.VBR = &VBRConfig{
+		config.VBR = &client.VBRConfig{
 			Hostname:           vbrMap["hostname"].(string),
 			Port:               vbrMap["port"].(string),
 			Username:           vbrMap["username"].(string),
@@ -181,7 +185,7 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 	}
 
 	// Create the unified client
-	veeamClient, err := NewVeeamClient(config)
+	veeamClient, err := client.NewVeeamClient(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Veeam client: %w", err)
 	}
