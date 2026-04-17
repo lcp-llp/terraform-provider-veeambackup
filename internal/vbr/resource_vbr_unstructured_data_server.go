@@ -1,12 +1,12 @@
-﻿package vbr
+package vbr
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
+	vc "terraform-provider-veeambackup/internal/client"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -16,18 +16,25 @@ import (
 )
 
 type VbrUnstructuredDataServer struct {
-	ID                        *string                                    `json:"id,omitempty"`
-	Type                      string                                     `json:"type"`
-	Processing                VbrUnstructuredDataServerProcessing        `json:"processing"`
-	HostID                    *string                                    `json:"hostId,omitempty"`                    //Used for type FileServer
-	Path                      *string                                    `json:"path,omitempty"`                      //Used for type SMBShare
-	AccessCredentialsRequired *bool                                      `json:"accessCredentialsRequired,omitempty"` //Used for type SMBShare
-	AccessCredentialsID       *string                                    `json:"accessCredentialsId,omitempty"`       //Used for type SMBShare
-	AdvancedSettings          *VbrUnstructuredDataServerAdvancedSettings `json:"advancedSettings,omitempty"`          //Used for type SMBShare
-	Account                   *string                                    `json:"account,omitempty"`                   //Used for type AmazonS3, S3Compatible,
-	FriendlyName              *string                                    `json:"friendlyName,omitempty"`              //Used for type AzureBlob
-	CredentialsID             *string                                    `json:"credentialsId,omitempty"`             //Used for type AzureBlob
-	RegionType                *string                                    `json:"regionType,omitempty"`                //Used for type AzureBlob
+	ID                        *string                                         `json:"id,omitempty"`
+	Type                      string                                          `json:"type"`
+	Processing                VbrUnstructuredDataServerProcessing             `json:"processing"`
+	HostID                    *string                                         `json:"hostId,omitempty"`                    //Used for type FileServer
+	Path                      *string                                         `json:"path,omitempty"`                      //Used for type SMBShare
+	AccessCredentialsRequired *bool                                           `json:"accessCredentialsRequired,omitempty"` //Used for type SMBShare
+	AccessCredentialsID       *string                                         `json:"accessCredentialsId,omitempty"`       //Used for type SMBShare
+	AdvancedSettings          *VbrUnstructuredDataServerAdvancedSettings      `json:"advancedSettings,omitempty"`          //Used for type SMBShare
+	Account                   *VbrUnstructuredDataServerSthreeAccountSettings `json:"account,omitempty"`                   //Used for type AmazonS3, S3Compatible,
+	FriendlyName              *string                                         `json:"friendlyName,omitempty"`              //Used for type AzureBlob
+	CredentialsID             *string                                         `json:"credentialsId,omitempty"`             //Used for type AzureBlob
+	RegionType                *string                                         `json:"regionType,omitempty"`                //Used for type AzureBlob
+}
+
+type VbrUnstructuredDataServerSthreeAccountSettings struct {
+	FriendlyName  string  `json:"friendlyName"`
+	CredentialsID string  `json:"credentialsId"`
+	RegionType    *string `json:"regionType,omitempty"`
+	RegionId      *string `json:regionId,omitempty`
 }
 
 type VbrBackupProxies struct {
@@ -168,10 +175,35 @@ func ResourceVbrUnstructuredDataServer() *schema.Resource {
 				},
 			},
 			"account": {
-				Type:        schema.TypeString,
+				Type:        schema.TypeList,
 				Optional:    true,
 				ForceNew:    true,
-				Description: "Account name for Amazon S3 or S3 Compatible types. Note: Only required if type is 'AmazonS3' or 'S3Compatible'.",
+				MaxItems:    1,
+				Description: "Account settings for Amazon S3 or S3 Compatible types. Note: Only required if type is 'AmazonS3' or 'S3Compatible'.",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"friendly_name": {
+							Type:        schema.TypeString,
+							Required:    true,
+							Description: "Friendly name for the account.",
+						},
+						"credentials_id": {
+							Type:        schema.TypeString,
+							Required:    true,
+							Description: "Credentials ID for the account.",
+						},
+						"region_type": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Region type for the account.",
+						},
+						"region_id": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Region ID for the account.",
+						},
+					},
+				},
 			},
 			"friendly_name": {
 				Type:        schema.TypeString,
@@ -295,7 +327,7 @@ func ResourceVbrUnstructuredDataServer() *schema.Resource {
 						})
 					}
 				case "AmazonS3", "S3Compatible":
-					if v, ok := d.GetOk("account"); !ok || v == "" {
+					if v, ok := d.GetOk("account"); !ok || len(v.([]interface{})) == 0 {
 						diags = append(diags, diag.Diagnostic{
 							Severity: diag.Error,
 							Summary:  "account is required when type is AmazonS3 or S3Compatible",
@@ -400,17 +432,16 @@ func ResourceVbrUnstructuredDataServerRead(ctx context.Context, d *schema.Resour
 		}
 		return diag.FromErr(err)
 	}
-	
-	// Use the data source response structure for the actual server details
-	var server UnstructuredDataServersResponseData
+
+	var server VbrUnstructuredDataServer
 	err = json.Unmarshal(respBody, &server)
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	
+
 	// Set the server configuration fields
 	d.Set("type", server.Type)
-	
+
 	if server.HostID != nil {
 		d.Set("host_id", *server.HostID)
 	}
@@ -424,7 +455,17 @@ func ResourceVbrUnstructuredDataServerRead(ctx context.Context, d *schema.Resour
 		d.Set("access_credentials_id", *server.AccessCredentialsID)
 	}
 	if server.Account != nil {
-		d.Set("account", *server.Account)
+		accountMap := map[string]interface{}{
+			"friendly_name":  server.Account.FriendlyName,
+			"credentials_id": server.Account.CredentialsID,
+		}
+		if server.Account.RegionType != nil {
+			accountMap["region_type"] = *server.Account.RegionType
+		}
+		if server.Account.RegionId != nil {
+			accountMap["region_id"] = *server.Account.RegionId
+		}
+		d.Set("account", []interface{}{accountMap})
 	}
 	if server.FriendlyName != nil {
 		d.Set("friendly_name", *server.FriendlyName)
@@ -435,7 +476,7 @@ func ResourceVbrUnstructuredDataServerRead(ctx context.Context, d *schema.Resour
 	if server.RegionType != nil {
 		d.Set("region_type", *server.RegionType)
 	}
-	
+
 	return diags
 }
 
@@ -582,8 +623,21 @@ func expandVbrUnstructuredDataServer(d *schema.ResourceData) (*VbrUnstructuredDa
 		}
 	case "AmazonS3", "S3Compatible":
 		if v, ok := d.GetOk("account"); ok {
-			val := v.(string)
-			unstructuredDataServer.Account = &val
+			accountList := v.([]interface{})
+			if len(accountList) > 0 {
+				accountMap := accountList[0].(map[string]interface{})
+				account := VbrUnstructuredDataServerSthreeAccountSettings{
+					FriendlyName:  accountMap["friendly_name"].(string),
+					CredentialsID: accountMap["credentials_id"].(string),
+				}
+				if v, ok := accountMap["region_type"].(string); ok && v != "" {
+					account.RegionType = &v
+				}
+				if v, ok := accountMap["region_id"].(string); ok && v != "" {
+					account.RegionId = &v
+				}
+				unstructuredDataServer.Account = &account
+			}
 		}
 	case "AzureBlob":
 		if v, ok := d.GetOk("friendly_name"); ok {
@@ -645,7 +699,7 @@ func waitForVbrSession(ctx context.Context, client *vc.VBRClient, sessionID stri
 func findUnstructuredDataServer(ctx context.Context, client *vc.VBRClient, server *VbrUnstructuredDataServer) (string, error) {
 	// Build query to find the server by name/identifying attribute
 	queryParams := url.Values{}
-	
+
 	// Use the appropriate identifier based on type
 	switch server.Type {
 	case "AzureBlob":
@@ -661,7 +715,7 @@ func findUnstructuredDataServer(ctx context.Context, client *vc.VBRClient, serve
 		}
 	case "AmazonS3", "S3Compatible":
 		if server.Account != nil {
-			queryParams.Add("nameFilter", *server.Account)
+			queryParams.Add("nameFilter", server.Account.FriendlyName)
 		}
 	}
 
