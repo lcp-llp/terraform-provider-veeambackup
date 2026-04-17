@@ -84,7 +84,11 @@ output "smb_share_servers" {
     - `processing_mode` - Processing mode.
     - `direct_backup_failover_enabled` - Whether direct backup failover is enabled.
     - `storage_snapshot_path` - Storage snapshot path.
-  - `account` - Account name (for `AmazonS3` and `S3Compatible` types).
+  - `account` - Account settings (for `AmazonS3` and `S3Compatible` types):
+    - `friendly_name` - Friendly name for the account.
+    - `credentials_id` - Credentials ID.
+    - `region_type` - Region type.
+    - `region_id` - Region ID.
   - `friendly_name` - Friendly name (for `AzureBlob` type).
   - `credentials_id` - Credentials ID (for `AzureBlob` type).
   - `region_type` - Region type (for `AzureBlob` type).

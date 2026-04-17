@@ -85,7 +85,11 @@ resource "veeambackup_vbr_unstructured_data_server" "s3" {
     cache_repository_id = "repo-123"
   }
   
-  account = "aws-account-123"
+  account {
+    friendly_name  = "My AWS Account"
+    credentials_id = "cred-aws-123"
+    region_type    = "Global"
+  }
 }
 ```
 
@@ -117,7 +121,11 @@ resource "veeambackup_vbr_unstructured_data_server" "s3" {
 
 ### AmazonS3 / S3Compatible Type Arguments
 
-- `account` (Required when type is `AmazonS3` or `S3Compatible`) - Account name for S3.
+- `account` (Required when type is `AmazonS3` or `S3Compatible`) - Account settings block:
+  - `friendly_name` (Required) - Friendly name for the account.
+  - `credentials_id` (Required) - Credentials ID for authentication.
+  - `region_type` (Optional) - Region type.
+  - `region_id` (Optional) - Region ID.
 
 ### AzureBlob Type Arguments
 
