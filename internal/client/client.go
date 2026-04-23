@@ -41,6 +41,7 @@ type VBRClient struct {
 	hostname     string
 	username     string
 	password     string
+	apiVersion   string
 	accessToken  string
 	refreshToken string
 	tokenExpiry  time.Time
@@ -90,6 +91,12 @@ type AWSConfig struct {
 	Password           string
 	APIVersion         string // Default: 1.8-rev0
 	InsecureSkipVerify bool   // Skip SSL certificate verification
+}
+
+type VBRStartJobRequest struct {
+	PerformActiveFull *bool   `json:"performActiveFull,omitempty"`
+	StartChainedJobs  *bool   `json:"startChainedJobs,omitempty"`
+	SyncRestorePoints *string `json:"syncRestorePoints,omitempty"`
 }
 
 // TokenResponse represents the response from the OAuth2 token endpoint
@@ -177,9 +184,10 @@ func NewVeeamClient(config ClientConfig) (*VeeamClient, error) {
 		hostname = strings.TrimPrefix(hostname, "http://")
 
 		vbrClient := &VBRClient{
-			hostname: fmt.Sprintf("%s:%s", hostname, port),
-			username: config.VBR.Username,
-			password: config.VBR.Password,
+			hostname:   fmt.Sprintf("%s:%s", hostname, port),
+			username:   config.VBR.Username,
+			password:   config.VBR.Password,
+			apiVersion: apiVersion,
 			httpClient: &http.Client{
 				Timeout:   10 * time.Minute,
 				Transport: transport,
@@ -590,13 +598,22 @@ func (c *VBRClient) DoRequest(ctx context.Context, method, endpoint string, body
 		reqBody = strings.NewReader(string(body))
 	}
 
+	token, err := c.GetValidTokenVBR(c.apiVersion)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get valid VBR token: %w", err)
+	}
+
 	req, err := http.NewRequestWithContext(ctx, method, endpoint, reqBody)
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.accessToken)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("x-api-version", c.apiVersion)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -615,7 +632,6 @@ func (c *VBRClient) DoRequest(ctx context.Context, method, endpoint string, body
 
 	return respBody, nil
 }
-
 // AuthenticateAWS performs the initial authentication with the Veeam Backup for AWS REST API
 func (c *AWSBackupClient) AuthenticateAWS() error {
 	tokenURL := fmt.Sprintf("https://%s/api/v1/token", c.hostname)

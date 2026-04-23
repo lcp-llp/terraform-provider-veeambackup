@@ -2,11 +2,15 @@
 
 The unified Veeam provider is used to interact with multiple Veeam services including Veeam Backup for Microsoft Azure and Veeam Backup & Replication REST APIs. It provides resources and data sources to manage and query Veeam backup infrastructure across different platforms.
 
+## Terraform Version Requirement
+
+Provider-defined actions in this provider require Terraform 1.14.0 or later.
+
 ## Supported Services
 
 - **Veeam Backup for Microsoft Azure**: Full support for Azure backup management
 - **Veeam Backup & Replication**: Planned support for VBR 13+ backup jobs and infrastructure
-- **Future AWS Support**: Planned support for Veeam AWS backup services
+- **Veeam Backup for AWS Support**: Planned support for Veeam AWS backup services
 
 ## Example Usage
 
@@ -19,6 +23,16 @@ provider "veeambackup" {
     username             = "admin@example.com"
     password             = "your-azure-password"
     api_version          = "8.1"
+    insecure_skip_verify = false  # Set to true for self-signed certificates (not recommended for production)
+  }
+
+  # Veeam Backup for AWS
+  aws {
+    hostname             = "aws-backup.example.com"
+    port                 = "11005"
+    username             = "administrator"
+    password             = "your-aws-password"
+    api_version          = "1.8-rev0"
     insecure_skip_verify = false  # Set to true for self-signed certificates (not recommended for production)
   }
   
@@ -49,7 +63,22 @@ data "veeambackup_azure_backup_repositories" "all" {}
 #   name = "Daily Backup Job"
 #   ...
 # }
+
+# Start a VBR backup job action
+action "veeambackup_vbr_start_backup_job" "daily" {
+  config {
+    job_id              = "job-id"
+    perform_active_full = false
+    start_chained_jobs  = true
+    sync_restore_points = "Latest"
+  }
+}
 ```
+
+## Actions
+
+- [`veeambackup_vbr_start_backup_job`](./actions/vbr_start_backup_job.md) - Start a Veeam Backup & Replication backup job immediately. Requires Terraform 1.14.0 or later.
+- `perform_active_full` defaults to `false` when omitted.
 
 ## Authentication
 
@@ -69,6 +98,14 @@ The provider supports service-specific authentication methods:
   - `Content-Type: application/x-www-form-urlencoded`
   - `x-api-version: 1.3-rev1` (configurable)
 
+### Veeam Backup for AWS
+- **Method**: OAuth2 Password grant flow with API versioning
+- **Protocol**: HTTPS (default port 11005)
+- **Endpoint**: `/api/oauth2/token`
+- **Headers**:
+  - `Content-Type: application/x-www-form-urlencoded`
+  - `x-api-version: 1.8-rev0` (configurable)
+
 ### Environment Variables
 
 You can provide credentials via environment variables:
@@ -79,6 +116,14 @@ export VEEAM_AZURE_HOSTNAME="https://azure-backup.example.com"
 export VEEAM_AZURE_USERNAME="admin@example.com"
 export VEEAM_AZURE_PASSWORD="your-password"
 export VEEAM_AZURE_INSECURE_SKIP_VERIFY="false"
+
+# Veeam Backup for AWS
+export VEEAM_AWS_HOSTNAME="aws-backup.example.com"
+export VEEAM_AWS_PORT="11005"
+export VEEAM_AWS_USERNAME="administrator"
+export VEEAM_AWS_PASSWORD="your-password"
+export VEEAM_AWS_API_VERSION="1.8-rev0"
+export VEEAM_AWS_INSECURE_SKIP_VERIFY="false"
 
 # Veeam Backup & Replication
 export VEEAM_VBR_HOSTNAME="vbr-server.example.com"
@@ -100,6 +145,16 @@ export VEEAM_VBR_INSECURE_SKIP_VERIFY="false"
   - `api_version` (String, Optional) - Azure Backup REST API version. Default: "8.1". Can be sourced from `VEEAM_AZURE_API_VERSION`
   - `insecure_skip_verify` (Boolean, Optional) - Skip SSL certificate verification. Default: `false`. Can be sourced from `VEEAM_AZURE_INSECURE_SKIP_VERIFY`. **Warning**: Only use in development/testing environments.
 
+### AWS Block
+
+- `aws` (Block List, Max: 1) Configuration for Veeam Backup for AWS
+  - `hostname` (String, Required) - Hostname of the AWS backup server. Can be sourced from `VEEAM_AWS_HOSTNAME`
+  - `port` (String, Optional) - REST API port. Default: "11005". Can be sourced from `VEEAM_AWS_PORT`
+  - `username` (String, Required) - Username for authentication. Can be sourced from `VEEAM_AWS_USERNAME`
+  - `password` (String, Required, Sensitive) - Password for authentication. Can be sourced from `VEEAM_AWS_PASSWORD`
+  - `api_version` (String, Optional) - REST API version. Default: "1.8-rev0". Can be sourced from `VEEAM_AWS_API_VERSION`
+  - `insecure_skip_verify` (Boolean, Optional) - Skip SSL certificate verification. Default: `false`. Can be sourced from `VEEAM_AWS_INSECURE_SKIP_VERIFY`. **Warning**: Only use in development/testing environments.
+
 ### VBR Block
 
 - `vbr` (Block List, Max: 1) Configuration for Veeam Backup & Replication
@@ -120,6 +175,11 @@ export VEEAM_VBR_INSECURE_SKIP_VERIFY="false"
 ### Veeam Backup & Replication
 - **API Version**: 1.3-rev1 (VBR 13+)
 - **Default Port**: 9419 (HTTPS)
+- **Authentication**: OAuth2 Password grant with API versioning
+
+### Veeam Backup for AWS
+- **API Version**: 1.8-rev0+
+- **Default Port**: 11005 (HTTPS)
 - **Authentication**: OAuth2 Password grant with API versioning
 
 ## Resource Routing
@@ -148,6 +208,10 @@ The provider includes comprehensive error handling for:
 - Invalid parameter validation
 
 ## Supported Resources
+
+### Actions
+
+- [`veeambackup_vbr_start_backup_job`](./actions/vbr_start_backup_job.md) - Start a Veeam Backup & Replication backup job immediately
 
 ### Data Sources
 

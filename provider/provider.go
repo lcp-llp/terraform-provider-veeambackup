@@ -57,6 +57,57 @@ func Provider() *schema.Provider {
 					},
 				},
 			},
+			// AWS Backup for AWS configuration
+			"aws": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				MaxItems:    1,
+				Description: "Configuration for Veeam Backup for AWS",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"hostname": {
+							Type:        schema.TypeString,
+							Required:    true,
+							Description: "Hostname or IP address of the Veeam Backup for AWS server",
+							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AWS_HOSTNAME", nil),
+						},
+						"port": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Default:     "11005",
+							Description: "Port for AWS REST API (default: 11005)",
+							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AWS_PORT", "11005"),
+						},
+						"username": {
+							Type:        schema.TypeString,
+							Required:    true,
+							Description: "Username for Veeam Backup for AWS authentication",
+							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AWS_USERNAME", nil),
+						},
+						"password": {
+							Type:        schema.TypeString,
+							Required:    true,
+							Sensitive:   true,
+							Description: "Password for Veeam Backup for AWS authentication",
+							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AWS_PASSWORD", nil),
+						},
+						"api_version": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Default:     "1.8-rev0",
+							Description: "AWS Backup REST API version (default: 1.8-rev0)",
+							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AWS_API_VERSION", "1.8-rev0"),
+						},
+						"insecure_skip_verify": {
+							Type:        schema.TypeBool,
+							Optional:    true,
+							Default:     false,
+							Description: "Skip SSL certificate verification (default: false)",
+							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AWS_INSECURE_SKIP_VERIFY", false),
+						},
+					},
+				},
+			},
 			// Veeam Backup & Replication configuration
 			"vbr": {
 				Type:        schema.TypeList,
@@ -151,6 +202,7 @@ func Provider() *schema.Provider {
 func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 	// Check for service-specific configurations
 	azureConfig := d.Get("azure").([]interface{})
+	awsConfig := d.Get("aws").([]interface{})
 	vbrConfig := d.Get("vbr").([]interface{})
 
 	config := client.ClientConfig{}
@@ -164,6 +216,19 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 			Password:           azureMap["password"].(string),
 			APIVersion:         azureMap["api_version"].(string),
 			InsecureSkipVerify: azureMap["insecure_skip_verify"].(bool),
+		}
+	}
+
+	// Handle AWS configuration
+	if len(awsConfig) > 0 {
+		awsMap := awsConfig[0].(map[string]interface{})
+		config.AWS = &client.AWSConfig{
+			Hostname:           awsMap["hostname"].(string),
+			Port:               awsMap["port"].(string),
+			Username:           awsMap["username"].(string),
+			Password:           awsMap["password"].(string),
+			APIVersion:         awsMap["api_version"].(string),
+			InsecureSkipVerify: awsMap["insecure_skip_verify"].(bool),
 		}
 	}
 
@@ -181,8 +246,8 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 	}
 
 	// Validate that at least one service is configured
-	if config.Azure == nil && config.VBR == nil {
-		return nil, fmt.Errorf("at least one service configuration (azure, vbr) must be provided")
+	if config.Azure == nil && config.AWS == nil && config.VBR == nil {
+		return nil, fmt.Errorf("at least one service configuration (azure, aws, vbr) must be provided")
 	}
 
 	// Create the unified client
