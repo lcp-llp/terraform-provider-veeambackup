@@ -21,6 +21,23 @@ This unified Terraform provider enables you to manage and query multiple Veeam s
 
 ## Quick Start
 
+## Terraform Version Requirement
+
+Provider-defined actions require Terraform 1.14.0 or later.
+
+```hcl
+terraform {
+  required_version = ">= 1.14.0"
+
+  required_providers {
+    veeambackup = {
+      source  = "lcp-llp/veeambackup"
+      version = "~> 1.0"
+    }
+  }
+}
+```
+
 ### 1. Configure the Provider
 
 ```hcl
@@ -41,6 +58,15 @@ provider "veeambackup" {
     username = "admin@example.com"
     password = "your-azure-password"
   }
+
+  # Veeam Backup for AWS
+  aws {
+    hostname    = "aws-backup.example.com"
+    port        = "11005"
+    username    = "administrator"
+    password    = "your-aws-password"
+    api_version = "1.8-rev0"
+  }
   
   # Veeam Backup & Replication
   vbr {
@@ -60,6 +86,13 @@ provider "veeambackup" {
 export VEEAM_AZURE_HOSTNAME="https://azure-backup.example.com"
 export VEEAM_AZURE_USERNAME="admin@example.com"
 export VEEAM_AZURE_PASSWORD="your-password"
+
+# Veeam Backup for AWS
+export VEEAM_AWS_HOSTNAME="aws-backup.example.com"
+export VEEAM_AWS_PORT="11005"
+export VEEAM_AWS_USERNAME="administrator"
+export VEEAM_AWS_PASSWORD="your-password"
+export VEEAM_AWS_API_VERSION="1.8-rev0"
 
 # Veeam Backup & Replication
 export VEEAM_VBR_HOSTNAME="vbr-server.example.com"
@@ -132,6 +165,34 @@ data "veeambackup_azure_backup_repository" "production" {
 #   max_concurrent_tasks = 4
 # }
 ```
+
+### 4. Start a VBR Backup Job Action
+
+Starting a VBR backup job is exposed as a Terraform action on the same `veeambackup` provider. This requires Terraform 1.14.0 or later.
+
+```hcl
+terraform {
+  required_version = ">= 1.14.0"
+}
+
+provider "veeambackup" {
+  vbr {
+    hostname    = "vbr-server.example.com"
+    port        = "9419"
+    username    = "administrator"
+    password    = "your-vbr-password"
+    api_version = "1.3-rev1"
+  }
+}
+
+action "veeambackup_vbr_start_backup_job" "example" {
+  config {
+    job_id              = "your-job-id"
+    perform_active_full = true
+    start_chained_jobs  = true
+    sync_restore_points = "Latest"
+  }
+}
 ```
 
 ### 3. Query Service Accounts
@@ -225,6 +286,13 @@ locals {
 ```
 
 ## Service Compatibility
+
+## Actions
+
+- `veeambackup_vbr_start_backup_job` starts a Veeam Backup & Replication job immediately.
+- Requires Terraform 1.14.0 or later.
+- `perform_active_full` defaults to `false`.
+- Optional arguments include `start_chained_jobs` and `sync_restore_points` with allowed values `All` and `Latest`.
 
 ### Veeam Backup for Microsoft Azure
 - **API Version**: 8.1+
