@@ -6,7 +6,7 @@ import (
 	"terraform-provider-veeambackup/internal/azure"
 	"terraform-provider-veeambackup/internal/client"
 	"terraform-provider-veeambackup/internal/vbr"
-
+	"terraform-provider-veeambackup/internal/aws"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -193,6 +193,7 @@ func Provider() *schema.Provider {
 			"veeambackup_vbr_cloud_credential":          vbr.DataSourceVbrCloudCredential(),
 			"veeambackup_vbr_repositories":              vbr.DataSourceVBRRepositories(),
 			"veeambackup_vbr_proxies":                   vbr.DataSourceVbrProxies(),
+			"veeambackup_aws_ec2_instances"				 aws.DataSourceAwsEC2Instances(),
 		},
 		ConfigureFunc: providerConfigure,
 	}
