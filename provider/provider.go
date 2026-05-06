@@ -193,7 +193,9 @@ func Provider() *schema.Provider {
 			"veeambackup_vbr_cloud_credential":          vbr.DataSourceVbrCloudCredential(),
 			"veeambackup_vbr_repositories":              vbr.DataSourceVBRRepositories(),
 			"veeambackup_vbr_proxies":                   vbr.DataSourceVbrProxies(),
-			"veeambackup_aws_ec2_instances"				 aws.DataSourceAwsEC2Instances(),
+			"veeambackup_aws_repositories":              aws.DataSourceAwsRepositories(),
+			"veeambackup_aws_iam_roles":                 aws.DataSourceAwsIAMRoles(),
+			"veeambackup_aws_ec2_instances":             aws.DataSourceAwsEC2Instances(),
 		},
 		ConfigureFunc: providerConfigure,
 	}
