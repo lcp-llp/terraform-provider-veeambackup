@@ -173,6 +173,7 @@ func Provider() *schema.Provider {
 			"veeambackup_vbr_object_storage_backup_job":   vbr.ResourceVbrObjectStorageBackupJob(),
 			"veeambackup_vbr_file_share_backup_job":       vbr.ResourceVbrFileShareBackupJob(),
 			"veeambackup_vbr_repository":                  vbr.ResourceVbrRepository(),
+			"veeambackup_aws_iam_role":                    aws.ResourceAwsIAMRole(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
 			"veeambackup_azure_backup_repositories":     azure.DataSourceAzureBackupRepositories(),
@@ -196,6 +197,7 @@ func Provider() *schema.Provider {
 			"veeambackup_aws_repositories":              aws.DataSourceAwsRepositories(),
 			"veeambackup_aws_iam_roles":                 aws.DataSourceAwsIAMRoles(),
 			"veeambackup_aws_ec2_instances":             aws.DataSourceAwsEC2Instances(),
+			"veeambackup_aws_regions":                   aws.DataSourceAwsRegions(),
 		},
 		ConfigureFunc: providerConfigure,
 	}
