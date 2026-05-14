@@ -174,6 +174,7 @@ func Provider() *schema.Provider {
 			"veeambackup_vbr_file_share_backup_job":       vbr.ResourceVbrFileShareBackupJob(),
 			"veeambackup_vbr_repository":                  vbr.ResourceVbrRepository(),
 			"veeambackup_aws_iam_role":                    aws.ResourceAwsIAMRole(),
+			"veeambackup_aws_ec2_backup_policy":           aws.ResourceAwsEC2InstanceBackupPolicy(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
 			"veeambackup_azure_backup_repositories":     azure.DataSourceAzureBackupRepositories(),
