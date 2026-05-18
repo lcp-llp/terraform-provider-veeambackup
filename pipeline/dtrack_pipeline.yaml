@@ -64,11 +64,12 @@ steps:
 - task: upload-bom-dtrack@1
   displayName: 'Upload SBOM to Dependency-Track'
   inputs:
-    bomFilePath: '$(Agent.TempDirectory)/bom.json'
-    dtrackProjId: '$(PROVIDERS_PROJ_ID)'
-    dtrackAPIKey: '$(INFRA_DTRACK_API_KEY)'
-    dtrackURI: '$(DTRACK_URI)'
-    dtrackProjAutoCreate: false
-    thresholdAction: 'warn'
-    thresholdCritical: 0
-    thresholdHigh: 5
+      bomFilePath: '$(Agent.TempDirectory)/bom.json'
+      dtrackProjName: 'terraform-provider-veeambackup'
+      dtrackProjVersion: '1.0.0'
+      dtrackAPIKey: '$(INFRA_DTRACK_API_KEY)'
+      dtrackURI: '$(DTRACK_URI)'
+      dtrackProjAutoCreate: true
+      thresholdAction: 'warn'
+      thresholdCritical: 0
+      thresholdHigh: 5
