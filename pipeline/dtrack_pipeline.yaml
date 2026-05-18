@@ -12,6 +12,14 @@ parameters:
 trigger:
 - none
 
+schedules:
+- cron: '0 2 * * 5'
+  displayName: 'Weekly Friday 2am UTC'
+  branches:
+    include:
+    - main
+  always: true
+
 pool:
   vmImage: 'ubuntu-latest'
 
