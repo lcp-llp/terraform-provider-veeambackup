@@ -176,6 +176,8 @@ func Provider() *schema.Provider {
 			"veeambackup_aws_iam_role":                    aws.ResourceAwsIAMRole(),
 			"veeambackup_aws_ec2_backup_policy":           aws.ResourceAwsEC2InstanceBackupPolicy(),
 			"veeambackup_aws_rds_backup_policy":           aws.ResourceAwsRDSBackupPolicy(),
+			"veeambackup_aws_dynamo_db_backup_policy":     aws.ResourceAwsDynamoDbBackupPolicy(),
+			"veeambackup_aws_repository":                  aws.ResourceAwsRepository(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
 			"veeambackup_azure_backup_repositories":     azure.DataSourceAzureBackupRepositories(),
@@ -201,6 +203,7 @@ func Provider() *schema.Provider {
 			"veeambackup_aws_ec2_instances":             aws.DataSourceAwsEC2Instances(),
 			"veeambackup_aws_regions":                   aws.DataSourceAwsRegions(),
 			"veeambackup_aws_rds_instances":             aws.DataSourceAwsRDSInstances(),
+			"veeambackup_aws_dynamo_db_tables":          aws.DataSourceAwsDynamoDbTables(),
 		},
 		ConfigureFunc: providerConfigure,
 	}
