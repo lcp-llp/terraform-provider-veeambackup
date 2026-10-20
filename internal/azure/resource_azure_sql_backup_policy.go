@@ -192,6 +192,11 @@ func ResourceAzureSQLBackupPolicy() *schema.Resource {
 			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
+			"id": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Policy ID assigned by Veeam.",
+			},
 			"name": {
 				Type:         schema.TypeString,
 				Required:     true,

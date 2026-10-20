@@ -199,7 +199,7 @@ Weekday names are `Sunday` through `Saturday`. Month names are `January` through
 
 ## Attribute Reference
 
-* `id` - Veeam policy ID.
+* `id` - Computed, read-only policy ID assigned by Veeam. Do not set it in resource configuration.
 * `priority` - Policy priority.
 * `excluded_items_count` - Number of excluded items.
 * `backup_status` - Backup status.
