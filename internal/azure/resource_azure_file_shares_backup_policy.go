@@ -1,18 +1,24 @@
-﻿package azure
+package azure
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	vc "terraform-provider-veeambackup/internal/client"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"regexp"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 // Request
@@ -117,188 +123,98 @@ type AzureFileShareBackupPolicyResponse struct {
 }
 
 // Schema
-func ResourceAzureFileSharesBackupPolicy() *schema.Resource {
-	return &schema.Resource{
-		CreateContext: ResourceAzureFileSharesBackupPolicyCreate,
-		ReadContext:   ResourceAzureFileSharesBackupPolicyRead,
-		UpdateContext: ResourceAzureFileSharesBackupPolicyUpdate,
-		DeleteContext: ResourceAzureFileSharesBackupPolicyDelete,
-		Importer: &schema.ResourceImporter{
-			StateContext: schema.ImportStatePassthroughContext,
-		},
-		Schema: map[string]*schema.Schema{
-			"backup_type": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ValidateFunc: validation.StringInSlice([]string{"AllSubscriptions", "SelectedItems", "Unknown"}, false),
-				Description:  "Specifies the backup type for the policy. Possible values are 'AllSubscriptions', 'SelectedItems', and 'Unknown'.",
-			},
-			"is_enabled": {
-				Type:        schema.TypeBool,
-				Required:    true,
-				Description: "Indicates whether the backup policy is enabled.",
-			},
-			"name": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "The name of the backup policy.",
-			},
-			"regions": {
-				Type:        schema.TypeList,
-				Required:    true,
-				Description: "List of regions where the backup policy is applied.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"region_id": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Azure region ID.",
-						},
+func ResourceAzureFileSharesBackupPolicy() resource.Resource {
+	return tf.NewResource(
+		"azure_file_shares_backup_policy",
+		schema.Schema{
+			Attributes: map[string]schema.Attribute{
+				"backup_type": schema.StringAttribute{
+					Description: "Specifies the backup type for the policy. Possible values are 'AllSubscriptions', 'SelectedItems', and 'Unknown'.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.OneOf([]string{"AllSubscriptions", "SelectedItems", "Unknown"}...),
 					},
 				},
+				"is_enabled": schema.BoolAttribute{
+					Description: "Indicates whether the backup policy is enabled.",
+					Required:    true,
+				},
+				"name": schema.StringAttribute{
+					Description: "The name of the backup policy.",
+					Required:    true,
+				},
+				"tenant_id": schema.StringAttribute{
+					Description: "Specifies a Microsoft Azure ID assigned to a tenant.",
+					Required:    true,
+				},
+				"service_account_id": schema.StringAttribute{
+					Description: "Specifies the system ID assigned to the service account.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.RegexMatches(regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`), "must be a UUID"),
+					},
+				},
+				"description": schema.StringAttribute{
+					Description: "Description of the backup policy.",
+					Optional:    true,
+				},
+				"enable_indexing": schema.BoolAttribute{
+					Description: "Indicates whether indexing is enabled for the backup policy.",
+					Optional:    true,
+				},
 			},
-			"tenant_id": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "Specifies a Microsoft Azure ID assigned to a tenant.",
-			},
-			"service_account_id": {
-				Type:         schema.TypeString,
-				Required:     true,
-				Description:  "Specifies the system ID assigned to the service account.",
-				ValidateFunc: validation.IsUUID,
-			},
-			"selected_items": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Specifies Azure resources to protect by the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"file_shares": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "List of Azure File Shares to include in the backup policy.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "The resource ID of the Azure File Share.",
-									},
-								},
-							},
-						},
-						"storage_accounts": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "List of Azure Storage Accounts to include in the backup policy.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "The resource ID of the Azure Storage Account.",
-									},
-								},
-							},
-						},
-						"resource_groups": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "List of Azure Resource Groups to include in the backup policy.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "The resource ID of the Azure Resource Group.",
-									},
-								},
+			Blocks: map[string]schema.Block{
+				"regions": schema.ListNestedBlock{
+					Description: "List of regions where the backup policy is applied.",
+					Validators: []validator.List{
+						listvalidator.SizeAtLeast(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"region_id": schema.StringAttribute{
+								Description: "Azure region ID.",
+								Required:    true,
 							},
 						},
 					},
 				},
-			},
-			"exclusion_items": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Specifies Azure resources to exclude from the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"file_shares": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "List of Azure File Shares to exclude from the backup policy.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "The resource ID of the Azure File Share.",
+				"selected_items": schema.ListNestedBlock{
+					Description: "Specifies Azure resources to protect by the backup policy.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{},
+						Blocks: map[string]schema.Block{
+							"file_shares": schema.ListNestedBlock{
+								Description: "List of Azure File Shares to include in the backup policy.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"id": schema.StringAttribute{
+											Description: "The resource ID of the Azure File Share.",
+											Required:    true,
+										},
 									},
 								},
 							},
-						},
-					},
-				},
-			},
-			"description": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Description of the backup policy.",
-			},
-			"enable_indexing": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Indicates whether indexing is enabled for the backup policy.",
-			},
-			"daily_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Daily backup schedule configuration.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"daily_type": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Type of daily schedule. Possible values are 'EveryDay' and 'SelectedDays'.",
-							ValidateFunc: validation.StringInSlice([]string{"EveryDay", "WeekDays", "SelectedDays"}, false),
-						},
-						"selected_days": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "List of selected days for the daily schedule.",
-							Elem: &schema.Schema{
-								Type:         schema.TypeString,
-								ValidateFunc: validation.StringInSlice([]string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}, false),
-							},
-						},
-						"runs_per_hour": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "Number of backup runs per hour.",
-						},
-						"snapshot_schedule": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "Snapshot schedule configuration for daily backups.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"snapshots_to_keep": {
-										Type:        schema.TypeInt,
-										Required:    true,
-										Description: "Number of snapshots to keep for the daily schedule.",
+							"storage_accounts": schema.ListNestedBlock{
+								Description: "List of Azure Storage Accounts to include in the backup policy.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"id": schema.StringAttribute{
+											Description: "The resource ID of the Azure Storage Account.",
+											Required:    true,
+										},
 									},
-									"hours": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "List of hours for the snapshot schedule.",
-										Elem: &schema.Schema{
-											Type: schema.TypeInt,
+								},
+							},
+							"resource_groups": schema.ListNestedBlock{
+								Description: "List of Azure Resource Groups to include in the backup policy.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"id": schema.StringAttribute{
+											Description: "The resource ID of the Azure Resource Group.",
+											Required:    true,
 										},
 									},
 								},
@@ -306,38 +222,21 @@ func ResourceAzureFileSharesBackupPolicy() *schema.Resource {
 						},
 					},
 				},
-			},
-			"weekly_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Weekly backup schedule configuration.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"start_time": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "Start time for the weekly schedule in hours (0-23).",
-						},
-						"snapshot_schedule": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "Snapshot schedule configuration for weekly backups.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"snapshots_to_keep": {
-										Type:        schema.TypeInt,
-										Required:    true,
-										Description: "Number of snapshots to keep for the weekly schedule.",
-									},
-									"selected_days": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "List of selected days for the weekly snapshot schedule.",
-										Elem: &schema.Schema{
-											Type:         schema.TypeString,
-											ValidateFunc: validation.StringInSlice([]string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}, false),
+				"exclusion_items": schema.ListNestedBlock{
+					Description: "Specifies Azure resources to exclude from the backup policy.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{},
+						Blocks: map[string]schema.Block{
+							"file_shares": schema.ListNestedBlock{
+								Description: "List of Azure File Shares to exclude from the backup policy.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"id": schema.StringAttribute{
+											Description: "The resource ID of the Azure File Share.",
+											Required:    true,
 										},
 									},
 								},
@@ -345,60 +244,147 @@ func ResourceAzureFileSharesBackupPolicy() *schema.Resource {
 						},
 					},
 				},
-			},
-			"monthly_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Monthly backup schedule configuration.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"start_time": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "Start time for the monthly schedule in hours (0-23).",
+				"daily_schedule": schema.ListNestedBlock{
+					Description: "Daily backup schedule configuration.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"daily_type": schema.StringAttribute{
+								Description: "Type of daily schedule. Possible values are 'EveryDay' and 'SelectedDays'.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"EveryDay", "WeekDays", "SelectedDays"}...),
+								},
+							},
+							"selected_days": schema.ListAttribute{
+								Description: "List of selected days for the daily schedule.",
+								Optional:    true,
+								Validators: []validator.List{
+									listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}...)),
+								},
+								ElementType: types.StringType,
+							},
+							"runs_per_hour": schema.Int64Attribute{
+								Description: "Number of backup runs per hour.",
+								Optional:    true,
+							},
 						},
-						"type": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Type of monthly schedule. Possible values are 'DayOfMonth' and 'DayOfWeek'.",
-							ValidateFunc: validation.StringInSlice([]string{"DayOfMonth", "DayOfWeek"}, false),
-						},
-						"day_of_month": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "Day of the month for the monthly schedule (1-31).",
-						},
-						"day_of_week": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Day of the week for the monthly schedule.",
-							ValidateFunc: validation.StringInSlice([]string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}, false),
-						},
-						"monthly_last_day": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Description: "Indicates whether the schedule is set to the last day of the month.",
-						},
-						"snapshot_schedule": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "Snapshot schedule configuration for monthly backups.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"snapshots_to_keep": {
-										Type:        schema.TypeInt,
-										Required:    true,
-										Description: "Number of snapshots to keep for the monthly schedule.",
+						Blocks: map[string]schema.Block{
+							"snapshot_schedule": schema.ListNestedBlock{
+								Description: "Snapshot schedule configuration for daily backups.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"snapshots_to_keep": schema.Int64Attribute{
+											Description: "Number of snapshots to keep for the daily schedule.",
+											Required:    true,
+										},
+										"hours": schema.ListAttribute{
+											Description: "List of hours for the snapshot schedule.",
+											Optional:    true,
+											ElementType: types.Int64Type,
+										},
 									},
-									"selected_months": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "List of selected months for the monthly snapshot schedule.",
-										Elem: &schema.Schema{
-											Type:         schema.TypeString,
-											ValidateFunc: validation.StringInSlice([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}, false),
+								},
+							},
+						},
+					},
+				},
+				"weekly_schedule": schema.ListNestedBlock{
+					Description: "Weekly backup schedule configuration.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"start_time": schema.Int64Attribute{
+								Description: "Start time for the weekly schedule in hours (0-23).",
+								Optional:    true,
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"snapshot_schedule": schema.ListNestedBlock{
+								Description: "Snapshot schedule configuration for weekly backups.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"snapshots_to_keep": schema.Int64Attribute{
+											Description: "Number of snapshots to keep for the weekly schedule.",
+											Required:    true,
+										},
+										"selected_days": schema.ListAttribute{
+											Description: "List of selected days for the weekly snapshot schedule.",
+											Optional:    true,
+											Validators: []validator.List{
+												listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}...)),
+											},
+											ElementType: types.StringType,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"monthly_schedule": schema.ListNestedBlock{
+					Description: "Monthly backup schedule configuration.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"start_time": schema.Int64Attribute{
+								Description: "Start time for the monthly schedule in hours (0-23).",
+								Optional:    true,
+							},
+							"type": schema.StringAttribute{
+								Description: "Type of monthly schedule. Possible values are 'DayOfMonth' and 'DayOfWeek'.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"DayOfMonth", "DayOfWeek"}...),
+								},
+							},
+							"day_of_month": schema.Int64Attribute{
+								Description: "Day of the month for the monthly schedule (1-31).",
+								Optional:    true,
+							},
+							"day_of_week": schema.StringAttribute{
+								Description: "Day of the week for the monthly schedule.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}...),
+								},
+							},
+							"monthly_last_day": schema.BoolAttribute{
+								Description: "Indicates whether the schedule is set to the last day of the month.",
+								Optional:    true,
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"snapshot_schedule": schema.ListNestedBlock{
+								Description: "Snapshot schedule configuration for monthly backups.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"snapshots_to_keep": schema.Int64Attribute{
+											Description: "Number of snapshots to keep for the monthly schedule.",
+											Required:    true,
+										},
+										"selected_months": schema.ListAttribute{
+											Description: "List of selected months for the monthly snapshot schedule.",
+											Optional:    true,
+											Validators: []validator.List{
+												listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}...)),
+											},
+											ElementType: types.StringType,
 										},
 									},
 								},
@@ -408,48 +394,55 @@ func ResourceAzureFileSharesBackupPolicy() *schema.Resource {
 				},
 			},
 		},
-		Timeouts: &schema.ResourceTimeout{
-			Create: schema.DefaultTimeout(10 * time.Minute),
-			Read:   schema.DefaultTimeout(5 * time.Minute),
-			Update: schema.DefaultTimeout(10 * time.Minute),
-			Delete: schema.DefaultTimeout(10 * time.Minute),
+		tf.ResourceOperations{
+			Create: ResourceAzureFileSharesBackupPolicyCreate,
+			Read:   ResourceAzureFileSharesBackupPolicyRead,
+			Update: ResourceAzureFileSharesBackupPolicyUpdate,
+			Delete: ResourceAzureFileSharesBackupPolicyDelete,
 		},
-	}
+		tf.Timeouts{
+			Create: 10 * time.Minute,
+			Read:   5 * time.Minute,
+			Update: 10 * time.Minute,
+			Delete: 10 * time.Minute,
+		},
+		true,
+	)
 }
 
 // CRUD Operations for Resource (Create)
-func ResourceAzureFileSharesBackupPolicyCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func ResourceAzureFileSharesBackupPolicyCreate(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	policyRequest := buildFSBackupPolicyRequest(d)
 
 	jsonData, err := json.Marshal(policyRequest)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("error marshaling Azure File Shares Backup Policy request: %s", err))
+		return tf.FromErr(fmt.Errorf("error marshaling Azure File Shares Backup Policy request: %s", err))
 	}
 
 	url := client.BuildAPIURL("/policies/fileShares")
 	resp, err := client.MakeAuthenticatedRequest("POST", url, strings.NewReader(string(jsonData)))
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("error creating Azure File Shares Backup Policy: %s", err))
+		return tf.FromErr(fmt.Errorf("error creating Azure File Shares Backup Policy: %s", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to create Azure File Shares Backup Policy, status: %d, response: %s", resp.StatusCode, string(bodyBytes)))
+		return tf.FromErr(fmt.Errorf("failed to create Azure File Shares Backup Policy, status: %d, response: %s", resp.StatusCode, string(bodyBytes)))
 	}
 
 	if resp.StatusCode == http.StatusUnauthorized {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("unauthorized (401): %s", string(bodyBytes)))
+		return tf.FromErr(fmt.Errorf("unauthorized (401): %s", string(bodyBytes)))
 	}
 
 	var policyResponse AzureFileShareBackupPolicyResponse
 	if err := json.NewDecoder(resp.Body).Decode(&policyResponse); err != nil {
-		return diag.FromErr(fmt.Errorf("error decoding Azure File Shares Backup Policy creation response: %s", err))
+		return tf.FromErr(fmt.Errorf("error decoding Azure File Shares Backup Policy creation response: %s", err))
 	}
 
 	d.SetId(policyResponse.Id)
@@ -457,100 +450,100 @@ func ResourceAzureFileSharesBackupPolicyCreate(ctx context.Context, d *schema.Re
 }
 
 // CRUD Operations for Resource (READ)
-func ResourceAzureFileSharesBackupPolicyRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func ResourceAzureFileSharesBackupPolicyRead(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	url := client.BuildAPIURL(fmt.Sprintf("/policies/fileShares/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("GET", url, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("error reading Azure File Shares Backup Policy: %s", err))
+		return tf.FromErr(fmt.Errorf("error reading Azure File Shares Backup Policy: %s", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("unauthorized (401): %s", string(bodyBytes)))
+		return tf.FromErr(fmt.Errorf("unauthorized (401): %s", string(bodyBytes)))
 	}
 	if resp.StatusCode == http.StatusForbidden {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("forbidden (403): %s", string(bodyBytes)))
+		return tf.FromErr(fmt.Errorf("forbidden (403): %s", string(bodyBytes)))
 	}
 	if resp.StatusCode == http.StatusNotFound {
 		d.SetId("")
-		return diag.FromErr(fmt.Errorf("404 Azure File Shares Backup Policy not found"))
+		return tf.FromErr(fmt.Errorf("404 Azure File Shares Backup Policy not found"))
 	}
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read Azure File Shares Backup Policy, status: %d, response: %s", resp.StatusCode, string(bodyBytes)))
+		return tf.FromErr(fmt.Errorf("failed to read Azure File Shares Backup Policy, status: %d, response: %s", resp.StatusCode, string(bodyBytes)))
 	}
 
 	var policyResponse AzureFileShareBackupPolicyResponse
 	if err := json.NewDecoder(resp.Body).Decode(&policyResponse); err != nil {
-		return diag.FromErr(fmt.Errorf("error decoding Azure File Shares Backup Policy read response: %s", err))
+		return tf.FromErr(fmt.Errorf("error decoding Azure File Shares Backup Policy read response: %s", err))
 	}
 	if err := d.Set("backup_type", policyResponse.BackupType); err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	if err := d.Set("is_enabled", policyResponse.IsEnabled); err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	if err := d.Set("name", policyResponse.Name); err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	return nil
 }
 
 // CRUD Operations for Resource (UPDATE)
-func ResourceAzureFileSharesBackupPolicyUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func ResourceAzureFileSharesBackupPolicyUpdate(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	policyRequest := buildFSBackupPolicyRequest(d)
 	jsonData, err := json.Marshal(policyRequest)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("error marshaling Azure File Shares Backup Policy update request: %s", err))
+		return tf.FromErr(fmt.Errorf("error marshaling Azure File Shares Backup Policy update request: %s", err))
 	}
 
 	url := client.BuildAPIURL(fmt.Sprintf("/policies/fileShares/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("PUT", url, strings.NewReader(string(jsonData)))
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("error updating Azure File Shares Backup Policy: %s", err))
+		return tf.FromErr(fmt.Errorf("error updating Azure File Shares Backup Policy: %s", err))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to update Azure File Shares Backup Policy, status: %d, response: %s", resp.StatusCode, string(bodyBytes)))
+		return tf.FromErr(fmt.Errorf("failed to update Azure File Shares Backup Policy, status: %d, response: %s", resp.StatusCode, string(bodyBytes)))
 	}
 
 	return ResourceAzureFileSharesBackupPolicyRead(ctx, d, m)
 }
 
 // CRUD Operations for Resource (Delete)
-func ResourceAzureFileSharesBackupPolicyDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func ResourceAzureFileSharesBackupPolicyDelete(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	url := client.BuildAPIURL(fmt.Sprintf("/policies/fileShares/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("DELETE", url, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("error deleting Azure File Shares Backup Policy: %s", err))
+		return tf.FromErr(fmt.Errorf("error deleting Azure File Shares Backup Policy: %s", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusNoContent {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to delete Azure File Shares Backup Policy, status: %d, response: %s", resp.StatusCode, string(bodyBytes)))
+		return tf.FromErr(fmt.Errorf("failed to delete Azure File Shares Backup Policy, status: %d, response: %s", resp.StatusCode, string(bodyBytes)))
 	}
 
 	d.SetId("")
 	return nil
 }
 
-func buildFSBackupPolicyRequest(d *schema.ResourceData) AzureFileShareBackupPolicyRequest {
+func buildFSBackupPolicyRequest(d *tf.Data) AzureFileShareBackupPolicyRequest {
 	request := AzureFileShareBackupPolicyRequest{
 		BackupType:                 d.Get("backup_type").(string),
 		IsEnabled:                  d.Get("is_enabled").(bool),

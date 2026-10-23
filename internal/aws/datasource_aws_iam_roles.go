@@ -9,19 +9,22 @@ import (
 	"strconv"
 	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 type AWSIAMRolesDataSourceRequest struct {
-	SearchPattern             *string   `json:"SearchPattern,omitempty"`
-	Offset                    *int      `json:"Offset,omitempty"`
-	Limit                     *int      `json:"Limit,omitempty"`
-	Sort                      *int      `json:"Sort,omitempty"`
+	SearchPattern *string `json:"SearchPattern,omitempty"`
+	Offset        *int    `json:"Offset,omitempty"`
+	Limit         *int    `json:"Limit,omitempty"`
+	Sort          *int    `json:"Sort,omitempty"`
 }
 
 type AWSIAMRolesDataSourceResponse struct {
-	TotalCount int                                        `json:"totalCount"`
+	TotalCount int                                   `json:"totalCount"`
 	Results    []WSIAMRolesDataSourceResponseResults `json:"results"`
 }
 
@@ -48,119 +51,101 @@ type WSIAMRolesDataSourceResponseResultsIAMRoleFromAnotherAccount struct {
 	RoleName              string `json:"roleName"`
 }
 
-func DataSourceAwsIAMRoles() *schema.Resource {
-	return &schema.Resource{
-		ReadContext: DataSourceAwsIAMRolesRead,
-		Schema: map[string]*schema.Schema{
-			"search_pattern": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Returns only those items of a resource collection whose names match the specified search pattern in the parameter value.",
-			},
-			"offset": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Default:     0,
-				Description: "Excludes from a response the first N items of a resource collection.",
-			},
-			"limit": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Default:     -1,
-				Description: "Specifies the maximum number of items of a resource collection to return in a response.",
-			},
-			"sort": {
-				Type:        schema.TypeSet,
-				Optional:    true,
-				Description: "Specifies the order of items in the response.",
-				Elem:        &schema.Schema{Type: schema.TypeString},
-			},
-			"total_count": {
-				Type:        schema.TypeInt,
-				Computed:    true,
-				Description: "Total number of IAM roles.",
-			},
-			"results": {
-				Type:        schema.TypeList,
-				Computed:    true,
-				Description: "Information on each IAM role.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"veeam_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "System ID assigned to the IAM role in the Veeam Backup for AWS REST API.",
-						},
-						"name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Name of the IAM role object in Veeam Backup for AWS.",
-						},
-						"aws_account_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "AWS ID of the account associated with this role object.",
-						},
-						"description": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Description of the IAM role object.",
-						},
-						"region_type": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Scope of the role region (for example, Global).",
-						},
-						"account_permissions": {
-							Type:        schema.TypeList,
-							Computed:    true,
-							Description: "Permissions assigned for this IAM role object.",
-							Elem:        &schema.Schema{Type: schema.TypeString},
-						},
-						"iam_role": {
-							Type:        schema.TypeList,
-							Computed:    true,
-							Description: "IAM role details for same-account access.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"parent_amazon_account_id": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "System ID of the parent AWS account in Veeam Backup for AWS.",
-									},
-									"role_name": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "IAM role name in AWS.",
-									},
-									"is_default": {
-										Type:        schema.TypeBool,
-										Computed:    true,
-										Description: "Whether this IAM role is marked as default.",
+func DataSourceAwsIAMRoles() datasource.DataSource {
+	return tf.NewDataSource(
+		"aws_iam_roles",
+		schema.Schema{
+			Attributes: map[string]schema.Attribute{
+				"search_pattern": schema.StringAttribute{
+					Description: "Returns only those items of a resource collection whose names match the specified search pattern in the parameter value.",
+					Optional:    true,
+				},
+				"offset": schema.Int64Attribute{
+					Description: "Excludes from a response the first N items of a resource collection.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"limit": schema.Int64Attribute{
+					Description: "Specifies the maximum number of items of a resource collection to return in a response.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"sort": schema.SetAttribute{
+					Description: "Specifies the order of items in the response.",
+					Optional:    true,
+					ElementType: types.StringType,
+				},
+				"total_count": schema.Int64Attribute{
+					Description: "Total number of IAM roles.",
+					Computed:    true,
+				},
+				"results": schema.ListNestedAttribute{
+					Description: "Information on each IAM role.",
+					Computed:    true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"veeam_id": schema.StringAttribute{
+								Description: "System ID assigned to the IAM role in the Veeam Backup for AWS REST API.",
+								Computed:    true,
+							},
+							"name": schema.StringAttribute{
+								Description: "Name of the IAM role object in Veeam Backup for AWS.",
+								Computed:    true,
+							},
+							"aws_account_id": schema.StringAttribute{
+								Description: "AWS ID of the account associated with this role object.",
+								Computed:    true,
+							},
+							"description": schema.StringAttribute{
+								Description: "Description of the IAM role object.",
+								Computed:    true,
+							},
+							"region_type": schema.StringAttribute{
+								Description: "Scope of the role region (for example, Global).",
+								Computed:    true,
+							},
+							"account_permissions": schema.ListAttribute{
+								Description: "Permissions assigned for this IAM role object.",
+								Computed:    true,
+								ElementType: types.StringType,
+							},
+							"iam_role": schema.ListNestedAttribute{
+								Description: "IAM role details for same-account access.",
+								Computed:    true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"parent_amazon_account_id": schema.StringAttribute{
+											Description: "System ID of the parent AWS account in Veeam Backup for AWS.",
+											Computed:    true,
+										},
+										"role_name": schema.StringAttribute{
+											Description: "IAM role name in AWS.",
+											Computed:    true,
+										},
+										"is_default": schema.BoolAttribute{
+											Description: "Whether this IAM role is marked as default.",
+											Computed:    true,
+										},
 									},
 								},
 							},
-						},
-						"iam_role_from_another_account": {
-							Type:        schema.TypeList,
-							Computed:    true,
-							Description: "Cross-account IAM role details.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"parent_amazon_account_id": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "System ID assigned to the initial (trusted) AWS account in Veeam Backup for AWS.",
-									},
-									"account_id": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "AWS ID of the trusting AWS account.",
-									},
-									"role_name": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Cross-account IAM role name in AWS.",
+							"iam_role_from_another_account": schema.ListNestedAttribute{
+								Description: "Cross-account IAM role details.",
+								Computed:    true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"parent_amazon_account_id": schema.StringAttribute{
+											Description: "System ID assigned to the initial (trusted) AWS account in Veeam Backup for AWS.",
+											Computed:    true,
+										},
+										"account_id": schema.StringAttribute{
+											Description: "AWS ID of the trusting AWS account.",
+											Computed:    true,
+										},
+										"role_name": schema.StringAttribute{
+											Description: "Cross-account IAM role name in AWS.",
+											Computed:    true,
+										},
 									},
 								},
 							},
@@ -169,13 +154,18 @@ func DataSourceAwsIAMRoles() *schema.Resource {
 				},
 			},
 		},
-	}
+		DataSourceAwsIAMRolesRead,
+		map[string]interface{}{
+			"offset": 0,
+			"limit":  -1,
+		},
+	)
 }
 
-func DataSourceAwsIAMRolesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func DataSourceAwsIAMRolesRead(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAWSClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	params := url.Values{}
@@ -194,7 +184,7 @@ func DataSourceAwsIAMRolesRead(ctx context.Context, d *schema.ResourceData, meta
 		params.Set("SearchPattern", v.(string))
 	}
 	if v, ok := d.GetOk("sort"); ok {
-		for _, s := range v.(*schema.Set).List() {
+		for _, s := range v.(*tf.Set).List() {
 			params.Add("Sort", s.(string))
 		}
 	}
@@ -203,26 +193,26 @@ func DataSourceAwsIAMRolesRead(ctx context.Context, d *schema.ResourceData, meta
 
 	resp, err := client.MakeAuthenticatedRequestAWS("GET", apiURL, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to retrieve IAM roles: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to retrieve IAM roles: %w", err))
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read response body: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read response body: %w", err))
 	}
 
 	if resp.StatusCode != 200 {
-		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
+		return tf.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
 	}
 
 	var rolesResponse AWSIAMRolesDataSourceResponse
 	if err := json.Unmarshal(body, &rolesResponse); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to parse IAM roles response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to parse IAM roles response: %w", err))
 	}
 
 	if err := d.Set("total_count", rolesResponse.TotalCount); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set total_count: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set total_count: %w", err))
 	}
 
 	results := make([]interface{}, 0, len(rolesResponse.Results))
@@ -252,7 +242,7 @@ func DataSourceAwsIAMRolesRead(ctx context.Context, d *schema.ResourceData, meta
 	}
 
 	if err := d.Set("results", results); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set results: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set results: %w", err))
 	}
 
 	d.SetId(fmt.Sprintf("aws-iam-roles-%d", rolesResponse.TotalCount))

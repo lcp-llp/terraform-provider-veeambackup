@@ -1,17 +1,22 @@
-﻿package azure
+package azure
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
 	"strconv"
+	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 // Azure Cosmos DB Accounts
@@ -34,9 +39,9 @@ type AzureCosmosDBAccountsDataSourceModel struct {
 }
 
 type AzureCosmosDBAccountsDataSourceResponse struct {
-	Offset     int                      `json:"offset"`
-	Limit      int                      `json:"limit"`
-	TotalCount *int                     `json:"totalCount,omitempty"`
+	Offset     int                     `json:"offset"`
+	Limit      int                     `json:"limit"`
+	TotalCount *int                    `json:"totalCount,omitempty"`
 	Results    []AzureCosmosDBAccounts `json:"results"`
 }
 
@@ -58,180 +63,155 @@ type AzureCosmosDBAccounts struct {
 	CapacityMode              string  `json:capacityMode`
 }
 
-func DataSourceAzureCosmosDbAccounts() *schema.Resource {
-	return &schema.Resource{
-		ReadContext: DataSourceAzureCosmosDbAccountsRead,
-		Description: "Data source for retrieving Azure Cosmos DB Accounts",
-		Schema: map[string]*schema.Schema{
-			"subscription_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Limit scope to a single azure subscription.",
-			},
-			"tenant_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The ID of the Azure tenant.",
-			},
-			"service_account_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The ID of the service account.",
-			},
-			"search_pattern": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The search pattern to filter Cosmos Accountss by name.",
-			},
-			"region_ids": {
-				Type:        schema.TypeList,
-				Elem:        &schema.Schema{Type: schema.TypeString},
-				Optional:    true,
-				Description: "List of region IDs to filter Cosmos Accountss.",
-			},
-			"account_types": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Returns only Cosmos DB accounts of selected kinds.",
-				Elem: &schema.Schema{
-					Type:         schema.TypeString,
-					ValidateFunc: validation.StringInSlice([]string{"NoSql", "MongoRU", "Table", "Gremlin", "PostgresSql"}, false),
+func DataSourceAzureCosmosDbAccounts() datasource.DataSource {
+	return tf.NewDataSource(
+		"azure_cosmos_accounts",
+		schema.Schema{
+			Description: "Data source for retrieving Azure Cosmos DB Accounts",
+			Attributes: map[string]schema.Attribute{
+				"subscription_id": schema.StringAttribute{
+					Description: "Limit scope to a single azure subscription.",
+					Optional:    true,
 				},
-			},
-			"soft_deleted": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Defines whether to include deleted Cosmos DB accounts into the response.",
-			},
-			"cosmos_db_accounts_from_protected_regions": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Defines whether Veeam Backup for Microsoft Azure must return only Cosmos DB accounts that reside in regions protected by backup policies.",
-			},
-			"protected_status": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Returns only Cosmos Accounts with the specified protection status.",
-				Elem: &schema.Schema{
-					Type:         schema.TypeString,
-					ValidateFunc: validation.StringInSlice([]string{"Unprotected", "Protected", "Unknown"}, false),
+				"tenant_id": schema.StringAttribute{
+					Description: "The ID of the Azure tenant.",
+					Optional:    true,
 				},
-			},
-			"offset": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Description: "The number of items to skip before starting to collect the result set.",
-			},
-			"limit": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Description: "The numbers of items to return.",
-			},
-			"backup_destination": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Returns only Cosmos Accounts with the specified backup type.",
-				Elem: &schema.Schema{
-					Type:         schema.TypeString,
-					ValidateFunc: validation.StringInSlice([]string{"AzureBlob", "ManualBackup", "Archive"}, false),
+				"service_account_id": schema.StringAttribute{
+					Description: "The ID of the service account.",
+					Optional:    true,
 				},
-			}, // computed fields
-			"results": {
-				Type:        schema.TypeList,
-				Computed:    true,
-				Description: "Detailed List of Azure Cosmos DB Accounts.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"veeam_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The ID of the Azure Cosmos DB Accounts.",
-						},
-						"azure_iad": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Resource ID assigned to the Cosmos DB account in Microsoft Azure.",
-						},
-						"name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The name of the Azure SQL Database.",
-						},
-						"status": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Status of the database.",
-						},
-						"account_type": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Kind of the protected Cosmos DB account.",
-						},
-						"latest_restorable_timestamp": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The most recent date and time to which the Cosmos DB account can be restored.",
-						},
-						"source_size_bytes": {
-							Type:        schema.TypeInt,
-							Computed:    true,
-							Description: "Total size of the Cosmos DB account data.",
-						},
-						"subscription_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The subscription ID of the Azure Cosmos Accounts.",
-						},
-						"region_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The region ID of the Azure Cosmos Accounts.",
-						},
-						"region_name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The region name of the Azure Cosmos Accounts.",
-						},
-						"resource_group_name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Information on a resource group to which the database belongs.",
-						},
-						"postgres_version": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "[Applies to Cosmos DB for PostgreSQL accounts only] PostgreSQL version of the Cosmos DB for PostgreSQL cluster.",
-						},
-						"mongo_db_server_version": {
-							Type:     schema.TypeString,
-							Computed: true,
-						},
-						"is_deleted": {
-							Type:        schema.TypeBool,
-							Computed:    true,
-							Description: "Defines whether the Cosmos DB account is no longer present in Azure infrastructure.",
-						},
-						"capacity_mode": {
-							Type:     schema.TypeString,
-							Computed: true,
+				"search_pattern": schema.StringAttribute{
+					Description: "The search pattern to filter Cosmos Accountss by name.",
+					Optional:    true,
+				},
+				"region_ids": schema.ListAttribute{
+					Description: "List of region IDs to filter Cosmos Accountss.",
+					Optional:    true,
+					ElementType: types.StringType,
+				},
+				"account_types": schema.ListAttribute{
+					Description: "Returns only Cosmos DB accounts of selected kinds.",
+					Optional:    true,
+					Validators: []validator.List{
+						listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"NoSql", "MongoRU", "Table", "Gremlin", "PostgresSql"}...)),
+					},
+					ElementType: types.StringType,
+				},
+				"soft_deleted": schema.BoolAttribute{
+					Description: "Defines whether to include deleted Cosmos DB accounts into the response.",
+					Optional:    true,
+				},
+				"cosmos_db_accounts_from_protected_regions": schema.BoolAttribute{
+					Description: "Defines whether Veeam Backup for Microsoft Azure must return only Cosmos DB accounts that reside in regions protected by backup policies.",
+					Optional:    true,
+				},
+				"protected_status": schema.ListAttribute{
+					Description: "Returns only Cosmos Accounts with the specified protection status.",
+					Optional:    true,
+					Validators: []validator.List{
+						listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"Unprotected", "Protected", "Unknown"}...)),
+					},
+					ElementType: types.StringType,
+				},
+				"offset": schema.Int64Attribute{
+					Description: "The number of items to skip before starting to collect the result set.",
+					Optional:    true,
+				},
+				"limit": schema.Int64Attribute{
+					Description: "The numbers of items to return.",
+					Optional:    true,
+				},
+				"backup_destination": schema.ListAttribute{
+					Description: "Returns only Cosmos Accounts with the specified backup type.",
+					Optional:    true,
+					Validators: []validator.List{
+						listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"AzureBlob", "ManualBackup", "Archive"}...)),
+					},
+					ElementType: types.StringType,
+				},
+				"results": schema.ListNestedAttribute{
+					Description: "Detailed List of Azure Cosmos DB Accounts.",
+					Computed:    true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"veeam_id": schema.StringAttribute{
+								Description: "The ID of the Azure Cosmos DB Accounts.",
+								Computed:    true,
+							},
+							"azure_iad": schema.StringAttribute{
+								Description: "Resource ID assigned to the Cosmos DB account in Microsoft Azure.",
+								Computed:    true,
+							},
+							"name": schema.StringAttribute{
+								Description: "The name of the Azure SQL Database.",
+								Computed:    true,
+							},
+							"status": schema.StringAttribute{
+								Description: "Status of the database.",
+								Computed:    true,
+							},
+							"account_type": schema.StringAttribute{
+								Description: "Kind of the protected Cosmos DB account.",
+								Computed:    true,
+							},
+							"latest_restorable_timestamp": schema.StringAttribute{
+								Description: "The most recent date and time to which the Cosmos DB account can be restored.",
+								Computed:    true,
+							},
+							"source_size_bytes": schema.Int64Attribute{
+								Description: "Total size of the Cosmos DB account data.",
+								Computed:    true,
+							},
+							"subscription_id": schema.StringAttribute{
+								Description: "The subscription ID of the Azure Cosmos Accounts.",
+								Computed:    true,
+							},
+							"region_id": schema.StringAttribute{
+								Description: "The region ID of the Azure Cosmos Accounts.",
+								Computed:    true,
+							},
+							"region_name": schema.StringAttribute{
+								Description: "The region name of the Azure Cosmos Accounts.",
+								Computed:    true,
+							},
+							"resource_group_name": schema.StringAttribute{
+								Description: "Information on a resource group to which the database belongs.",
+								Computed:    true,
+							},
+							"postgres_version": schema.StringAttribute{
+								Description: "[Applies to Cosmos DB for PostgreSQL accounts only] PostgreSQL version of the Cosmos DB for PostgreSQL cluster.",
+								Computed:    true,
+							},
+							"mongo_db_server_version": schema.StringAttribute{
+								Computed: true,
+							},
+							"is_deleted": schema.BoolAttribute{
+								Description: "Defines whether the Cosmos DB account is no longer present in Azure infrastructure.",
+								Computed:    true,
+							},
+							"capacity_mode": schema.StringAttribute{
+								Computed: true,
+							},
 						},
 					},
 				},
-			},
-			"cosmos_accounts": {
-				Type:        schema.TypeMap,
-				Computed:    true,
-				Description: "Map of Azure Cosmos Accounts names to their complete details as JSON strings.",
-				Elem:        &schema.Schema{Type: schema.TypeString},
+				"cosmos_accounts": schema.MapAttribute{
+					Description: "Map of Azure Cosmos Accounts names to their complete details as JSON strings.",
+					Computed:    true,
+					ElementType: types.StringType,
+				},
 			},
 		},
-	}
+		DataSourceAzureCosmosDbAccountsRead,
+		map[string]interface{}{},
+	)
 }
 
-func DataSourceAzureCosmosDbAccountsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func DataSourceAzureCosmosDbAccountsRead(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	request := AzureCosmosDBAccountsDataSourceModel{}
 
@@ -305,21 +285,21 @@ func DataSourceAzureCosmosDbAccountsRead(ctx context.Context, d *schema.Resource
 	// Make API request
 	resp, err := client.MakeAuthenticatedRequest("GET", apiUrl, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to retrieve Azure Cosmos DB Accounts: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to retrieve Azure Cosmos DB Accounts: %w", err))
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to read response body: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to read response body: %w", err))
 	}
 	if resp.StatusCode != 200 {
-		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
+		return tf.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
 	}
 
 	// Parse response
 	var cosmosDbAccountsResponse AzureCosmosDBAccountsDataSourceResponse
 	if err := json.Unmarshal(body, &cosmosDbAccountsResponse); err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to parse response JSON: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to parse response JSON: %w", err))
 	}
 
 	// Create both a list and a map of SQL databases
@@ -351,16 +331,16 @@ func DataSourceAzureCosmosDbAccountsRead(ctx context.Context, d *schema.Resource
 		// Marshal complete cosmos db accounts object to JSON for the map
 		cosmosDbAccountsJSON, err := json.Marshal(cosmosDbAccounts)
 		if err != nil {
-			return diag.FromErr(fmt.Errorf("Failed to marshal Cosmos DB Accounts to JSON: %w", err))
+			return tf.FromErr(fmt.Errorf("Failed to marshal Cosmos DB Accounts to JSON: %w", err))
 		}
 		cosmosDbAccountsMap[cosmosDbAccounts.Name] = string(cosmosDbAccountsJSON)
 	}
 
 	if err := d.Set("results", cosmosDbAccountsList); err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to set results: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to set results: %w", err))
 	}
 	if err := d.Set("cosmos_accounts", cosmosDbAccountsMap); err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to set cosmos_accounts: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to set cosmos_accounts: %w", err))
 	}
 
 	// Set ID for the data source

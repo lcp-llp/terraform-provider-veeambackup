@@ -1,15 +1,18 @@
-﻿package vbr
+package vbr
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
+	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 // Response models
@@ -19,11 +22,11 @@ type VBRProxiesResponse struct {
 }
 
 type VBRProxyModel struct {
-	ID          string                     `json:"id"`
-	Description string                     `json:"description"`
-	Name        string                     `json:"name"`
-	Type        string                     `json:"type"`
-	Server      *ProxyServerSettingsModel  `json:"server,omitempty"`
+	ID          string                    `json:"id"`
+	Description string                    `json:"description"`
+	Name        string                    `json:"name"`
+	Type        string                    `json:"type"`
+	Server      *ProxyServerSettingsModel `json:"server,omitempty"`
 }
 
 type ProxyServerSettingsModel struct {
@@ -32,141 +35,130 @@ type ProxyServerSettingsModel struct {
 	MaxTaskCount *int   `json:"maxTaskCount,omitempty"`
 }
 
-func DataSourceVbrProxies() *schema.Resource {
-	return &schema.Resource{
-		Description: "Retrieves information about backup proxies from Veeam Backup & Replication.",
-		ReadContext: DataSourceVbrProxiesRead,
-		Schema: map[string]*schema.Schema{
-			"skip": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Description: "Number of items to skip for pagination.",
-			},
-			"limit": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Default:     200,
-				Description: "Maximum number of items to return.",
-			},
-			"order_column": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "Name",
-				Description: "Column to order results by.",
-			},
-			"order_asc": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Default:     true,
-				Description: "Sort in ascending order.",
-			},
-			"name_filter": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Filter proxies by name pattern.",
-			},
-			"type_filter": {
-				Type:         schema.TypeString,
-				Optional:     true,
-				ValidateFunc: validation.StringInSlice([]string{"ViProxy", "HvOffHostProxy", "CdpProxy"}, false),
-				Description:  "Filter by proxy type (ViProxy, HvOffHostProxy, CdpProxy).",
-			},
-			"host_id_filter": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Filter by host ID (UUID format).",
-			},
-			"proxies": {
-				Type:        schema.TypeList,
-				Computed:    true,
-				Description: "List of backup proxies.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Backup proxy ID.",
-						},
-						"name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Name of the backup proxy.",
-						},
-						"description": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Description of the backup proxy.",
-						},
-						"type": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Type of backup proxy.",
-						},
-						"server": {
-							Type:        schema.TypeList,
-							Computed:    true,
-							Description: "Server settings for the backup proxy.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"host_id": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Server ID (UUID).",
-									},
-									"host_name": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Server name.",
-									},
-									"max_task_count": {
-										Type:        schema.TypeInt,
-										Computed:    true,
-										Description: "Maximum number of concurrent tasks.",
+func DataSourceVbrProxies() datasource.DataSource {
+	return tf.NewDataSource(
+		"vbr_proxies",
+		schema.Schema{
+			Description: "Retrieves information about backup proxies from Veeam Backup & Replication.",
+			Attributes: map[string]schema.Attribute{
+				"skip": schema.Int64Attribute{
+					Description: "Number of items to skip for pagination.",
+					Optional:    true,
+				},
+				"limit": schema.Int64Attribute{
+					Description: "Maximum number of items to return.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"order_column": schema.StringAttribute{
+					Description: "Column to order results by.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"order_asc": schema.BoolAttribute{
+					Description: "Sort in ascending order.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"name_filter": schema.StringAttribute{
+					Description: "Filter proxies by name pattern.",
+					Optional:    true,
+				},
+				"type_filter": schema.StringAttribute{
+					Description: "Filter by proxy type (ViProxy, HvOffHostProxy, CdpProxy).",
+					Optional:    true,
+					Validators: []validator.String{
+						stringvalidator.OneOf([]string{"ViProxy", "HvOffHostProxy", "CdpProxy"}...),
+					},
+				},
+				"host_id_filter": schema.StringAttribute{
+					Description: "Filter by host ID (UUID format).",
+					Optional:    true,
+				},
+				"proxies": schema.ListNestedAttribute{
+					Description: "List of backup proxies.",
+					Computed:    true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"id": schema.StringAttribute{
+								Description: "Backup proxy ID.",
+								Computed:    true,
+							},
+							"name": schema.StringAttribute{
+								Description: "Name of the backup proxy.",
+								Computed:    true,
+							},
+							"description": schema.StringAttribute{
+								Description: "Description of the backup proxy.",
+								Computed:    true,
+							},
+							"type": schema.StringAttribute{
+								Description: "Type of backup proxy.",
+								Computed:    true,
+							},
+							"server": schema.ListNestedAttribute{
+								Description: "Server settings for the backup proxy.",
+								Computed:    true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"host_id": schema.StringAttribute{
+											Description: "Server ID (UUID).",
+											Computed:    true,
+										},
+										"host_name": schema.StringAttribute{
+											Description: "Server name.",
+											Computed:    true,
+										},
+										"max_task_count": schema.Int64Attribute{
+											Description: "Maximum number of concurrent tasks.",
+											Computed:    true,
+										},
 									},
 								},
 							},
 						},
 					},
 				},
-			},
-			"pagination": {
-				Type:        schema.TypeList,
-				Computed:    true,
-				Description: "Pagination information.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"total": {
-							Type:        schema.TypeInt,
-							Computed:    true,
-							Description: "Total number of results.",
-						},
-						"count": {
-							Type:        schema.TypeInt,
-							Computed:    true,
-							Description: "Number of returned results.",
-						},
-						"skip": {
-							Type:        schema.TypeInt,
-							Computed:    true,
-							Description: "Number of skipped results.",
-						},
-						"limit": {
-							Type:        schema.TypeInt,
-							Computed:    true,
-							Description: "Maximum number of results to return.",
+				"pagination": schema.ListNestedAttribute{
+					Description: "Pagination information.",
+					Computed:    true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"total": schema.Int64Attribute{
+								Description: "Total number of results.",
+								Computed:    true,
+							},
+							"count": schema.Int64Attribute{
+								Description: "Number of returned results.",
+								Computed:    true,
+							},
+							"skip": schema.Int64Attribute{
+								Description: "Number of skipped results.",
+								Computed:    true,
+							},
+							"limit": schema.Int64Attribute{
+								Description: "Maximum number of results to return.",
+								Computed:    true,
+							},
 						},
 					},
 				},
 			},
 		},
-	}
+		DataSourceVbrProxiesRead,
+		map[string]interface{}{
+			"limit":        200,
+			"order_column": "Name",
+			"order_asc":    true,
+		},
+	)
 }
 
-func DataSourceVbrProxiesRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func DataSourceVbrProxiesRead(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	apiUrl := "/api/v1/backupInfrastructure/proxies"
 
@@ -201,14 +193,14 @@ func DataSourceVbrProxiesRead(ctx context.Context, d *schema.ResourceData, m int
 	// Make API request
 	respBody, err := client.DoRequest(ctx, "GET", fullUrl, nil)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	// Parse JSON response
 	var proxiesResponse VBRProxiesResponse
 	err = json.Unmarshal(respBody, &proxiesResponse)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("error parsing response: %w", err))
+		return tf.FromErr(fmt.Errorf("error parsing response: %w", err))
 	}
 
 	// Set proxies data
@@ -239,7 +231,7 @@ func DataSourceVbrProxiesRead(ctx context.Context, d *schema.ResourceData, m int
 	}
 
 	if err := d.Set("proxies", proxiesData); err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	// Set pagination data
@@ -252,7 +244,7 @@ func DataSourceVbrProxiesRead(ctx context.Context, d *schema.ResourceData, m int
 		},
 	}
 	if err := d.Set("pagination", paginationData); err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	// Set resource ID

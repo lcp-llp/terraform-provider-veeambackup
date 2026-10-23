@@ -6,6 +6,8 @@ The unified Veeam provider is used to interact with multiple Veeam services incl
 
 Provider-defined actions in this provider require Terraform 1.14.0 or later.
 
+All resources, data sources, and actions use one Terraform Plugin Framework provider with protocol version 6. Existing resource names, nested configuration blocks, and state IDs are preserved by the Framework migration. Back up state and review a non-production plan before applying the upgraded provider.
+
 ## Supported Services
 
 - **Veeam Backup for Microsoft Azure**: Full support for Azure backup management
@@ -78,6 +80,7 @@ action "veeambackup_vbr_start_backup_job" "daily" {
 ## Actions
 
 - [`veeambackup_vbr_start_backup_job`](./actions/vbr_start_backup_job.md) - Start a Veeam Backup & Replication backup job immediately. Requires Terraform 1.14.0 or later.
+- [`veeambackup_azure_sql_databases_rescan`](./actions/azure_sql_databases_rescan.md) - Submit an Azure SQL databases rescan request. Requires Terraform 1.14.0 or later and Veeam Azure API version `9`.
 - `perform_active_full` defaults to `false` when omitted.
 
 ## Authentication
@@ -109,6 +112,8 @@ The provider supports service-specific authentication methods:
 ### Environment Variables
 
 You can provide credentials via environment variables:
+
+Include the corresponding `azure`, `aws`, or `vbr` block even when all its connection settings are provided through environment variables. Explicit settings, including `insecure_skip_verify = false`, take precedence over environment variables.
 
 ```bash
 # Azure Backup for Azure

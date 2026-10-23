@@ -1,728 +1,682 @@
-﻿package azure
+package azure
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	vc "terraform-provider-veeambackup/internal/client"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"regexp"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
-
 type ComsmosDbBackupPolicyRequest struct {
-	ID                                           *string                         `json:"id,omitempty"` // ID is null for create requests and set for update requests
-	BackupType                                   string                          `json:"backupType"`
-	IsEnabled                                    bool                            `json:"isEnabled"`
-	Name                                         string                          `json:"name"`
-	Regions                                      []PolicyRegion                  `json:"regions"`
-	TenantID                                     *string                        `json:"tenantId,omitempty"`
-	ServiceAccountID                             *string                        `json:"serviceAccountId,omitempty"`
+	ID                                           *string                            `json:"id,omitempty"` // ID is null for create requests and set for update requests
+	BackupType                                   string                             `json:"backupType"`
+	IsEnabled                                    bool                               `json:"isEnabled"`
+	Name                                         string                             `json:"name"`
+	Regions                                      []PolicyRegion                     `json:"regions"`
+	TenantID                                     *string                            `json:"tenantId,omitempty"`
+	ServiceAccountID                             *string                            `json:"serviceAccountId,omitempty"`
 	SelectedItems                                *CosmosDbBackupPolicySelectedItems `json:"selectedItems,omitempty"`
-	ExcludedItems                                *CosmosDbBackupPolicyExcludedItems  `json:"excludedItems,omitempty"`
-	ContinuousBackupType						*string    					     `json:"continuousBackupType,omitempty"`
-	Description                                  *string                         `json:"description,omitempty"`
-	RetrySettings                                *RetrySettings                  `json:"retrySettings,omitempty"`
-	PolicyNotificationSettings                   *PolicyNotificationSettings     `json:"policyNotificationSettings,omitempty"`
-	CreatePrivateEndpointToWorkloadAutomatically *bool                           `json:"createPrivateEndpointToWorkloadAutomatically,omitempty"`
-	BackupWorkloads                              *[]string        				 `json:"backupWorkloads,omitempty"`
-	DailySchedule                                *DailySchedule                  `json:"dailySchedule,omitempty"`
-	WeeklySchedule                               *WeeklySchedule                 `json:"weeklySchedule,omitempty"`
-	MonthlySchedule                              *MonthlySchedule                `json:"monthlySchedule,omitempty"`
-	YearlySchedule                               *YearlySchedule                 `json:"yearlySchedule,omitempty"`
-	HealthCheckSchedule                          *HealthCheckSchedule            `json:"healthCheckSchedule,omitempty"`
-	DefaultBackupAccountID                       *string                         `json:"defaultBackupAccountId,omitempty"`
+	ExcludedItems                                *CosmosDbBackupPolicyExcludedItems `json:"excludedItems,omitempty"`
+	ContinuousBackupType                         *string                            `json:"continuousBackupType,omitempty"`
+	Description                                  *string                            `json:"description,omitempty"`
+	RetrySettings                                *RetrySettings                     `json:"retrySettings,omitempty"`
+	PolicyNotificationSettings                   *PolicyNotificationSettings        `json:"policyNotificationSettings,omitempty"`
+	CreatePrivateEndpointToWorkloadAutomatically *bool                              `json:"createPrivateEndpointToWorkloadAutomatically,omitempty"`
+	BackupWorkloads                              *[]string                          `json:"backupWorkloads,omitempty"`
+	DailySchedule                                *DailySchedule                     `json:"dailySchedule,omitempty"`
+	WeeklySchedule                               *WeeklySchedule                    `json:"weeklySchedule,omitempty"`
+	MonthlySchedule                              *MonthlySchedule                   `json:"monthlySchedule,omitempty"`
+	YearlySchedule                               *YearlySchedule                    `json:"yearlySchedule,omitempty"`
+	HealthCheckSchedule                          *HealthCheckSchedule               `json:"healthCheckSchedule,omitempty"`
+	DefaultBackupAccountID                       *string                            `json:"defaultBackupAccountId,omitempty"`
 }
 
 type ComsmosDbBackupPolicyResponse struct {
-	ID                         string                      `json:"id"`
-	Priority                   int                        `json:"priority,omitempty"`
-	ExcludedItemCount          int                        `json:"excludedItemCount,omitempty"`
-	TenantID                   string                     `json:"tenantId,omitempty"`
-	ServiceAccountID           string                     `json:"serviceAccountId,omitempty"`
-	BackupWorkloads            []string        		   `json:"backupWorkloads,omitempty"`
-	BackupStatus               string                     `json:"backupStatus,omitempty"`
-	ArchiveStatus              string                     `json:"archiveStatus,omitempty"`
-	HealthCheckStatus          string                     `json:"healthCheckStatus,omitempty"`
-	ConfigurationStatus		   string                     `json:"configurationStatus,omitempty"`
-	ContinuousBackupType       string					  `json:"continuousBackupType"`
-	NextExecutionTime          *time.Time                  `json:"nextExecutionTime,omitempty"`
-	IsArchiveBackupConfigured  *bool                       `json:"isArchiveBackupConfigured,omitempty"`
-	CreatePrivateEndpointToWorkloadAutomatically *bool     `json:"createPrivateEndpointToWorkloadAutomatically,omitempty"`
-	Name                       string                      `json:"name"`
-	Description                *string                     `json:"description,omitempty"`
-	RetrySettings              *RetrySettings              `json:"retrySettings,omitempty"`
-	PolicyNotificationSettings *PolicyNotificationSettings `json:"policyNotificationSettings,omitempty"`
-	IsEnabled                  bool                        `json:"isEnabled"`
-	BackupType                 string                      `json:"backupType"`
-	DailySchedule              *DailySchedule              `json:"dailySchedule,omitempty"`
-	WeeklySchedule             *WeeklySchedule             `json:"weeklySchedule,omitempty"`
-	MonthlySchedule            *MonthlySchedule            `json:"monthlySchedule,omitempty"`
-	YearlySchedule             *YearlySchedule             `json:"yearlySchedule,omitempty"`
-	HealthCheckSchedule        *HealthCheckSchedule        `json:"healthCheckSchedule,omitempty"`
-	DefaultBackupAccountID                       *string                         `json:"defaultBackupAccountId,omitempty"`
+	ID                                           string                      `json:"id"`
+	Priority                                     int                         `json:"priority,omitempty"`
+	ExcludedItemCount                            int                         `json:"excludedItemCount,omitempty"`
+	TenantID                                     string                      `json:"tenantId,omitempty"`
+	ServiceAccountID                             string                      `json:"serviceAccountId,omitempty"`
+	BackupWorkloads                              []string                    `json:"backupWorkloads,omitempty"`
+	BackupStatus                                 string                      `json:"backupStatus,omitempty"`
+	ArchiveStatus                                string                      `json:"archiveStatus,omitempty"`
+	HealthCheckStatus                            string                      `json:"healthCheckStatus,omitempty"`
+	ConfigurationStatus                          string                      `json:"configurationStatus,omitempty"`
+	ContinuousBackupType                         string                      `json:"continuousBackupType"`
+	NextExecutionTime                            *time.Time                  `json:"nextExecutionTime,omitempty"`
+	IsArchiveBackupConfigured                    *bool                       `json:"isArchiveBackupConfigured,omitempty"`
+	CreatePrivateEndpointToWorkloadAutomatically *bool                       `json:"createPrivateEndpointToWorkloadAutomatically,omitempty"`
+	Name                                         string                      `json:"name"`
+	Description                                  *string                     `json:"description,omitempty"`
+	RetrySettings                                *RetrySettings              `json:"retrySettings,omitempty"`
+	PolicyNotificationSettings                   *PolicyNotificationSettings `json:"policyNotificationSettings,omitempty"`
+	IsEnabled                                    bool                        `json:"isEnabled"`
+	BackupType                                   string                      `json:"backupType"`
+	DailySchedule                                *DailySchedule              `json:"dailySchedule,omitempty"`
+	WeeklySchedule                               *WeeklySchedule             `json:"weeklySchedule,omitempty"`
+	MonthlySchedule                              *MonthlySchedule            `json:"monthlySchedule,omitempty"`
+	YearlySchedule                               *YearlySchedule             `json:"yearlySchedule,omitempty"`
+	HealthCheckSchedule                          *HealthCheckSchedule        `json:"healthCheckSchedule,omitempty"`
+	DefaultBackupAccountID                       *string                     `json:"defaultBackupAccountId,omitempty"`
 }
 
-
 type CosmosDbBackupPolicySelectedItems struct {
-	CosmosDbAccounts *[]CosmosDbPolicyItems  `json:"cosmosDbAccounts,omitempty`     
-	Subscriptions   *[]AzureSubscriptions    `json:"subscriptions,omitempty"`
-	ResourceGroups  *[]AzureResourceGroups   `json:"resourceGroups,omitempty"`
-	TagGroups       *[]AzureTagGroups        `json:"tagGroups,omitempty"`
-	Tags            *[]Tags                   `json:"tags,omitempty"`
+	CosmosDbAccounts *[]CosmosDbPolicyItems `json:"cosmosDbAccounts,omitempty`
+	Subscriptions    *[]AzureSubscriptions  `json:"subscriptions,omitempty"`
+	ResourceGroups   *[]AzureResourceGroups `json:"resourceGroups,omitempty"`
+	TagGroups        *[]AzureTagGroups      `json:"tagGroups,omitempty"`
+	Tags             *[]Tags                `json:"tags,omitempty"`
 }
 
 type CosmosDbBackupPolicyExcludedItems struct {
-	CosmosDbAccounts *[]CosmosDbPolicyItems  `json:"cosmosDbAccounts,omitempty`     
-	Tags            *[]Tags                   `json:"tags,omitempty"`
+	CosmosDbAccounts *[]CosmosDbPolicyItems `json:"cosmosDbAccounts,omitempty`
+	Tags             *[]Tags                `json:"tags,omitempty"`
 }
 
-type  CosmosDbPolicyItems struct {
+type CosmosDbPolicyItems struct {
 	ID *string `json:"id,omitempty"`
 }
 
-
 // Azure Cosmos DB Backup policy terraform schema
-func ResourceAzureCosmosDbBackupPolicy() *schema.Resource {
-	return &schema.Resource{
-		CreateContext: ResourceAzureCosmosBackupPolicyCreate,
-		ReadContext:   ResourceAzureCosmosBackupPolicyRead,
-		UpdateContext: ResourceAzureCosmosBackupPolicyUpdate,
-		DeleteContext: ResourceAzureCosmosBackupPolicyDelete,
-
-		Schema: map[string]*schema.Schema{
-			"backup_type": {
-				Type:         schema.TypeString,
-				Required:     true,
-				Description:  "Defines whether you want to include to the backup scope all resources residing in the specified Azure regions.",
-				ValidateFunc: validation.StringInSlice([]string{"AllSubscriptions", "SelectedItems", "Unknown"}, false),
-			},
-			"is_enabled": {
-				Type:        schema.TypeBool,
-				Required:    true,
-				Description: "Defines whether the policy is enabled.",
-			},
-			"name": {
-				Type:         schema.TypeString,
-				Required:     true,
-				Description:  "Specifies a name for the backup policy.",
-				ValidateFunc: validation.StringLenBetween(1, 255),
-			},
-			"regions": {
-				Type:        schema.TypeList,
-				Required:    true,
-				MinItems:    1,
-				Description: "Specifies Azure regions where the resources that will be backed up reside.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"name": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Azure region name.",
-						},
+func ResourceAzureCosmosDbBackupPolicy() resource.Resource {
+	return tf.NewResource(
+		"azure_cosmos_backup_policy",
+		schema.Schema{
+			Attributes: map[string]schema.Attribute{
+				"backup_type": schema.StringAttribute{
+					Description: "Defines whether you want to include to the backup scope all resources residing in the specified Azure regions.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.OneOf([]string{"AllSubscriptions", "SelectedItems", "Unknown"}...),
 					},
 				},
-			},
-			"tenant_id": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "Specifies a Microsoft Azure ID assigned to a tenant.",
-			},
-			"service_account_id": {
-				Type:         schema.TypeString,
-				Required:     true,
-				Description:  "Specifies the system ID assigned to the service account.",
-				ValidateFunc: validation.IsUUID,
-			},
-			"selected_items": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Specifies Azure resources to protect by the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"subscriptions": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies a list of Azure subscription IDs to include in the backup scope.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"subscription_id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Azure subscription ID.",
-									},
-								},
-							},
-						},
-						"tags": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies a list of tags assigned to Azure resources to include in the backup scope.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"name": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Tag name.",
-									},
-									"value": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Tag value.",
-									},
-								},
-							},
-						},
-						"resource_groups": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies a list of Azure resource groups to include in the backup scope.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Resource group system ID.",
-									},
-								},
-							},
-						},
-						"cosmos_db_accounts": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies a list of protected Cosmos DB accounts.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Specifies the Cosmos DB account ID in Microsoft Azure.",
-									},
-								},
-							},
-						},
-						"tag_groups": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies a list of tag groups assigned to Azure resources to include in the backup scope.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"name": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Tag group name.",
-									},
-									"subsciption": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies a list of Azure subscription IDs to include in the tag group.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"subscription_id": {
-													Type:        schema.TypeString,
-													Required:    true,
-													Description: "Azure subscription ID.",
-												},
-											},
-										},
-									},
-									"resource_groups": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies a list of Azure resource groups to include in the tag group.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"id": {
-													Type:        schema.TypeString,
-													Required:    true,
-													Description: "Resource group system ID.",
-												},
-											},
-										},
-									},
-									"tags": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies a list of tags assigned to Azure resources to include in the tag group.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"name": {
-													Type:        schema.TypeString,
-													Required:    true,
-													Description: "Tag name.",
-												},
-												"value": {
-													Type:        schema.TypeString,
-													Required:    true,
-													Description: "Tag value.",
-												},
-											},
-										},
-									},
-								},
-							},
-						},
+				"is_enabled": schema.BoolAttribute{
+					Description: "Defines whether the policy is enabled.",
+					Required:    true,
+				},
+				"name": schema.StringAttribute{
+					Description: "Specifies a name for the backup policy.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.LengthBetween(1, 255),
 					},
 				},
-			},
-			"excluded_items": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Specifies Azure resources to exclude from the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"cosmos_db_accounts": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies a list of protected Cosmos DB accounts.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Specifies the Cosmos DB account ID in Microsoft Azure.",
-									},
-								},
-							},
-						},
-						"tags": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies a list of tags assigned to Azure resources to exclude from the backup policy.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"name": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Tag name.",
-									},
-									"value": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Tag value.",
-									},
-								},
-							},
-						},
+				"tenant_id": schema.StringAttribute{
+					Description: "Specifies a Microsoft Azure ID assigned to a tenant.",
+					Required:    true,
+				},
+				"service_account_id": schema.StringAttribute{
+					Description: "Specifies the system ID assigned to the service account.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.RegexMatches(regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`), "must be a UUID"),
 					},
 				},
-			},
-			"continuous_backup_type": {
-				Type: schema.TypeString,
-				Optional: true,
-				Description: "Specifies the retention period for Cosmos DB continuous backup.",
-				ValidateFunc: validation.StringInSlice([]string{"Continuous7Days", "Continuous30Days"}, false),
-			},
-			"description": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Specifies a description for the backup policy.",
-			},
-			"retry_settings": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Specifies retry settings for the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"retry_count": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Default:     3,
-							Description: "Specifies the number of retry attempts for failed backup tasks.",
-						},
+				"continuous_backup_type": schema.StringAttribute{
+					Description: "Specifies the retention period for Cosmos DB continuous backup.",
+					Optional:    true,
+					Validators: []validator.String{
+						stringvalidator.OneOf([]string{"Continuous7Days", "Continuous30Days"}...),
 					},
 				},
-			},
-			"policy_notification_settings": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Specifies notification settings for the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"recipient": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Specifies the email address of the notification recipient.",
-						},
-						"notify_on_success": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Default:     false,
-							Description: "Defines whether to send notifications on successful backup jobs.",
-						},
-						"notify_on_warning": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Default:     true,
-							Description: "Defines whether to send notifications on backup jobs with warnings.",
-						},
-						"notify_on_failure": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Default:     true,
-							Description: "Defines whether to send notifications on failed backup jobs.",
-						},
+				"description": schema.StringAttribute{
+					Description: "Specifies a description for the backup policy.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"create_private_endpoint_to_workload_automatically": schema.BoolAttribute{
+					Optional: true,
+				},
+				"backup_workloads": schema.ListAttribute{
+					Description: "Specifies kinds of the Cosmos DB accounts protected using the Backup to repository option.",
+					Optional:    true,
+					Validators: []validator.List{
+						listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"PostgreSQL", "MongoDB"}...)),
 					},
+					ElementType: types.StringType,
 				},
-			},
-			"create_private_endpoint_to_workload_automatically": {
-				Type:     schema.TypeBool,
-				Optional: true,
-			},
-			"backup_workloads": {
-				Type: 	schema.TypeList,
-				Optional: true,
-				Description: "Specifies kinds of the Cosmos DB accounts protected using the Backup to repository option.",
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-					ValidateFunc: validation.StringInSlice([]string{"PostgreSQL", "MongoDB"}, false),
-				},
-			},
-			"daily_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Specifies daily backup schedule settings for the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"daily_type": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Specifies the type of daily backup schedule.",
-							ValidateFunc: validation.StringInSlice([]string{"EveryDay", "Weekdays", "SelectedDays", "Unknown"}, false),
-						},
-						"selected_days": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies the days of the week when backups should be performed if the daily type is SelectedDays.",
-							Elem: &schema.Schema{
-								Type:         schema.TypeString,
-								ValidateFunc: validation.StringInSlice([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}, false),
-							},
-						},
-						"backup_schedule": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies backup schedule settings for daily backups.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"hours": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies the hours when backups should be performed.",
-										Elem: &schema.Schema{
-											Type:         schema.TypeInt,
-											ValidateFunc: validation.IntBetween(0, 23),
-										},
-									},
-									"retention": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies retention settings for daily backups.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"time_retention_duration": {
-													Type:        schema.TypeInt,
-													Optional:    true,
-													Description: "Specifies the duration (in days) to retain daily backups.",
-												},
-												"retention_duration_type": {
-													Type:         schema.TypeString,
-													Optional:     true,
-													Description:  "Specifies the type of retention duration.",
-													ValidateFunc: validation.StringInSlice([]string{"Days", "Months", "Years", "Unknown"}, false),
-												},
-											},
-										},
-									},
-									"target_repository_id": {
-										Type:        schema.TypeString,
-										Optional:    true,
-										Description: "Specifies the system ID of the target repository for daily backups.",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			"weekly_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Specifies weekly backup schedule settings for the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"start_time": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "Specifies the start time for weekly backups.",
-						},
-						"backup_schedule": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies backup schedule settings for weekly backups.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"selected_days": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies the days of the week when backups should be performed.",
-										Elem: &schema.Schema{
-											Type:         schema.TypeString,
-											ValidateFunc: validation.StringInSlice([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}, false),
-										},
-									},
-									"retention": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies retention settings for weekly backups.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"time_retention_duration": {
-													Type:        schema.TypeInt,
-													Optional:    true,
-													Description: "Specifies the duration (in days) to retain weekly backups.",
-												},
-												"retention_duration_type": {
-													Type:         schema.TypeString,
-													Optional:     true,
-													Description:  "Specifies the type of retention duration.",
-													ValidateFunc: validation.StringInSlice([]string{"Days", "Months", "Years", "Unknown"}, false),
-												},
-											},
-										},
-									},
-									"target_repository_id": {
-										Type:        schema.TypeString,
-										Optional:    true,
-										Description: "Specifies the system ID of the target repository for weekly backups.",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			"monthly_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Specifies monthly backup schedule settings for the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"start_time": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "Specifies the start time for monthly backups.",
-						},
-						"type": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Specifies the day of the month when the backup policy will run.",
-							ValidateFunc: validation.StringInSlice([]string{"First", "Second", "Third", "Fourth", "Last", "SelectedDay", "Unknown"}, false),
-						},
-						"day_of_week": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Applies if one of the First, Second, Third, Fourth or Last values is specified for the type parameter Specifies the days of the week when the backup policy will run.",
-							ValidateFunc: validation.StringInSlice([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}, false),
-						},
-						"day_of_month": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "Applies if SelectedDay is specified for the type parameter. Specifies the day of the month when the backup policy will run.",
-						},
-						"monthly_last_day": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Description: "Defines whether the backup policy will run on the last day of the month.",
-						},
-						"backup_schedule": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies backup schedule settings for monthly backups.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"selected_months": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies the months when backups should be performed.",
-										Elem: &schema.Schema{
-											Type:         schema.TypeString,
-											ValidateFunc: validation.StringInSlice([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}, false),
-										},
-									},
-									"retention": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies retention settings for monthly backups.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"time_retention_duration": {
-													Type:        schema.TypeInt,
-													Optional:    true,
-													Description: "Specifies the duration (in days) to retain monthly backups.",
-												},
-												"retention_duration_type": {
-													Type:         schema.TypeString,
-													Optional:     true,
-													Description:  "Specifies the type of retention duration.",
-													ValidateFunc: validation.StringInSlice([]string{"Days", "Months", "Years", "Unknown"}, false),
-												},
-											},
-										},
-									},
-									"target_repository_id": {
-										Type:        schema.TypeString,
-										Optional:    true,
-										Description: "Specifies the system ID of the target repository for monthly backups.",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			"yearly_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Specifies yearly backup schedule settings for the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"start_time": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "Specifies the start time for yearly backups.",
-						},
-						"type": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Specifies the day of the month when the backup policy will run.",
-							ValidateFunc: validation.StringInSlice([]string{"First", "Second", "Third", "Fourth", "Last", "SelectedDay", "Unknown"}, false),
-						},
-						"month": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Specifies the month when the backup policy will run.",
-							ValidateFunc: validation.StringInSlice([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}, false),
-						},
-						"day_of_week": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Specifies the day of the week when the backup policy will run.",
-							ValidateFunc: validation.StringInSlice([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Unknown"}, false),
-						},
-						"day_of_month": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "Specifies the day of the month when the backup policy will run.",
-						},
-						"yearly_last_day": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Description: "Defines whether the backup policy will run on the last day of the month.",
-						},
-						"retention_years_count": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "Specifies the number of years to retain yearly backups.",
-						},
-						"target_repository_id": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Specifies the system ID of the target repository for yearly backups.",
-						},
-					},
-				},
-			},
-			"health_check_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Specifies health check settings for the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"health_check_enabled": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Default:     false,
-							Description: "Defines whether health checks are enabled for the backup policy.",
-						},
-						"local_time": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Specifies the date and time when the health check will run.",
-						},
-						"day_number_in_month": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Specifies the day number in the month when the health check will run.",
-							ValidateFunc: validation.StringInSlice([]string{"First", "Second", "Third", "Fourth", "Last", "OnDay", "EveryDay", "EverySelectedDay", "Unknown"}, false),
-						},
-						"day_of_week": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Specifies the day of the week when the health check will run.",
-							ValidateFunc: validation.StringInSlice([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}, false),
-						},
-						"day_of_month": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "Specifies the day of the month when the health check will run.",
-						},
-						"months": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies the months when the health check will run.",
-							Elem: &schema.Schema{
-								Type:         schema.TypeString,
-								ValidateFunc: validation.StringInSlice([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}, false),
-							},
-						},
-					},
-				},
-			},
-			"default_backup_account_id":{
-					Type:         schema.TypeString,
-					Optional:     true,
+				"default_backup_account_id": schema.StringAttribute{
 					Description: "[Applies only to backup policies that have the Backup to repository option enabled] Specifies the system ID assigned in the Veeam Backup for Microsoft Azure REST API to a default database account that will be used to access all protected databases.",
+					Optional:    true,
+				},
+			},
+			Blocks: map[string]schema.Block{
+				"regions": schema.ListNestedBlock{
+					Description: "Specifies Azure regions where the resources that will be backed up reside.",
+					Validators: []validator.List{
+						listvalidator.SizeAtLeast(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"name": schema.StringAttribute{
+								Description: "Azure region name.",
+								Required:    true,
+							},
+						},
+					},
+				},
+				"selected_items": schema.ListNestedBlock{
+					Description: "Specifies Azure resources to protect by the backup policy.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{},
+						Blocks: map[string]schema.Block{
+							"subscriptions": schema.ListNestedBlock{
+								Description: "Specifies a list of Azure subscription IDs to include in the backup scope.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"subscription_id": schema.StringAttribute{
+											Description: "Azure subscription ID.",
+											Required:    true,
+										},
+									},
+								},
+							},
+							"tags": schema.ListNestedBlock{
+								Description: "Specifies a list of tags assigned to Azure resources to include in the backup scope.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"name": schema.StringAttribute{
+											Description: "Tag name.",
+											Required:    true,
+										},
+										"value": schema.StringAttribute{
+											Description: "Tag value.",
+											Required:    true,
+										},
+									},
+								},
+							},
+							"resource_groups": schema.ListNestedBlock{
+								Description: "Specifies a list of Azure resource groups to include in the backup scope.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"id": schema.StringAttribute{
+											Description: "Resource group system ID.",
+											Required:    true,
+										},
+									},
+								},
+							},
+							"cosmos_db_accounts": schema.ListNestedBlock{
+								Description: "Specifies a list of protected Cosmos DB accounts.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"id": schema.StringAttribute{
+											Description: "Specifies the Cosmos DB account ID in Microsoft Azure.",
+											Required:    true,
+										},
+									},
+								},
+							},
+							"tag_groups": schema.ListNestedBlock{
+								Description: "Specifies a list of tag groups assigned to Azure resources to include in the backup scope.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"name": schema.StringAttribute{
+											Description: "Tag group name.",
+											Required:    true,
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"subsciption": schema.ListNestedBlock{
+											Description: "Specifies a list of Azure subscription IDs to include in the tag group.",
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"subscription_id": schema.StringAttribute{
+														Description: "Azure subscription ID.",
+														Required:    true,
+													},
+												},
+											},
+										},
+										"resource_groups": schema.ListNestedBlock{
+											Description: "Specifies a list of Azure resource groups to include in the tag group.",
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"id": schema.StringAttribute{
+														Description: "Resource group system ID.",
+														Required:    true,
+													},
+												},
+											},
+										},
+										"tags": schema.ListNestedBlock{
+											Description: "Specifies a list of tags assigned to Azure resources to include in the tag group.",
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"name": schema.StringAttribute{
+														Description: "Tag name.",
+														Required:    true,
+													},
+													"value": schema.StringAttribute{
+														Description: "Tag value.",
+														Required:    true,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"excluded_items": schema.ListNestedBlock{
+					Description: "Specifies Azure resources to exclude from the backup policy.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{},
+						Blocks: map[string]schema.Block{
+							"cosmos_db_accounts": schema.ListNestedBlock{
+								Description: "Specifies a list of protected Cosmos DB accounts.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"id": schema.StringAttribute{
+											Description: "Specifies the Cosmos DB account ID in Microsoft Azure.",
+											Required:    true,
+										},
+									},
+								},
+							},
+							"tags": schema.ListNestedBlock{
+								Description: "Specifies a list of tags assigned to Azure resources to exclude from the backup policy.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"name": schema.StringAttribute{
+											Description: "Tag name.",
+											Required:    true,
+										},
+										"value": schema.StringAttribute{
+											Description: "Tag value.",
+											Required:    true,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"retry_settings": schema.ListNestedBlock{
+					Description: "Specifies retry settings for the backup policy.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"retry_count": schema.Int64Attribute{
+								Description: "Specifies the number of retry attempts for failed backup tasks.",
+								Optional:    true,
+								Computed:    true,
+								Default:     int64default.StaticInt64(3),
+							},
+						},
+					},
+				},
+				"policy_notification_settings": schema.ListNestedBlock{
+					Description: "Specifies notification settings for the backup policy.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"recipient": schema.StringAttribute{
+								Description: "Specifies the email address of the notification recipient.",
+								Optional:    true,
+							},
+							"notify_on_success": schema.BoolAttribute{
+								Description: "Defines whether to send notifications on successful backup jobs.",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(false),
+							},
+							"notify_on_warning": schema.BoolAttribute{
+								Description: "Defines whether to send notifications on backup jobs with warnings.",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(true),
+							},
+							"notify_on_failure": schema.BoolAttribute{
+								Description: "Defines whether to send notifications on failed backup jobs.",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(true),
+							},
+						},
+					},
+				},
+				"daily_schedule": schema.ListNestedBlock{
+					Description: "Specifies daily backup schedule settings for the backup policy.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"daily_type": schema.StringAttribute{
+								Description: "Specifies the type of daily backup schedule.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"EveryDay", "Weekdays", "SelectedDays", "Unknown"}...),
+								},
+							},
+							"selected_days": schema.ListAttribute{
+								Description: "Specifies the days of the week when backups should be performed if the daily type is SelectedDays.",
+								Optional:    true,
+								Validators: []validator.List{
+									listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}...)),
+								},
+								ElementType: types.StringType,
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"backup_schedule": schema.ListNestedBlock{
+								Description: "Specifies backup schedule settings for daily backups.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"hours": schema.ListAttribute{
+											Description: "Specifies the hours when backups should be performed.",
+											Optional:    true,
+											Validators: []validator.List{
+												listvalidator.ValueInt64sAre(int64validator.Between(0, 23)),
+											},
+											ElementType: types.Int64Type,
+										},
+										"target_repository_id": schema.StringAttribute{
+											Description: "Specifies the system ID of the target repository for daily backups.",
+											Optional:    true,
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"retention": schema.ListNestedBlock{
+											Description: "Specifies retention settings for daily backups.",
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"time_retention_duration": schema.Int64Attribute{
+														Description: "Specifies the duration (in days) to retain daily backups.",
+														Optional:    true,
+													},
+													"retention_duration_type": schema.StringAttribute{
+														Description: "Specifies the type of retention duration.",
+														Optional:    true,
+														Validators: []validator.String{
+															stringvalidator.OneOf([]string{"Days", "Months", "Years", "Unknown"}...),
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"weekly_schedule": schema.ListNestedBlock{
+					Description: "Specifies weekly backup schedule settings for the backup policy.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"start_time": schema.Int64Attribute{
+								Description: "Specifies the start time for weekly backups.",
+								Optional:    true,
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"backup_schedule": schema.ListNestedBlock{
+								Description: "Specifies backup schedule settings for weekly backups.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"selected_days": schema.ListAttribute{
+											Description: "Specifies the days of the week when backups should be performed.",
+											Optional:    true,
+											Validators: []validator.List{
+												listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}...)),
+											},
+											ElementType: types.StringType,
+										},
+										"target_repository_id": schema.StringAttribute{
+											Description: "Specifies the system ID of the target repository for weekly backups.",
+											Optional:    true,
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"retention": schema.ListNestedBlock{
+											Description: "Specifies retention settings for weekly backups.",
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"time_retention_duration": schema.Int64Attribute{
+														Description: "Specifies the duration (in days) to retain weekly backups.",
+														Optional:    true,
+													},
+													"retention_duration_type": schema.StringAttribute{
+														Description: "Specifies the type of retention duration.",
+														Optional:    true,
+														Validators: []validator.String{
+															stringvalidator.OneOf([]string{"Days", "Months", "Years", "Unknown"}...),
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"monthly_schedule": schema.ListNestedBlock{
+					Description: "Specifies monthly backup schedule settings for the backup policy.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"start_time": schema.Int64Attribute{
+								Description: "Specifies the start time for monthly backups.",
+								Optional:    true,
+							},
+							"type": schema.StringAttribute{
+								Description: "Specifies the day of the month when the backup policy will run.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"First", "Second", "Third", "Fourth", "Last", "SelectedDay", "Unknown"}...),
+								},
+							},
+							"day_of_week": schema.StringAttribute{
+								Description: "Applies if one of the First, Second, Third, Fourth or Last values is specified for the type parameter Specifies the days of the week when the backup policy will run.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}...),
+								},
+							},
+							"day_of_month": schema.Int64Attribute{
+								Description: "Applies if SelectedDay is specified for the type parameter. Specifies the day of the month when the backup policy will run.",
+								Optional:    true,
+							},
+							"monthly_last_day": schema.BoolAttribute{
+								Description: "Defines whether the backup policy will run on the last day of the month.",
+								Optional:    true,
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"backup_schedule": schema.ListNestedBlock{
+								Description: "Specifies backup schedule settings for monthly backups.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"selected_months": schema.ListAttribute{
+											Description: "Specifies the months when backups should be performed.",
+											Optional:    true,
+											Validators: []validator.List{
+												listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}...)),
+											},
+											ElementType: types.StringType,
+										},
+										"target_repository_id": schema.StringAttribute{
+											Description: "Specifies the system ID of the target repository for monthly backups.",
+											Optional:    true,
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"retention": schema.ListNestedBlock{
+											Description: "Specifies retention settings for monthly backups.",
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"time_retention_duration": schema.Int64Attribute{
+														Description: "Specifies the duration (in days) to retain monthly backups.",
+														Optional:    true,
+													},
+													"retention_duration_type": schema.StringAttribute{
+														Description: "Specifies the type of retention duration.",
+														Optional:    true,
+														Validators: []validator.String{
+															stringvalidator.OneOf([]string{"Days", "Months", "Years", "Unknown"}...),
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"yearly_schedule": schema.ListNestedBlock{
+					Description: "Specifies yearly backup schedule settings for the backup policy.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"start_time": schema.Int64Attribute{
+								Description: "Specifies the start time for yearly backups.",
+								Optional:    true,
+							},
+							"type": schema.StringAttribute{
+								Description: "Specifies the day of the month when the backup policy will run.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"First", "Second", "Third", "Fourth", "Last", "SelectedDay", "Unknown"}...),
+								},
+							},
+							"month": schema.StringAttribute{
+								Description: "Specifies the month when the backup policy will run.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}...),
+								},
+							},
+							"day_of_week": schema.StringAttribute{
+								Description: "Specifies the day of the week when the backup policy will run.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Unknown"}...),
+								},
+							},
+							"day_of_month": schema.Int64Attribute{
+								Description: "Specifies the day of the month when the backup policy will run.",
+								Optional:    true,
+							},
+							"yearly_last_day": schema.BoolAttribute{
+								Description: "Defines whether the backup policy will run on the last day of the month.",
+								Optional:    true,
+							},
+							"retention_years_count": schema.Int64Attribute{
+								Description: "Specifies the number of years to retain yearly backups.",
+								Optional:    true,
+							},
+							"target_repository_id": schema.StringAttribute{
+								Description: "Specifies the system ID of the target repository for yearly backups.",
+								Optional:    true,
+							},
+						},
+					},
+				},
+				"health_check_schedule": schema.ListNestedBlock{
+					Description: "Specifies health check settings for the backup policy.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"health_check_enabled": schema.BoolAttribute{
+								Description: "Defines whether health checks are enabled for the backup policy.",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(false),
+							},
+							"local_time": schema.StringAttribute{
+								Description: "Specifies the date and time when the health check will run.",
+								Optional:    true,
+							},
+							"day_number_in_month": schema.StringAttribute{
+								Description: "Specifies the day number in the month when the health check will run.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"First", "Second", "Third", "Fourth", "Last", "OnDay", "EveryDay", "EverySelectedDay", "Unknown"}...),
+								},
+							},
+							"day_of_week": schema.StringAttribute{
+								Description: "Specifies the day of the week when the health check will run.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}...),
+								},
+							},
+							"day_of_month": schema.Int64Attribute{
+								Description: "Specifies the day of the month when the health check will run.",
+								Optional:    true,
+							},
+							"months": schema.ListAttribute{
+								Description: "Specifies the months when the health check will run.",
+								Optional:    true,
+								Validators: []validator.List{
+									listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}...)),
+								},
+								ElementType: types.StringType,
+							},
+						},
+					},
+				},
 			},
 		},
-	}
+		tf.ResourceOperations{
+			Create: ResourceAzureCosmosBackupPolicyCreate,
+			Read:   ResourceAzureCosmosBackupPolicyRead,
+			Update: ResourceAzureCosmosBackupPolicyUpdate,
+			Delete: ResourceAzureCosmosBackupPolicyDelete,
+		},
+		tf.Timeouts{},
+		false,
+	)
 }
 
-
-func ResourceAzureCosmosBackupPolicyCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func ResourceAzureCosmosBackupPolicyCreate(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	policyRequest := buildCosmosBackupPolicyRequest(d)
 
 	jsonData, err := json.Marshal(policyRequest)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to marshal Cosmos DB Backup Policy request: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to marshal Cosmos DB Backup Policy request: %w", err))
 	}
 
 	url := client.BuildAPIURL(fmt.Sprintf("/policies/cosmosDb/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("POST", url, strings.NewReader(string(jsonData)))
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to create Cosmos DB Backup Policy: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to create Cosmos DB Backup Policy: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("Failed to create Cosmos DB Backup Policy, status: %s, response: %s", resp.Status, string(bodyBytes)))
+		return tf.FromErr(fmt.Errorf("Failed to create Cosmos DB Backup Policy, status: %s, response: %s", resp.Status, string(bodyBytes)))
 	}
 
 	var policyResponse ComsmosDbBackupPolicyResponse
 	if err := json.NewDecoder(resp.Body).Decode(&policyResponse); err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to decode Cosmos DB Backup Policy creation response: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to decode Cosmos DB Backup Policy creation response: %w", err))
 	}
 	defer resp.Body.Close()
 
@@ -730,26 +684,26 @@ func ResourceAzureCosmosBackupPolicyCreate(ctx context.Context, d *schema.Resour
 	return ResourceAzureCosmosBackupPolicyRead(ctx, d, meta)
 }
 
-func ResourceAzureCosmosBackupPolicyRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func ResourceAzureCosmosBackupPolicyRead(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	url := client.BuildAPIURL(fmt.Sprintf("/policies/cosmosDb/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("GET", url, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to read Cosmos DB Backup Policy: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to read Cosmos DB Backup Policy: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("Failed to read Cosmos DB Backup Policy, status: %s, response: %s", resp.Status, string(bodyBytes)))
+		return tf.FromErr(fmt.Errorf("Failed to read Cosmos DB Backup Policy, status: %s, response: %s", resp.Status, string(bodyBytes)))
 	}
 
 	var policyResponse ComsmosDbBackupPolicyResponse
 	if err := json.NewDecoder(resp.Body).Decode(&policyResponse); err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to decode Cosmos DB Backup Policy creation response: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to decode Cosmos DB Backup Policy creation response: %w", err))
 	}
 
 	// Map response fields to resource data
@@ -769,60 +723,60 @@ func ResourceAzureCosmosBackupPolicyRead(ctx context.Context, d *schema.Resource
 
 }
 
-func ResourceAzureCosmosBackupPolicyUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func ResourceAzureCosmosBackupPolicyUpdate(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	policyRequest := buildCosmosBackupPolicyRequest(d)
 
 	jsonData, err := json.Marshal(policyRequest)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to marshal Cosmos DB Backup Policy request: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to marshal Cosmos DB Backup Policy request: %w", err))
 	}
 
 	url := client.BuildAPIURL(fmt.Sprintf("/policies/cosmosDb/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("PUT", url, strings.NewReader(string(jsonData)))
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to update Cosmos DB Backup Policy: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to update Cosmos DB Backup Policy: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to update Cosmos DB backup policy (status %d): %s", resp.StatusCode, string(body)))
+		return tf.FromErr(fmt.Errorf("failed to update Cosmos DB backup policy (status %d): %s", resp.StatusCode, string(body)))
 	}
 
 	return ResourceAzureCosmosBackupPolicyRead(ctx, d, meta)
 
 }
 
-func ResourceAzureCosmosBackupPolicyDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func ResourceAzureCosmosBackupPolicyDelete(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	url := client.BuildAPIURL(fmt.Sprintf("/policies/cosmosDb/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("DELETE", url, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to delete Cosmos DB backup policy: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to delete Cosmos DB backup policy: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
 		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to delete Cosmos DB backup policy: %s", string(body)))
+		return tf.FromErr(fmt.Errorf("failed to delete Cosmos DB backup policy: %s", string(body)))
 	}
 
 	d.SetId("")
 	return nil
 }
 
-func buildCosmosBackupPolicyRequest(d *schema.ResourceData) ComsmosDbBackupPolicyRequest {
+func buildCosmosBackupPolicyRequest(d *tf.Data) ComsmosDbBackupPolicyRequest {
 	tenantID := d.Get("tenant_id").(string)
 	serviceAccountID := d.Get("service_account_id").(string)
-	
+
 	request := ComsmosDbBackupPolicyRequest{
 		BackupType:       d.Get("backup_type").(string),
 		IsEnabled:        d.Get("is_enabled").(bool),
@@ -830,7 +784,7 @@ func buildCosmosBackupPolicyRequest(d *schema.ResourceData) ComsmosDbBackupPolic
 		TenantID:         &tenantID,
 		ServiceAccountID: &serviceAccountID,
 	}
-	
+
 	// For updates, include the ID in the request body
 	if d.Id() != "" {
 		id := d.Id()

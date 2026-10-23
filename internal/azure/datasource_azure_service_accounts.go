@@ -1,16 +1,21 @@
-﻿package azure
+package azure
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
 	"strconv"
+	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 // AzureServiceAccount represents an Azure service account from the Veeam API
@@ -47,203 +52,162 @@ type AzureServiceAccountsResponse struct {
 	TotalCount int                   `json:"totalCount"`
 }
 
-func DataSourceAzureServiceAccounts() *schema.Resource {
-	return &schema.Resource{
-		Description: "Retrieves a list of Azure service accounts from Veeam Backup for Microsoft Azure.",
-		ReadContext: DataSourceAzureServiceAccountsRead,
-
-		Schema: map[string]*schema.Schema{
-			"filter": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Filter to apply to the service accounts list.",
-			},
-			"offset": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Default:     0,
-				Description: "Number of items to skip from the beginning of the result set.",
-			},
-			"limit": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Default:     -1,
-				Description: "Maximum number of items to return. Use -1 for all items.",
-			},
-			"purpose": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "None",
-				Description: "Purpose filter for the service accounts.",
-				ValidateFunc: func(val interface{}, key string) (warns []string, errs []error) {
-					v := val.(string)
-					validPurposes := []string{"None", "WorkerManagement", "Repository", "Unknown", "VirtualMachineBackup", "VirtualMachineRestore", "AzureSqlBackup", "AzureSqlRestore", "AzureFiles", "VnetBackup", "VnetRestore", "CosmosBackup", "CosmosRestore"}
-					for _, purpose := range validPurposes {
-						if v == purpose {
-							return
-						}
-					}
-					errs = append(errs, fmt.Errorf("%q must be one of %v", key, validPurposes))
-					return
+func DataSourceAzureServiceAccounts() datasource.DataSource {
+	return tf.NewDataSource(
+		"azure_service_accounts",
+		schema.Schema{
+			Description: "Retrieves a list of Azure service accounts from Veeam Backup for Microsoft Azure.",
+			Attributes: map[string]schema.Attribute{
+				"filter": schema.StringAttribute{
+					Description: "Filter to apply to the service accounts list.",
+					Optional:    true,
 				},
-			},
-			"service_accounts": {
-				Type:        schema.TypeList,
-				Computed:    true,
-				Description: "List of Azure service accounts.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"account_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Unique identifier of the service account.",
-						},
-						"application_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Azure application ID of the service account.",
-						},
-						"application_certificate_name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Name of the application certificate.",
-						},
-						"name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Name of the service account.",
-						},
-						"description": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Description of the service account.",
-						},
-						"region": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Azure region for the service account.",
-						},
-						"tenant_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Azure tenant ID associated with the service account.",
-						},
-						"tenant_name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Azure tenant name associated with the service account.",
-						},
-						"account_origin": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Origin of the service account creation.",
-						},
-						"expiration_date": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Date of the account expiration.",
-						},
-						"account_state": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "State of the service account.",
-						},
-						"ad_group_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Microsoft Azure ID assigned to a Microsoft Entra group to which the account belongs.",
-						},
-						"cloud_state": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Cloud state of the service account.",
-						},
-						"ad_group_name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Name of the Microsoft Entra group.",
-						},
-						"purposes": {
-							Type:        schema.TypeSet,
-							Computed:    true,
-							Description: "List of purposes for the service account.",
-							Elem: &schema.Schema{
-								Type: schema.TypeString,
+				"offset": schema.Int64Attribute{
+					Description: "Number of items to skip from the beginning of the result set.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"limit": schema.Int64Attribute{
+					Description: "Maximum number of items to return. Use -1 for all items.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"purpose": schema.StringAttribute{
+					Description: "Purpose filter for the service accounts.",
+					Optional:    true,
+					Computed:    true,
+					Validators: []validator.String{
+						stringvalidator.OneOf([]string{"None", "WorkerManagement", "Repository", "Unknown", "VirtualMachineBackup", "VirtualMachineRestore", "AzureSqlBackup", "AzureSqlRestore", "AzureFiles", "VnetBackup", "VnetRestore", "CosmosBackup", "CosmosRestore"}...),
+					},
+				},
+				"service_accounts": schema.ListNestedAttribute{
+					Description: "List of Azure service accounts.",
+					Computed:    true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"account_id": schema.StringAttribute{
+								Description: "Unique identifier of the service account.",
+								Computed:    true,
 							},
-						},
-						"management_group_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Microsoft Azure ID assigned to a management group.",
-						},
-						"management_group_name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Name of the management group.",
-						},
-						"subscription_ids": {
-							Type:        schema.TypeSet,
-							Computed:    true,
-							Description: "List of Azure subscription IDs associated with the service account.",
-							Elem: &schema.Schema{
-								Type: schema.TypeString,
+							"application_id": schema.StringAttribute{
+								Description: "Azure application ID of the service account.",
+								Computed:    true,
 							},
-						},
-						"selected_for_workermanagement": {
-							Type:        schema.TypeBool,
-							Computed:    true,
-							Description: "Whether the service account is selected for worker management.",
-						},
-						"azure_permissions_state": {
-							Type:        schema.TypeSet,
-							Computed:    true,
-							Description: "Azure permissions state for the service account.",
-							Elem: &schema.Schema{
-								Type: schema.TypeString,
+							"application_certificate_name": schema.StringAttribute{
+								Description: "Name of the application certificate.",
+								Computed:    true,
 							},
-						},
-						"azure_permissions_state_check_time_utc": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "UTC time when Azure permissions state was last checked.",
-						},
-						"subscription_id_for_worker_deployment": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Subscription ID used for worker deployment.",
+							"name": schema.StringAttribute{
+								Description: "Name of the service account.",
+								Computed:    true,
+							},
+							"description": schema.StringAttribute{
+								Description: "Description of the service account.",
+								Computed:    true,
+							},
+							"region": schema.StringAttribute{
+								Description: "Azure region for the service account.",
+								Computed:    true,
+							},
+							"tenant_id": schema.StringAttribute{
+								Description: "Azure tenant ID associated with the service account.",
+								Computed:    true,
+							},
+							"tenant_name": schema.StringAttribute{
+								Description: "Azure tenant name associated with the service account.",
+								Computed:    true,
+							},
+							"account_origin": schema.StringAttribute{
+								Description: "Origin of the service account creation.",
+								Computed:    true,
+							},
+							"expiration_date": schema.StringAttribute{
+								Description: "Date of the account expiration.",
+								Computed:    true,
+							},
+							"account_state": schema.StringAttribute{
+								Description: "State of the service account.",
+								Computed:    true,
+							},
+							"ad_group_id": schema.StringAttribute{
+								Description: "Microsoft Azure ID assigned to a Microsoft Entra group to which the account belongs.",
+								Computed:    true,
+							},
+							"cloud_state": schema.StringAttribute{
+								Description: "Cloud state of the service account.",
+								Computed:    true,
+							},
+							"ad_group_name": schema.StringAttribute{
+								Description: "Name of the Microsoft Entra group.",
+								Computed:    true,
+							},
+							"purposes": schema.SetAttribute{
+								Description: "List of purposes for the service account.",
+								Computed:    true,
+								ElementType: types.StringType,
+							},
+							"management_group_id": schema.StringAttribute{
+								Description: "Microsoft Azure ID assigned to a management group.",
+								Computed:    true,
+							},
+							"management_group_name": schema.StringAttribute{
+								Description: "Name of the management group.",
+								Computed:    true,
+							},
+							"subscription_ids": schema.SetAttribute{
+								Description: "List of Azure subscription IDs associated with the service account.",
+								Computed:    true,
+								ElementType: types.StringType,
+							},
+							"selected_for_workermanagement": schema.BoolAttribute{
+								Description: "Whether the service account is selected for worker management.",
+								Computed:    true,
+							},
+							"azure_permissions_state": schema.SetAttribute{
+								Description: "Azure permissions state for the service account.",
+								Computed:    true,
+								ElementType: types.StringType,
+							},
+							"azure_permissions_state_check_time_utc": schema.StringAttribute{
+								Description: "UTC time when Azure permissions state was last checked.",
+								Computed:    true,
+							},
+							"subscription_id_for_worker_deployment": schema.StringAttribute{
+								Description: "Subscription ID used for worker deployment.",
+								Computed:    true,
+							},
 						},
 					},
 				},
-			},
-			"service_accounts_by_id": {
-				Type:        schema.TypeMap,
-				Computed:    true,
-				Description: "Map of service account IDs to their names for easy lookup.",
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
+				"service_accounts_by_id": schema.MapAttribute{
+					Description: "Map of service account IDs to their names for easy lookup.",
+					Computed:    true,
+					ElementType: types.StringType,
 				},
-			},
-			"service_accounts_by_name": {
-				Type:        schema.TypeMap,
-				Computed:    true,
-				Description: "Map of service account names to their IDs for easy lookup.",
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
+				"service_accounts_by_name": schema.MapAttribute{
+					Description: "Map of service account names to their IDs for easy lookup.",
+					Computed:    true,
+					ElementType: types.StringType,
 				},
-			},
-			"total": {
-				Type:        schema.TypeInt,
-				Computed:    true,
-				Description: "Total number of service accounts available (before pagination).",
+				"total": schema.Int64Attribute{
+					Description: "Total number of service accounts available (before pagination).",
+					Computed:    true,
+				},
 			},
 		},
-	}
+		DataSourceAzureServiceAccountsRead,
+		map[string]interface{}{
+			"offset":  0,
+			"limit":   -1,
+			"purpose": "None",
+		},
+	)
 }
 
-func DataSourceAzureServiceAccountsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func DataSourceAzureServiceAccountsRead(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	// Build query parameters
@@ -274,23 +238,23 @@ func DataSourceAzureServiceAccountsRead(ctx context.Context, d *schema.ResourceD
 	// Make the API request
 	resp, err := client.MakeAuthenticatedRequest("GET", apiURL, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to retrieve Azure service accounts: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to retrieve Azure service accounts: %w", err))
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read response body: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read response body: %w", err))
 	}
 
 	if resp.StatusCode != 200 {
-		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
+		return tf.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
 	}
 
 	// Parse the response
 	var accountsResp AzureServiceAccountsResponse
 	if err := json.Unmarshal(body, &accountsResp); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to parse response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to parse response: %w", err))
 	}
 
 	// Convert service accounts to Terraform format
@@ -300,28 +264,28 @@ func DataSourceAzureServiceAccountsRead(ctx context.Context, d *schema.ResourceD
 
 	for i, account := range accountsResp.Results {
 		serviceAccounts[i] = map[string]interface{}{
-			"account_id":                              account.AccountID,
-			"application_id":                          account.ApplicationID,
-			"application_certificate_name":            account.ApplicationCertificateName,
-			"name":                                    account.Name,
-			"description":                             account.Description,
-			"region":                                  account.Region,
-			"tenant_id":                               account.TenantID,
-			"tenant_name":                             account.TenantName,
-			"account_origin":                          account.AccountOrigin,
-			"expiration_date":                         account.ExpirationDate,
-			"account_state":                           account.AccountState,
-			"ad_group_id":                             account.AdGroupID,
-			"cloud_state":                             account.CloudState,
-			"ad_group_name":                           account.AdGroupName,
-			"purposes":                                account.Purposes,
-			"management_group_id":                     account.ManagementGroupID,
-			"management_group_name":                   account.ManagementGroupName,
-			"subscription_ids":                        account.SubscriptionIDs,
-			"selected_for_workermanagement":           account.SelectedForWorkermanagement,
-			"azure_permissions_state":                 account.AzurePermissionsState,
-			"azure_permissions_state_check_time_utc":  account.AzurePermissionsStateCheckTimeUtc,
-			"subscription_id_for_worker_deployment":   account.SubscriptionIDForWorkerDeployment,
+			"account_id":                             account.AccountID,
+			"application_id":                         account.ApplicationID,
+			"application_certificate_name":           account.ApplicationCertificateName,
+			"name":                                   account.Name,
+			"description":                            account.Description,
+			"region":                                 account.Region,
+			"tenant_id":                              account.TenantID,
+			"tenant_name":                            account.TenantName,
+			"account_origin":                         account.AccountOrigin,
+			"expiration_date":                        account.ExpirationDate,
+			"account_state":                          account.AccountState,
+			"ad_group_id":                            account.AdGroupID,
+			"cloud_state":                            account.CloudState,
+			"ad_group_name":                          account.AdGroupName,
+			"purposes":                               account.Purposes,
+			"management_group_id":                    account.ManagementGroupID,
+			"management_group_name":                  account.ManagementGroupName,
+			"subscription_ids":                       account.SubscriptionIDs,
+			"selected_for_workermanagement":          account.SelectedForWorkermanagement,
+			"azure_permissions_state":                account.AzurePermissionsState,
+			"azure_permissions_state_check_time_utc": account.AzurePermissionsStateCheckTimeUtc,
+			"subscription_id_for_worker_deployment":  account.SubscriptionIDForWorkerDeployment,
 		}
 
 		// Build the lookup maps
@@ -331,19 +295,19 @@ func DataSourceAzureServiceAccountsRead(ctx context.Context, d *schema.ResourceD
 
 	// Set the data in the resource
 	if err := d.Set("service_accounts", serviceAccounts); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set service_accounts: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set service_accounts: %w", err))
 	}
 
 	if err := d.Set("service_accounts_by_id", serviceAccountsByID); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set service_accounts_by_id: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set service_accounts_by_id: %w", err))
 	}
 
 	if err := d.Set("service_accounts_by_name", serviceAccountsByName); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set service_accounts_by_name: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set service_accounts_by_name: %w", err))
 	}
 
 	if err := d.Set("total", accountsResp.TotalCount); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set total: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set total: %w", err))
 	}
 
 	// Set the ID (use a combination of hostname and parameters for uniqueness)

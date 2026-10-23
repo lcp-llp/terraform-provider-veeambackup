@@ -1,4 +1,4 @@
-package tfprovider
+package provider
 
 import (
 	"context"
@@ -7,11 +7,11 @@ import (
 	vc "terraform-provider-veeambackup/internal/client"
 	ivbr "terraform-provider-veeambackup/internal/vbr"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/action"
 	actionschema "github.com/hashicorp/terraform-plugin-framework/action/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 )
 
 var _ action.Action = &vbrStartBackupJobAction{}

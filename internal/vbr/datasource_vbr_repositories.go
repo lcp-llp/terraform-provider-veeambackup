@@ -1,15 +1,20 @@
-﻿package vbr
+package vbr
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
+	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 type VBRRepositoriesDataSourceModel struct {
@@ -47,379 +52,318 @@ type VBRRepositoriesResponseData struct {
 }
 
 // Schema
-func DataSourceVBRRepositories() *schema.Resource {
-	return &schema.Resource{
-		Description: "Schema for VBR Repositories Data Source.",
-		ReadContext: DataSourceVBRRepositoriesRead,
-		Schema: map[string]*schema.Schema{
-			"skip": {
-				Type:     schema.TypeInt,
-				Optional: true,
-			},
-			"limit": {
-				Type:     schema.TypeInt,
-				Optional: true,
-			},
-			"order_column": {
-				Type:     schema.TypeString,
-				Optional: true,
-			},
-			"order_asc": {
-				Type:     schema.TypeBool,
-				Optional: true,
-			},
-			"name_filter": {
-				Type:     schema.TypeString,
-				Optional: true,
-			},
-			"type_filter": {
-				Type:     schema.TypeList,
-				Optional: true,
-				Elem:     &schema.Schema{Type: schema.TypeString, ValidateFunc: validation.StringInSlice([]string{"AmazonS3", "AmazonGlacier", "AzureBlob", "AzureArchive"}, false)},
-			},
-			"host_id_filter": {
-				Type:     schema.TypeString,
-				Optional: true,
-			},
-			"path_filter": {
-				Type:     schema.TypeString,
-				Optional: true,
-			},
-			"vmb_api_filter": {
-				Type:     schema.TypeString,
-				Optional: true,
-			},
-			"vmb_api_platform": {
-				Type:     schema.TypeString,
-				Optional: true,
-			},
-			"exclude_extents": {
-				Type:     schema.TypeBool,
-				Optional: true,
-			},
-			"repositories": {
-				Type:        schema.TypeList,
-				Computed:    true,
-				Description: "List of VBR Repositories.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Repository ID.",
-						},
-						"name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Repository name.",
-						},
-						"description": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Repository description.",
-						},
-						"type": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Repository type.",
-						},
-						"account": {
-							Type:        schema.TypeList,
-							Computed:    true,
-							Description: "Repository account details (for AmazonS3, AmazonGlacier, AzureBlob, AzureArchive types).",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"credential_id": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Credential ID.",
-									},
-									"region_type": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Region type.",
-									},
-									"connection_settings": {
-										Type:        schema.TypeList,
-										Computed:    true,
-										Description: "Connection settings.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"connection_type": {
-													Type:        schema.TypeString,
-													Computed:    true,
-													Description: "Connection type.",
-												},
-												"gateway_server_ids": {
-													Type:        schema.TypeList,
-													Computed:    true,
-													Description: "List of gateway server IDs.",
-													Elem:        &schema.Schema{Type: schema.TypeString},
+func DataSourceVBRRepositories() datasource.DataSource {
+	return tf.NewDataSource(
+		"vbr_repositories",
+		schema.Schema{
+			Description: "Schema for VBR Repositories Data Source.",
+			Attributes: map[string]schema.Attribute{
+				"skip": schema.Int64Attribute{
+					Optional: true,
+				},
+				"limit": schema.Int64Attribute{
+					Optional: true,
+				},
+				"order_column": schema.StringAttribute{
+					Optional: true,
+				},
+				"order_asc": schema.BoolAttribute{
+					Optional: true,
+				},
+				"name_filter": schema.StringAttribute{
+					Optional: true,
+				},
+				"type_filter": schema.ListAttribute{
+					Optional: true,
+					Validators: []validator.List{
+						listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"AmazonS3", "AmazonGlacier", "AzureBlob", "AzureArchive"}...)),
+					},
+					ElementType: types.StringType,
+				},
+				"host_id_filter": schema.StringAttribute{
+					Optional: true,
+				},
+				"path_filter": schema.StringAttribute{
+					Optional: true,
+				},
+				"vmb_api_filter": schema.StringAttribute{
+					Optional: true,
+				},
+				"vmb_api_platform": schema.StringAttribute{
+					Optional: true,
+				},
+				"exclude_extents": schema.BoolAttribute{
+					Optional: true,
+				},
+				"repositories": schema.ListNestedAttribute{
+					Description: "List of VBR Repositories.",
+					Computed:    true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"id": schema.StringAttribute{
+								Description: "Repository ID.",
+								Computed:    true,
+							},
+							"name": schema.StringAttribute{
+								Description: "Repository name.",
+								Computed:    true,
+							},
+							"description": schema.StringAttribute{
+								Description: "Repository description.",
+								Computed:    true,
+							},
+							"type": schema.StringAttribute{
+								Description: "Repository type.",
+								Computed:    true,
+							},
+							"account": schema.ListNestedAttribute{
+								Description: "Repository account details (for AmazonS3, AmazonGlacier, AzureBlob, AzureArchive types).",
+								Computed:    true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"credential_id": schema.StringAttribute{
+											Description: "Credential ID.",
+											Computed:    true,
+										},
+										"region_type": schema.StringAttribute{
+											Description: "Region type.",
+											Computed:    true,
+										},
+										"connection_settings": schema.ListNestedAttribute{
+											Description: "Connection settings.",
+											Computed:    true,
+											NestedObject: schema.NestedAttributeObject{
+												Attributes: map[string]schema.Attribute{
+													"connection_type": schema.StringAttribute{
+														Description: "Connection type.",
+														Computed:    true,
+													},
+													"gateway_server_ids": schema.ListAttribute{
+														Description: "List of gateway server IDs.",
+														Computed:    true,
+														ElementType: types.StringType,
+													},
 												},
 											},
 										},
 									},
 								},
 							},
-						},
-						"bucket": {
-							Type:        schema.TypeList,
-							Computed:    true,
-							Description: "Amazon S3 bucket details (for AmazonS3, AmazonGlacier types).",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"region_id": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Region ID.",
-									},
-									"bucket_name": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Bucket name.",
-									},
-									"folder_name": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Folder name.",
-									},
-									"storage_consumption_limit": {
-										Type:        schema.TypeList,
-										Computed:    true,
-										Description: "Storage consumption limit.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"is_enabled": {
-													Type:        schema.TypeBool,
-													Computed:    true,
-													Description: "Is consumption limit enabled.",
-												},
-												"consumption_limit_count": {
-													Type:        schema.TypeInt,
-													Computed:    true,
-													Description: "Consumption limit count.",
-												},
-												"consumption_limit_kind": {
-													Type:        schema.TypeString,
-													Computed:    true,
-													Description: "Consumption limit kind.",
+							"bucket": schema.ListNestedAttribute{
+								Description: "Amazon S3 bucket details (for AmazonS3, AmazonGlacier types).",
+								Computed:    true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"region_id": schema.StringAttribute{
+											Description: "Region ID.",
+											Computed:    true,
+										},
+										"bucket_name": schema.StringAttribute{
+											Description: "Bucket name.",
+											Computed:    true,
+										},
+										"folder_name": schema.StringAttribute{
+											Description: "Folder name.",
+											Computed:    true,
+										},
+										"storage_consumption_limit": schema.ListNestedAttribute{
+											Description: "Storage consumption limit.",
+											Computed:    true,
+											NestedObject: schema.NestedAttributeObject{
+												Attributes: map[string]schema.Attribute{
+													"is_enabled": schema.BoolAttribute{
+														Description: "Is consumption limit enabled.",
+														Computed:    true,
+													},
+													"consumption_limit_count": schema.Int64Attribute{
+														Description: "Consumption limit count.",
+														Computed:    true,
+													},
+													"consumption_limit_kind": schema.StringAttribute{
+														Description: "Consumption limit kind.",
+														Computed:    true,
+													},
 												},
 											},
 										},
-									},
-									"immutability": {
-										Type:        schema.TypeList,
-										Computed:    true,
-										Description: "Immutability settings (for AmazonS3 type).",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"is_enabled": {
-													Type:        schema.TypeBool,
-													Computed:    true,
-													Description: "Is immutability enabled.",
-												},
-												"days_count": {
-													Type:        schema.TypeInt,
-													Computed:    true,
-													Description: "Number of days for immutability.",
-												},
-												"immutability_mode": {
-													Type:        schema.TypeString,
-													Computed:    true,
-													Description: "Immutability mode.",
+										"immutability": schema.ListNestedAttribute{
+											Description: "Immutability settings (for AmazonS3 type).",
+											Computed:    true,
+											NestedObject: schema.NestedAttributeObject{
+												Attributes: map[string]schema.Attribute{
+													"is_enabled": schema.BoolAttribute{
+														Description: "Is immutability enabled.",
+														Computed:    true,
+													},
+													"days_count": schema.Int64Attribute{
+														Description: "Number of days for immutability.",
+														Computed:    true,
+													},
+													"immutability_mode": schema.StringAttribute{
+														Description: "Immutability mode.",
+														Computed:    true,
+													},
 												},
 											},
 										},
-									},
-									"immutability_enabled": {
-										Type:        schema.TypeBool,
-										Computed:    true,
-										Description: "Is immutability enabled (for AmazonGlacier type).",
-									},
-									"use_deep_archive": {
-										Type:        schema.TypeBool,
-										Computed:    true,
-										Description: "Use deep archive (for AmazonGlacier type).",
-									},
-									"infrequent_access_storage": {
-										Type:        schema.TypeList,
-										Computed:    true,
-										Description: "Infrequent access storage settings.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"is_enabled": {
-													Type:        schema.TypeBool,
-													Computed:    true,
-													Description: "Is infrequent access storage enabled.",
-												},
-												"single_zone_enabled": {
-													Type:        schema.TypeBool,
-													Computed:    true,
-													Description: "Is single zone enabled.",
+										"immutability_enabled": schema.BoolAttribute{
+											Description: "Is immutability enabled (for AmazonGlacier type).",
+											Computed:    true,
+										},
+										"use_deep_archive": schema.BoolAttribute{
+											Description: "Use deep archive (for AmazonGlacier type).",
+											Computed:    true,
+										},
+										"infrequent_access_storage": schema.ListNestedAttribute{
+											Description: "Infrequent access storage settings.",
+											Computed:    true,
+											NestedObject: schema.NestedAttributeObject{
+												Attributes: map[string]schema.Attribute{
+													"is_enabled": schema.BoolAttribute{
+														Description: "Is infrequent access storage enabled.",
+														Computed:    true,
+													},
+													"single_zone_enabled": schema.BoolAttribute{
+														Description: "Is single zone enabled.",
+														Computed:    true,
+													},
 												},
 											},
 										},
 									},
 								},
 							},
-						},
-						"container": {
-							Type:        schema.TypeList,
-							Computed:    true,
-							Description: "Azure Blob container details (for AzureBlob, AzureArchive types).",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"container_name": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Container name.",
-									},
-									"folder_name": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Folder name.",
-									},
-									"storage_consumption_limit": {
-										Type:        schema.TypeList,
-										Computed:    true,
-										Description: "Storage consumption limit.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"is_enabled": {
-													Type:        schema.TypeBool,
-													Computed:    true,
-													Description: "Is consumption limit enabled.",
-												},
-												"consumption_limit_count": {
-													Type:        schema.TypeInt,
-													Computed:    true,
-													Description: "Consumption limit count.",
-												},
-												"consumption_limit_kind": {
-													Type:        schema.TypeString,
-													Computed:    true,
-													Description: "Consumption limit kind.",
+							"container": schema.ListNestedAttribute{
+								Description: "Azure Blob container details (for AzureBlob, AzureArchive types).",
+								Computed:    true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"container_name": schema.StringAttribute{
+											Description: "Container name.",
+											Computed:    true,
+										},
+										"folder_name": schema.StringAttribute{
+											Description: "Folder name.",
+											Computed:    true,
+										},
+										"storage_consumption_limit": schema.ListNestedAttribute{
+											Description: "Storage consumption limit.",
+											Computed:    true,
+											NestedObject: schema.NestedAttributeObject{
+												Attributes: map[string]schema.Attribute{
+													"is_enabled": schema.BoolAttribute{
+														Description: "Is consumption limit enabled.",
+														Computed:    true,
+													},
+													"consumption_limit_count": schema.Int64Attribute{
+														Description: "Consumption limit count.",
+														Computed:    true,
+													},
+													"consumption_limit_kind": schema.StringAttribute{
+														Description: "Consumption limit kind.",
+														Computed:    true,
+													},
 												},
 											},
 										},
-									},
-									"immutability": {
-										Type:        schema.TypeList,
-										Computed:    true,
-										Description: "Immutability settings.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"is_enabled": {
-													Type:        schema.TypeBool,
-													Computed:    true,
-													Description: "Is immutability enabled.",
-												},
-												"days_count": {
-													Type:        schema.TypeInt,
-													Computed:    true,
-													Description: "Number of days for immutability.",
-												},
-												"immutability_mode": {
-													Type:        schema.TypeString,
-													Computed:    true,
-													Description: "Immutability mode.",
+										"immutability": schema.ListNestedAttribute{
+											Description: "Immutability settings.",
+											Computed:    true,
+											NestedObject: schema.NestedAttributeObject{
+												Attributes: map[string]schema.Attribute{
+													"is_enabled": schema.BoolAttribute{
+														Description: "Is immutability enabled.",
+														Computed:    true,
+													},
+													"days_count": schema.Int64Attribute{
+														Description: "Number of days for immutability.",
+														Computed:    true,
+													},
+													"immutability_mode": schema.StringAttribute{
+														Description: "Immutability mode.",
+														Computed:    true,
+													},
 												},
 											},
 										},
 									},
 								},
 							},
-						},
-						"mount_server": {
-							Type:        schema.TypeList,
-							Computed:    true,
-							Description: "Mount server settings (for AzureBlob type).",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"mount_server_settings_type": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Mount server settings type.",
-									},
-									"windows": {
-										Type:        schema.TypeList,
-										Computed:    true,
-										Description: "Windows mount server settings.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"mount_server_id": {
-													Type:        schema.TypeString,
-													Computed:    true,
-													Description: "Mount server ID.",
-												},
-												"v_power_nfs_enabled": {
-													Type:        schema.TypeBool,
-													Computed:    true,
-													Description: "vPower NFS enabled.",
-												},
-												"write_cache_enabled": {
-													Type:        schema.TypeBool,
-													Computed:    true,
-													Description: "Write cache enabled.",
-												},
-												"v_power_nfs_port_settings": {
-													Type:        schema.TypeList,
-													Computed:    true,
-													Description: "vPower NFS port settings.",
-													Elem: &schema.Resource{
-														Schema: map[string]*schema.Schema{
-															"mount_port": {
-																Type:        schema.TypeInt,
-																Computed:    true,
-																Description: "Mount port.",
-															},
-															"v_power_nfs_port": {
-																Type:        schema.TypeInt,
-																Computed:    true,
-																Description: "vPower NFS port.",
+							"mount_server": schema.ListNestedAttribute{
+								Description: "Mount server settings (for AzureBlob type).",
+								Computed:    true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"mount_server_settings_type": schema.StringAttribute{
+											Description: "Mount server settings type.",
+											Computed:    true,
+										},
+										"windows": schema.ListNestedAttribute{
+											Description: "Windows mount server settings.",
+											Computed:    true,
+											NestedObject: schema.NestedAttributeObject{
+												Attributes: map[string]schema.Attribute{
+													"mount_server_id": schema.StringAttribute{
+														Description: "Mount server ID.",
+														Computed:    true,
+													},
+													"v_power_nfs_enabled": schema.BoolAttribute{
+														Description: "vPower NFS enabled.",
+														Computed:    true,
+													},
+													"write_cache_enabled": schema.BoolAttribute{
+														Description: "Write cache enabled.",
+														Computed:    true,
+													},
+													"v_power_nfs_port_settings": schema.ListNestedAttribute{
+														Description: "vPower NFS port settings.",
+														Computed:    true,
+														NestedObject: schema.NestedAttributeObject{
+															Attributes: map[string]schema.Attribute{
+																"mount_port": schema.Int64Attribute{
+																	Description: "Mount port.",
+																	Computed:    true,
+																},
+																"v_power_nfs_port": schema.Int64Attribute{
+																	Description: "vPower NFS port.",
+																	Computed:    true,
+																},
 															},
 														},
 													},
 												},
 											},
 										},
-									},
-									"linux": {
-										Type:        schema.TypeList,
-										Computed:    true,
-										Description: "Linux mount server settings.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"mount_server_id": {
-													Type:        schema.TypeString,
-													Computed:    true,
-													Description: "Mount server ID.",
-												},
-												"v_power_nfs_enabled": {
-													Type:        schema.TypeBool,
-													Computed:    true,
-													Description: "vPower NFS enabled.",
-												},
-												"write_cache_enabled": {
-													Type:        schema.TypeBool,
-													Computed:    true,
-													Description: "Write cache enabled.",
-												},
-												"v_power_nfs_port_settings": {
-													Type:        schema.TypeList,
-													Computed:    true,
-													Description: "vPower NFS port settings.",
-													Elem: &schema.Resource{
-														Schema: map[string]*schema.Schema{
-															"mount_port": {
-																Type:        schema.TypeInt,
-																Computed:    true,
-																Description: "Mount port.",
-															},
-															"v_power_nfs_port": {
-																Type:        schema.TypeInt,
-																Computed:    true,
-																Description: "vPower NFS port.",
+										"linux": schema.ListNestedAttribute{
+											Description: "Linux mount server settings.",
+											Computed:    true,
+											NestedObject: schema.NestedAttributeObject{
+												Attributes: map[string]schema.Attribute{
+													"mount_server_id": schema.StringAttribute{
+														Description: "Mount server ID.",
+														Computed:    true,
+													},
+													"v_power_nfs_enabled": schema.BoolAttribute{
+														Description: "vPower NFS enabled.",
+														Computed:    true,
+													},
+													"write_cache_enabled": schema.BoolAttribute{
+														Description: "Write cache enabled.",
+														Computed:    true,
+													},
+													"v_power_nfs_port_settings": schema.ListNestedAttribute{
+														Description: "vPower NFS port settings.",
+														Computed:    true,
+														NestedObject: schema.NestedAttributeObject{
+															Attributes: map[string]schema.Attribute{
+																"mount_port": schema.Int64Attribute{
+																	Description: "Mount port.",
+																	Computed:    true,
+																},
+																"v_power_nfs_port": schema.Int64Attribute{
+																	Description: "vPower NFS port.",
+																	Computed:    true,
+																},
 															},
 														},
 													},
@@ -429,127 +373,109 @@ func DataSourceVBRRepositories() *schema.Resource {
 									},
 								},
 							},
-						},
-						"unique_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Unique ID.",
-						},
-						"task_limit_enabled": {
-							Type:        schema.TypeBool,
-							Computed:    true,
-							Description: "Is task limit enabled.",
-						},
-						"max_task_count": {
-							Type:        schema.TypeInt,
-							Computed:    true,
-							Description: "Maximum task count.",
-						},
-						"proxy_appliance": {
-							Type:        schema.TypeList,
-							Computed:    true,
-							Description: "Proxy appliance settings (for AzureBlob, AzureArchive, AmazonS3, AmazonGlacier types).",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"subscription_id": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Subscription ID (for Azure types).",
-									},
-									"instance_size": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Instance size (for Azure types).",
-									},
-									"resource_group": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Resource group (for Azure types).",
-									},
-									"virtual_network": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Virtual network (for Azure types).",
-									},
-									"subnet": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Subnet (for Azure types).",
-									},
-									"redirector_port": {
-										Type:        schema.TypeInt,
-										Computed:    true,
-										Description: "Redirector port.",
-									},
-									"ec2_instance_type": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "EC2 instance type (for AWS types).",
-									},
-									"vpc_name": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "VPC name (for AWS types).",
-									},
-									"vpc_id": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "VPC ID (for AWS types).",
-									},
-									"subnet_id": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Subnet ID (for AWS types).",
-									},
-									"subnet_name": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Subnet name (for AWS types).",
-									},
-									"security_group": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Security group (for AWS types).",
+							"unique_id": schema.StringAttribute{
+								Description: "Unique ID.",
+								Computed:    true,
+							},
+							"task_limit_enabled": schema.BoolAttribute{
+								Description: "Is task limit enabled.",
+								Computed:    true,
+							},
+							"max_task_count": schema.Int64Attribute{
+								Description: "Maximum task count.",
+								Computed:    true,
+							},
+							"proxy_appliance": schema.ListNestedAttribute{
+								Description: "Proxy appliance settings (for AzureBlob, AzureArchive, AmazonS3, AmazonGlacier types).",
+								Computed:    true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"subscription_id": schema.StringAttribute{
+											Description: "Subscription ID (for Azure types).",
+											Computed:    true,
+										},
+										"instance_size": schema.StringAttribute{
+											Description: "Instance size (for Azure types).",
+											Computed:    true,
+										},
+										"resource_group": schema.StringAttribute{
+											Description: "Resource group (for Azure types).",
+											Computed:    true,
+										},
+										"virtual_network": schema.StringAttribute{
+											Description: "Virtual network (for Azure types).",
+											Computed:    true,
+										},
+										"subnet": schema.StringAttribute{
+											Description: "Subnet (for Azure types).",
+											Computed:    true,
+										},
+										"redirector_port": schema.Int64Attribute{
+											Description: "Redirector port.",
+											Computed:    true,
+										},
+										"ec2_instance_type": schema.StringAttribute{
+											Description: "EC2 instance type (for AWS types).",
+											Computed:    true,
+										},
+										"vpc_name": schema.StringAttribute{
+											Description: "VPC name (for AWS types).",
+											Computed:    true,
+										},
+										"vpc_id": schema.StringAttribute{
+											Description: "VPC ID (for AWS types).",
+											Computed:    true,
+										},
+										"subnet_id": schema.StringAttribute{
+											Description: "Subnet ID (for AWS types).",
+											Computed:    true,
+										},
+										"subnet_name": schema.StringAttribute{
+											Description: "Subnet name (for AWS types).",
+											Computed:    true,
+										},
+										"security_group": schema.StringAttribute{
+											Description: "Security group (for AWS types).",
+											Computed:    true,
+										},
 									},
 								},
 							},
 						},
 					},
 				},
-			},
-			"pagination": {
-				Type:        schema.TypeList,
-				Computed:    true,
-				Description: "Pagination information.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"total": {
-							Type:        schema.TypeInt,
-							Computed:    true,
-							Description: "Total number of items.",
-						},
-						"skip": {
-							Type:        schema.TypeInt,
-							Computed:    true,
-							Description: "Number of items skipped.",
-						},
-						"limit": {
-							Type:        schema.TypeInt,
-							Computed:    true,
-							Description: "Limit of items per page.",
+				"pagination": schema.ListNestedAttribute{
+					Description: "Pagination information.",
+					Computed:    true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"total": schema.Int64Attribute{
+								Description: "Total number of items.",
+								Computed:    true,
+							},
+							"skip": schema.Int64Attribute{
+								Description: "Number of items skipped.",
+								Computed:    true,
+							},
+							"limit": schema.Int64Attribute{
+								Description: "Limit of items per page.",
+								Computed:    true,
+							},
 						},
 					},
 				},
 			},
 		},
-	}
+		DataSourceVBRRepositoriesRead,
+		map[string]interface{}{},
+	)
 }
 
-func DataSourceVBRRepositoriesRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func DataSourceVBRRepositoriesRead(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	apiUrl := "/api/v1/backupInfrastructure/repositories"
 	// Build query parameters
@@ -597,14 +523,14 @@ func DataSourceVBRRepositoriesRead(ctx context.Context, d *schema.ResourceData, 
 	fullUrl := client.BuildAPIURL(fmt.Sprintf("%s?%s", apiUrl, queryParams.Encode()))
 	respBody, err := client.DoRequest(ctx, "GET", fullUrl, nil)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	// Parse response
 	var repositoriesResponse VBRRepositoriesResponse
 	err = json.Unmarshal(respBody, &repositoriesResponse)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	// Set repositories data
@@ -623,7 +549,7 @@ func DataSourceVBRRepositoriesRead(ctx context.Context, d *schema.ResourceData, 
 		repositoriesData = append(repositoriesData, repoMap)
 	}
 	if err := d.Set("repositories", repositoriesData); err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	// Set pagination data
@@ -635,7 +561,7 @@ func DataSourceVBRRepositoriesRead(ctx context.Context, d *schema.ResourceData, 
 		},
 	}
 	if err := d.Set("pagination", paginationData); err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	// Set resource ID

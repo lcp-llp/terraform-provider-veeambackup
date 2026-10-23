@@ -1,16 +1,19 @@
-﻿package azure
+package azure
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
 	"strconv"
+	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 // AzureSQLServers
@@ -44,118 +47,104 @@ type AzureSQLServersDataSourceResponse struct {
 	Results []AzureSQLServer `json:"results"`
 }
 
-func DataSourceAzureSqlServers() *schema.Resource {
-	return &schema.Resource{
-		ReadContext: DataSourceAzureSqlServersRead,
-		Description: "Data source for retrieving Azure SQL Servers.",
-		Schema: map[string]*schema.Schema{
-			"offset": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Description: "The number of items to skip before starting to collect the result set.",
-			},
-			"limit": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Description: "The numbers of items to return.",
-			},
-			"tenant_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The ID of the Azure tenant.",
-			},
-			"service_account_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The ID of the service account.",
-			},
-			"search_pattern": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The search pattern to filter SQL servers by name.",
-			},
-			"credentials_state": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The credentials state to filter SQL servers.",
-			},
-			"assignable_by_sql_account_id": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Description: "Filter SQL servers that can be assigned by the specified SQL account ID.",
-			},
-			"region_ids": {
-				Type:        schema.TypeList,
-				Elem:        &schema.Schema{Type: schema.TypeString},
-				Optional:    true,
-				Description: "List of region IDs to filter SQL servers.",
-			},
-			"sync": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Specifies whether to synchronize the SQL servers before retrieving.",
-			},
-			"server_types": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The server types to filter SQL servers.",
-			},
-			"sql_server_details": {
-				Type:        schema.TypeList,
-				Computed:    true,
-				Description: "Detailed list of Azure SQL Servers matching the specified criteria.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"veeam_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The ID of the Azure SQL Server.",
-						},
-						"name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The name of the Azure SQL Server.",
-						},
-						"resource_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The resource ID of the Azure SQL Server.",
-						},
-						"subscription_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The subscription ID of the Azure SQL Server.",
-						},
-						"region_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The region ID of the Azure SQL Server.",
-						},
-						"server_type": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The server type of the Azure SQL Server.",
+func DataSourceAzureSqlServers() datasource.DataSource {
+	return tf.NewDataSource(
+		"azure_sql_servers",
+		schema.Schema{
+			Description: "Data source for retrieving Azure SQL Servers.",
+			Attributes: map[string]schema.Attribute{
+				"offset": schema.Int64Attribute{
+					Description: "The number of items to skip before starting to collect the result set.",
+					Optional:    true,
+				},
+				"limit": schema.Int64Attribute{
+					Description: "The numbers of items to return.",
+					Optional:    true,
+				},
+				"tenant_id": schema.StringAttribute{
+					Description: "The ID of the Azure tenant.",
+					Optional:    true,
+				},
+				"service_account_id": schema.StringAttribute{
+					Description: "The ID of the service account.",
+					Optional:    true,
+				},
+				"search_pattern": schema.StringAttribute{
+					Description: "The search pattern to filter SQL servers by name.",
+					Optional:    true,
+				},
+				"credentials_state": schema.StringAttribute{
+					Description: "The credentials state to filter SQL servers.",
+					Optional:    true,
+				},
+				"assignable_by_sql_account_id": schema.Int64Attribute{
+					Description: "Filter SQL servers that can be assigned by the specified SQL account ID.",
+					Optional:    true,
+				},
+				"region_ids": schema.ListAttribute{
+					Description: "List of region IDs to filter SQL servers.",
+					Optional:    true,
+					ElementType: types.StringType,
+				},
+				"sync": schema.BoolAttribute{
+					Description: "Specifies whether to synchronize the SQL servers before retrieving.",
+					Optional:    true,
+				},
+				"server_types": schema.StringAttribute{
+					Description: "The server types to filter SQL servers.",
+					Optional:    true,
+				},
+				"sql_server_details": schema.ListNestedAttribute{
+					Description: "Detailed list of Azure SQL Servers matching the specified criteria.",
+					Computed:    true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"veeam_id": schema.StringAttribute{
+								Description: "The ID of the Azure SQL Server.",
+								Computed:    true,
+							},
+							"name": schema.StringAttribute{
+								Description: "The name of the Azure SQL Server.",
+								Computed:    true,
+							},
+							"resource_id": schema.StringAttribute{
+								Description: "The resource ID of the Azure SQL Server.",
+								Computed:    true,
+							},
+							"subscription_id": schema.StringAttribute{
+								Description: "The subscription ID of the Azure SQL Server.",
+								Computed:    true,
+							},
+							"region_id": schema.StringAttribute{
+								Description: "The region ID of the Azure SQL Server.",
+								Computed:    true,
+							},
+							"server_type": schema.StringAttribute{
+								Description: "The server type of the Azure SQL Server.",
+								Computed:    true,
+							},
 						},
 					},
 				},
-			},
-			"sql_servers": {
-				Type:        schema.TypeMap,
-				Computed:    true,
-				Description: "Map of Azure SQL Servers names to their complete details as JSON strings..",
-				Elem:        &schema.Schema{Type: schema.TypeString},
+				"sql_servers": schema.MapAttribute{
+					Description: "Map of Azure SQL Servers names to their complete details as JSON strings..",
+					Computed:    true,
+					ElementType: types.StringType,
+				},
 			},
 		},
-	}
+		DataSourceAzureSqlServersRead,
+		map[string]interface{}{},
+	)
 }
 
-func DataSourceAzureSqlServersRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func DataSourceAzureSqlServersRead(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	request := AzureSQLServersDataSourceModel{}
-	
+
 	// Handle optional values - only set if provided
 	if v, ok := d.GetOk("offset"); ok {
 		val := v.(int)
@@ -206,22 +195,22 @@ func DataSourceAzureSqlServersRead(ctx context.Context, d *schema.ResourceData, 
 	// Make API request
 	resp, err := client.MakeAuthenticatedRequest("GET", apiUrl, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to retrieve Azure SQL Servers: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to retrieve Azure SQL Servers: %w", err))
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to read response body: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to read response body: %w", err))
 	}
 
 	if resp.StatusCode != 200 && resp.StatusCode != 202 {
-		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
+		return tf.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
 	}
 
 	// Parse response
 	var sqlServerResponse AzureSQLServersDataSourceResponse
 	if err := json.Unmarshal(body, &sqlServerResponse); err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to parse response JSON: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to parse response JSON: %w", err))
 	}
 
 	// Create both a list and a map of SQL servers
@@ -232,7 +221,7 @@ func DataSourceAzureSqlServersRead(ctx context.Context, d *schema.ResourceData, 
 		// Create detailed SQLServers object
 		sqlServerDetails := map[string]interface{}{
 			"veeam_id":        sqlServers.VeeamID,
-			"name":           sqlServers.Name,
+			"name":            sqlServers.Name,
 			"resource_id":     sqlServers.ResourceID,
 			"subscription_id": sqlServers.SubscriptionID,
 			"region_id":       sqlServers.RegionID,
@@ -245,16 +234,16 @@ func DataSourceAzureSqlServersRead(ctx context.Context, d *schema.ResourceData, 
 		// Marshal complete SQLServers object to JSON for the map
 		sqlServerJSON, err := json.Marshal(sqlServers)
 		if err != nil {
-			return diag.FromErr(fmt.Errorf("Failed to marshal SQL Server to JSON: %w", err))
+			return tf.FromErr(fmt.Errorf("Failed to marshal SQL Server to JSON: %w", err))
 		}
 		sqlServersMap[sqlServers.Name] = string(sqlServerJSON)
 	}
 
 	if err := d.Set("sql_server_details", sqlServersList); err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to set sql_server_details: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to set sql_server_details: %w", err))
 	}
 	if err := d.Set("sql_servers", sqlServersMap); err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to set sql_servers: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to set sql_servers: %w", err))
 	}
 
 	// Set ID for the data source
@@ -297,4 +286,4 @@ func buildSQLServerQueryParams(req AzureSQLServersDataSourceModel) string {
 		params.Set("serverTypes", *req.ServerTypes)
 	}
 	return params.Encode()
-} 
+}

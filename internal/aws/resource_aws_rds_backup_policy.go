@@ -9,18 +9,22 @@ import (
 	"net/url"
 	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
-
 type AWSRDSBackupPolicyRequest struct {
-	RegionIDs  []string `json:"regionIds"`
-	Name       string   `json:"name"`
-	IdentityId string   `json:"identityId"`
-	BackupType string   `json:"backupType"`
-	Description *string  `json:"description,omitempty"`
+	RegionIDs     []string `json:"regionIds"`
+	Name          string   `json:"name"`
+	IdentityId    string   `json:"identityId"`
+	BackupType    string   `json:"backupType"`
+	Description   *string  `json:"description,omitempty"`
 	SelectedItems *struct {
 		TagIDs []string `json:"tagIds,omitempty"`
 		RdsIDs []string `json:"rdsIds,omitempty"`
@@ -54,10 +58,10 @@ type AWSRDSBackupPolicyRequest struct {
 		WeeklyScheduleEnabled  bool `json:"weeklyScheduleEnabled"`
 		MonthlyScheduleEnabled bool `json:"monthlyScheduleEnabled"`
 		YearlyScheduleEnabled  bool `json:"yearlyScheduleEnabled"`
-		DailySchedule *struct {
-			Kind        string   `json:"kind"`
-			RunsPerHour int      `json:"runsPerHour"`
-			Days        []string `json:"days,omitempty"`
+		DailySchedule          *struct {
+			Kind            string   `json:"kind"`
+			RunsPerHour     int      `json:"runsPerHour"`
+			Days            []string `json:"days,omitempty"`
 			SnapshotOptions *struct {
 				Retention *struct {
 					Count int `json:"count"`
@@ -85,8 +89,8 @@ type AWSRDSBackupPolicyRequest struct {
 			} `json:"backupOptions,omitempty"`
 		} `json:"dailySchedule,omitempty"`
 		WeeklySchedule *struct {
-			TimeLocal string   `json:"timeLocal"`
-			Days      []string `json:"days,omitempty"`
+			TimeLocal       string   `json:"timeLocal"`
+			Days            []string `json:"days,omitempty"`
 			SnapshotOptions *struct {
 				Retention *struct {
 					Count int `json:"count"`
@@ -114,12 +118,12 @@ type AWSRDSBackupPolicyRequest struct {
 			} `json:"backupOptions,omitempty"`
 		} `json:"weeklySchedule,omitempty"`
 		MonthlySchedule *struct {
-			TimeLocal string `json:"timeLocal"`
-			DayNumberInMonth string `json:"dayNumberInMonth"`
-			DayOfWeek string `json:"dayOfWeek"`
-			DayOfMonth int `json:"dayOfMonth"`
-			SendBackupsToArchive bool `json:"sendBackupsToArchive"`
-			SnapshotOptions *struct {
+			TimeLocal            string `json:"timeLocal"`
+			DayNumberInMonth     string `json:"dayNumberInMonth"`
+			DayOfWeek            string `json:"dayOfWeek"`
+			DayOfMonth           int    `json:"dayOfMonth"`
+			SendBackupsToArchive bool   `json:"sendBackupsToArchive"`
+			SnapshotOptions      *struct {
 				Retention *struct {
 					Count int `json:"count"`
 				} `json:"retention"`
@@ -128,17 +132,17 @@ type AWSRDSBackupPolicyRequest struct {
 				} `json:"schedule"`
 			} `json:"snapshotOptions,omitempty"`
 			ReplicaOptions *struct {
-					Retention *struct {
+				Retention *struct {
 					Count int `json:"count"`
 				} `json:"retention"`
 				Schedule *struct {
 					Months []string `json:"months"`
-			} `json:"schedule,omitempty"`
+				} `json:"schedule,omitempty"`
 			} `json:"replicaOptions,omitempty"`
 			BackupOptions *struct {
 				Retention *struct {
-					Type string `json:"type"`
-					Count int `json:"count"`
+					Type  string `json:"type"`
+					Count int    `json:"count"`
 				} `json:"retention"`
 				Schedule *struct {
 					Months []string `json:"months"`
@@ -153,15 +157,15 @@ type AWSRDSBackupPolicyRequest struct {
 			DayOfMonth                 int    `json:"dayOfMonth"`
 			SendBackupsToArchive       bool   `json:"sendBackupsToArchive"`
 			HealthCheckScheduleEnabled bool   `json:"healthCheckScheduleEnabled"`
-			Retention *struct {
+			Retention                  *struct {
 				Type  string `json:"type"`
 				Count int    `json:"count"`
 			} `json:"retention"`
 			HealthCheckSchedule *struct {
-				Months []string `json:"months"`
-				DayNumberInMonth string `json:"dayNumberInMonth"`
-				DayOfWeek *[]string `json:"dayOfWeek,omitempty"`
-				DayOfMonth *int `json:"dayOfMonth,omitempty"`
+				Months           []string  `json:"months"`
+				DayNumberInMonth string    `json:"dayNumberInMonth"`
+				DayOfWeek        *[]string `json:"dayOfWeek,omitempty"`
+				DayOfMonth       *int      `json:"dayOfMonth,omitempty"`
 			} `json:"healthCheckSchedule,omitempty"`
 		} `json:"yearlySchedule,omitempty"`
 	} `json:"scheduleSettings,omitempty"`
@@ -169,23 +173,23 @@ type AWSRDSBackupPolicyRequest struct {
 		RetryTimes int `json:"retryTimes"`
 	} `json:"retrySettings,omitempty"`
 	PolicyNotificationSettings *struct {
-		Email string `json:"email"`
-		NotifyOnSuccess bool `json:"notifyOnSuccess"`
-		NotifyOnFailure bool `json:"notifyOnFailure"`
-		NotifyOnWarning bool `json:"notifyOnWarning"`
-		SuppressNotificationsUntilLastRetry bool `json:"suppressNotificationsUntilLastRetry"`
+		Email                               string `json:"email"`
+		NotifyOnSuccess                     bool   `json:"notifyOnSuccess"`
+		NotifyOnFailure                     bool   `json:"notifyOnFailure"`
+		NotifyOnWarning                     bool   `json:"notifyOnWarning"`
+		SuppressNotificationsUntilLastRetry bool   `json:"suppressNotificationsUntilLastRetry"`
 	} `json:"policyNotificationSettings,omitempty"`
 	RDSBackupSettings *struct {
-		TargetRepositoryID string `json:"targetRepositoryId"`
-		WorkerRoleID *string `json:"workerRoleId,omitempty"`
+		TargetRepositoryID string  `json:"targetRepositoryId"`
+		WorkerRoleID       *string `json:"workerRoleId,omitempty"`
 		DefaultCredentials *struct {
 			DatabaseCredentialsID string `json:"databaseCredentialsId"`
-			Username string `json:"username"`
-			Password string `json:"password"`
+			Username              string `json:"username"`
+			Password              string `json:"password"`
 		} `json:"defaultCredentials,omitempty"`
 		Credentials *struct {
-			DatabaseCredentialsID string `json:"databaseCredentialsId"`
-			RDSID string `json:"rdsId"`
+			DatabaseCredentialsID       string `json:"databaseCredentialsId"`
+			RDSID                       string `json:"rdsId"`
 			DatabaseCredentialsUsername string `json:"databaseCredentialsUserName"`
 		} `json:"credentials,omitempty"`
 	} `json:"rdsBackupSettings,omitempty"`
@@ -193,18 +197,18 @@ type AWSRDSBackupPolicyRequest struct {
 		TargetRepositoryID string `json:"targetRepositoryId"`
 	} `json:"rdsArchiveSettings,omitempty"`
 	OrganizationSettings *struct {
-		LimitedScopeID *string `json:"limitedScopeId,omitempty"`
+		LimitedScopeID *string  `json:"limitedScopeId,omitempty"`
 		ExcludeMembers []string `json:"excludeMembers,omitempty"`
-	} `json:"organizationSettings,omitempty"` 
+	} `json:"organizationSettings,omitempty"`
 }
 
 type AWSRDSBackupPolicyResponse struct {
-	ID         string   `json:"id"`
-	RegionIDs  []string `json:"regionIds"`
-	Name       string   `json:"name"`
-	IdentityId string   `json:"identityId"`
-	BackupType string   `json:"backupType"`
-	Description *string  `json:"description,omitempty"`
+	ID            string   `json:"id"`
+	RegionIDs     []string `json:"regionIds"`
+	Name          string   `json:"name"`
+	IdentityId    string   `json:"identityId"`
+	BackupType    string   `json:"backupType"`
+	Description   *string  `json:"description,omitempty"`
 	SelectedItems *struct {
 		TagIDs []string `json:"tagIds,omitempty"`
 		RdsIDs []string `json:"rdsIds,omitempty"`
@@ -234,13 +238,13 @@ type AWSRDSBackupPolicyResponse struct {
 		CopyTagsFromVolumeEnabled *bool `json:"copyTagsFromVolumeEnabled,omitempty"`
 	} `json:"replicaSettings,omitempty"`
 	ScheduleSettings *struct {
-		DailyScheduleEnabled bool `json:"dailyScheduleEnabled"`
-		WeeklyScheduleEnabled bool `json:"weeklyScheduleEnabled"`
+		DailyScheduleEnabled   bool `json:"dailyScheduleEnabled"`
+		WeeklyScheduleEnabled  bool `json:"weeklyScheduleEnabled"`
 		MonthlyScheduleEnabled bool `json:"monthlyScheduleEnabled"`
-		YearlyScheduleEnabled bool `json:"yearlyScheduleEnabled"`
-		DailySchedule *struct {
-			Kind string `json:"kind"`
-			RunsPerHour int `json:"runsPerHour"`
+		YearlyScheduleEnabled  bool `json:"yearlyScheduleEnabled"`
+		DailySchedule          *struct {
+			Kind            string `json:"kind"`
+			RunsPerHour     int    `json:"runsPerHour"`
 			SnapshotOptions *struct {
 				Retention *struct {
 					Count int `json:"count"`
@@ -249,9 +253,9 @@ type AWSRDSBackupPolicyResponse struct {
 					Hours []int `json:"hours"`
 				} `json:"schedule"`
 			} `json:"snapshotOptions,omitempty"`
-		    Days []string `json:"days,omitempty"`
+			Days           []string `json:"days,omitempty"`
 			ReplicaOptions *struct {
-					Retention *struct {
+				Retention *struct {
 					Count int `json:"count"`
 				} `json:"retention"`
 				Schedule *struct {
@@ -260,8 +264,8 @@ type AWSRDSBackupPolicyResponse struct {
 			} `json:"replicaOptions,omitempty"`
 			BackupOptions *struct {
 				Retention *struct {
-					Type string `json:"type"`
-					Count int `json:"count"`
+					Type  string `json:"type"`
+					Count int    `json:"count"`
 				} `json:"retention"`
 				Schedule *struct {
 					Hours []int `json:"hours"`
@@ -269,7 +273,7 @@ type AWSRDSBackupPolicyResponse struct {
 			} `json:"backupOptions,omitempty"`
 		} `json:"dailySchedule,omitempty"`
 		WeeklySchedule *struct {
-			TimeLocal string `json:"timeLocal"`
+			TimeLocal       string `json:"timeLocal"`
 			SnapshotOptions *struct {
 				Retention *struct {
 					Count int `json:"count"`
@@ -278,9 +282,9 @@ type AWSRDSBackupPolicyResponse struct {
 					Days []string `json:"days"`
 				} `json:"schedule"`
 			} `json:"snapshotOptions,omitempty"`
-		    Days []string `json:"days,omitempty"`
+			Days           []string `json:"days,omitempty"`
 			ReplicaOptions *struct {
-					Retention *struct {
+				Retention *struct {
 					Count int `json:"count"`
 				} `json:"retention"`
 				Schedule *struct {
@@ -289,8 +293,8 @@ type AWSRDSBackupPolicyResponse struct {
 			} `json:"replicaOptions,omitempty"`
 			BackupOptions *struct {
 				Retention *struct {
-					Type string `json:"type"`
-					Count int `json:"count"`
+					Type  string `json:"type"`
+					Count int    `json:"count"`
 				} `json:"retention"`
 				Schedule *struct {
 					Days []string `json:"days"`
@@ -298,12 +302,12 @@ type AWSRDSBackupPolicyResponse struct {
 			} `json:"backupOptions,omitempty"`
 		} `json:"weeklySchedule,omitempty"`
 		MonthlySchedule *struct {
-			TimeLocal string `json:"timeLocal"`
-			DayNumberInMonth string `json:"dayNumberInMonth"`
-			DayOfWeek string `json:"dayOfWeek"`
-			DayOfMonth int `json:"dayOfMonth"`
-			SendBackupsToArchive bool `json:"sendBackupsToArchive"`
-			SnapshotOptions *struct {
+			TimeLocal            string `json:"timeLocal"`
+			DayNumberInMonth     string `json:"dayNumberInMonth"`
+			DayOfWeek            string `json:"dayOfWeek"`
+			DayOfMonth           int    `json:"dayOfMonth"`
+			SendBackupsToArchive bool   `json:"sendBackupsToArchive"`
+			SnapshotOptions      *struct {
 				Retention *struct {
 					Count int `json:"count"`
 				} `json:"retention"`
@@ -312,17 +316,17 @@ type AWSRDSBackupPolicyResponse struct {
 				} `json:"schedule"`
 			} `json:"snapshotOptions,omitempty"`
 			ReplicaOptions *struct {
-					Retention *struct {
+				Retention *struct {
 					Count int `json:"count"`
 				} `json:"retention"`
 				Schedule *struct {
 					Months []string `json:"months"`
-			} `json:"schedule,omitempty"`
+				} `json:"schedule,omitempty"`
 			} `json:"replicaOptions,omitempty"`
 			BackupOptions *struct {
 				Retention *struct {
-					Type string `json:"type"`
-					Count int `json:"count"`
+					Type  string `json:"type"`
+					Count int    `json:"count"`
 				} `json:"retention"`
 				Schedule *struct {
 					Months []string `json:"months"`
@@ -330,22 +334,22 @@ type AWSRDSBackupPolicyResponse struct {
 			} `json:"backupOptions,omitempty"`
 		} `json:"monthlySchedule,omitempty"`
 		YearlySchedule *struct {
-			TimeLocal string `json:"timeLocal"`
+			TimeLocal        string `json:"timeLocal"`
 			DayNumberInMonth string `json:"dayNumberInMonth"`
-			Month string `json:"month"`
-			DayOfWeek string `json:"dayOfWeek"`
-			DayOfMonth int `json:"dayOfMonth"`
-			Retention *struct {
-				Type string `json:"type"`
-				Count int `json:"count"`
+			Month            string `json:"month"`
+			DayOfWeek        string `json:"dayOfWeek"`
+			DayOfMonth       int    `json:"dayOfMonth"`
+			Retention        *struct {
+				Type  string `json:"type"`
+				Count int    `json:"count"`
 			} `json:"retention"`
-			SendBackupsToArchive bool `json:"sendBackupsToArchive"`
+			SendBackupsToArchive       bool `json:"sendBackupsToArchive"`
 			HealthCheckScheduleEnabled bool `json:"healthCheckScheduleEnabled"`
-			HealthCheckSchedule *struct {
-				Months []string `json:"months"`
-				DayNumberInMonth string `json:"dayNumberInMonth"`
-				DayOfWeek *[]string `json:"dayOfWeek,omitempty"`
-				DayOfMonth *int `json:"dayOfMonth,omitempty"`
+			HealthCheckSchedule        *struct {
+				Months           []string  `json:"months"`
+				DayNumberInMonth string    `json:"dayNumberInMonth"`
+				DayOfWeek        *[]string `json:"dayOfWeek,omitempty"`
+				DayOfMonth       *int      `json:"dayOfMonth,omitempty"`
 			} `json:"healthCheckSchedule,omitempty"`
 		} `json:"yearlySchedule,omitempty"`
 	} `json:"scheduleSettings,omitempty"`
@@ -353,23 +357,23 @@ type AWSRDSBackupPolicyResponse struct {
 		RetryTimes int `json:"retryTimes"`
 	} `json:"retrySettings,omitempty"`
 	PolicyNotificationSettings *struct {
-		Email string `json:"email"`
-		NotifyOnSuccess bool `json:"notifyOnSuccess"`
-		NotifyOnFailure bool `json:"notifyOnFailure"`
-		NotifyOnWarning bool `json:"notifyOnWarning"`
-		SuppressNotificationsUntilLastRetry bool `json:"suppressNotificationsUntilLastRetry"`
+		Email                               string `json:"email"`
+		NotifyOnSuccess                     bool   `json:"notifyOnSuccess"`
+		NotifyOnFailure                     bool   `json:"notifyOnFailure"`
+		NotifyOnWarning                     bool   `json:"notifyOnWarning"`
+		SuppressNotificationsUntilLastRetry bool   `json:"suppressNotificationsUntilLastRetry"`
 	} `json:"policyNotificationSettings,omitempty"`
 	RDSBackupSettings *struct {
-		TargetRepositoryID string `json:"targetRepositoryId"`
-		WorkerRoleID *string `json:"workerRoleId,omitempty"`
+		TargetRepositoryID string  `json:"targetRepositoryId"`
+		WorkerRoleID       *string `json:"workerRoleId,omitempty"`
 		DefaultCredentials *struct {
 			DatabaseCredentialsID string `json:"databaseCredentialsId"`
-			Username string `json:"username"`
-			Password string `json:"password"`
+			Username              string `json:"username"`
+			Password              string `json:"password"`
 		} `json:"defaultCredentials,omitempty"`
 		Credentials *struct {
-			DatabaseCredentialsID string `json:"databaseCredentialsId"`
-			RDSID string `json:"rdsId"`
+			DatabaseCredentialsID       string `json:"databaseCredentialsId"`
+			RDSID                       string `json:"rdsId"`
 			DatabaseCredentialsUsername string `json:"databaseCredentialsUserName"`
 		} `json:"credentials,omitempty"`
 	} `json:"rdsBackupSettings,omitempty"`
@@ -377,16 +381,16 @@ type AWSRDSBackupPolicyResponse struct {
 		TargetRepositoryID string `json:"targetRepositoryId"`
 	} `json:"rdsArchiveSettings,omitempty"`
 	OrganizationSettings *struct {
-		LimitedScopeID *string `json:"limitedScopeId,omitempty"`
+		LimitedScopeID *string  `json:"limitedScopeId,omitempty"`
 		ExcludeMembers []string `json:"excludeMembers,omitempty"`
 	} `json:"organizationSettings,omitempty"`
-	Priority int `json:"priority"`
+	Priority  int  `json:"priority"`
 	IsEnabled bool `json:"isEnabled"`
-	Identity struct {
-		ID string `json:"id"`
-		Type string `json:"type"`
-		AWSID string `json:"awsId"`
-		Name string `json:"name"`
+	Identity  struct {
+		ID         string `json:"id"`
+		Type       string `json:"type"`
+		AWSID      string `json:"awsId"`
+		Name       string `json:"name"`
 		RegionType string `json:"regionType"`
 	} `json:"identity"`
 	CreatedBy               string `json:"createdBy"`
@@ -394,522 +398,105 @@ type AWSRDSBackupPolicyResponse struct {
 	LastPolicySessionStatus string `json:"lastPolicySessionStatus"`
 }
 
-func ResourceAwsRDSBackupPolicy() *schema.Resource {
-	return &schema.Resource{
-		CreateContext: resourceAwsRDSBackupPolicyCreate,
-		ReadContext:   resourceAwsRDSBackupPolicyRead,
-		UpdateContext: resourceAwsRDSBackupPolicyUpdate,
-		DeleteContext: resourceAwsRDSBackupPolicyDelete,
-		Schema: map[string]*schema.Schema{
-			// ── Required ────────────────────────────────────────────
-			"name": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "Name of the RDS backup policy.",
-			},
-			"region_ids": {
-				Type:        schema.TypeList,
-				Required:    true,
-				Description: "List of AWS region IDs to which the policy applies.",
-				Elem:        &schema.Schema{Type: schema.TypeString},
-			},
-			"identity_id": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "ID of the AWS account identity (cloud credential) used by this policy.",
-			},
-			"backup_type": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "Type of backup operations performed by the policy.",
-				ValidateFunc: validation.StringInSlice([]string{
-					"Snapshot",
-					"Backup",
-					"SnapshotAndBackup",
-					"BackupWithArchive",
-					"SnapshotAndBackupWithArchive",
-				}, false),
-			},
-			// ── Optional ────────────────────────────────────────────
-			"description": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Description of the backup policy.",
-			},
-			"selected_items": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "RDS instances or tags to include in the policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"rds_ids": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "IDs of RDS instances to include.",
-							Elem:        &schema.Schema{Type: schema.TypeString},
-						},
-						"tag_ids": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Tag IDs whose matching RDS instances are included.",
-							Elem:        &schema.Schema{Type: schema.TypeString},
-						},
+func ResourceAwsRDSBackupPolicy() resource.Resource {
+	return tf.NewResource(
+		"aws_rds_backup_policy",
+		schema.Schema{
+			Attributes: map[string]schema.Attribute{
+				"name": schema.StringAttribute{
+					Description: "Name of the RDS backup policy.",
+					Required:    true,
+				},
+				"region_ids": schema.ListAttribute{
+					Description: "List of AWS region IDs to which the policy applies.",
+					Required:    true,
+					ElementType: types.StringType,
+				},
+				"identity_id": schema.StringAttribute{
+					Description: "ID of the AWS account identity (cloud credential) used by this policy.",
+					Required:    true,
+				},
+				"backup_type": schema.StringAttribute{
+					Description: "Type of backup operations performed by the policy.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.OneOf([]string{
+							"Snapshot",
+							"Backup",
+							"SnapshotAndBackup",
+							"BackupWithArchive",
+							"SnapshotAndBackupWithArchive",
+						}...),
 					},
 				},
-			},
-			"exclude_items": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "RDS instances or tags to exclude from the policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"rds_ids": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "IDs of RDS instances to exclude.",
-							Elem:        &schema.Schema{Type: schema.TypeString},
-						},
-						"tag_ids": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Tag IDs whose matching RDS instances are excluded.",
-							Elem:        &schema.Schema{Type: schema.TypeString},
-						},
-					},
+				"description": schema.StringAttribute{
+					Description: "Description of the backup policy.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"last_policy_session_status": schema.StringAttribute{
+					Description: "Status of the last policy session.",
+					Computed:    true,
 				},
 			},
-			"snapshot_settings": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Settings for snapshot operations.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"additional_tags": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Additional tags to apply to snapshots.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"key":   {Type: schema.TypeString, Optional: true},
-									"value": {Type: schema.TypeString, Optional: true},
-								},
+			Blocks: map[string]schema.Block{
+				"selected_items": schema.ListNestedBlock{
+					Description: "RDS instances or tags to include in the policy.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"rds_ids": schema.ListAttribute{
+								Description: "IDs of RDS instances to include.",
+								Optional:    true,
+								ElementType: types.StringType,
+							},
+							"tag_ids": schema.ListAttribute{
+								Description: "Tag IDs whose matching RDS instances are included.",
+								Optional:    true,
+								ElementType: types.StringType,
 							},
 						},
 					},
 				},
-			},
-			"replica_settings": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Settings for snapshot replication to other regions.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"mapping": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Source-to-target region replication mappings.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"source_region_id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "System ID of the source region.",
-									},
-									"target_region_id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "System ID of the target region.",
-									},
-									"target_iam_role_id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "IAM role ID used in the target region.",
-									},
-									"encryption_key": {
-										Type:        schema.TypeString,
-										Optional:    true,
-										Description: "KMS key ID for encrypting replicated snapshots.",
-									},
-									"encrypt_only_encrypted_volumes": {
-										Type:        schema.TypeBool,
-										Optional:    true,
-										Description: "Only encrypt volumes that are already encrypted.",
-									},
-								},
-							},
-						},
-						"additional_tags": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Additional tags to apply to replicated snapshots.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"key":   {Type: schema.TypeString, Optional: true},
-									"value": {Type: schema.TypeString, Optional: true},
-								},
-							},
-						},
-						"copy_tags_from_volume_enabled": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Description: "Copy tags from source volumes to replicated snapshots.",
-						},
+				"exclude_items": schema.ListNestedBlock{
+					Description: "RDS instances or tags to exclude from the policy.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
 					},
-				},
-			},
-			"rds_backup_settings": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Settings for RDS backup-to-repository operations.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"target_repository_id": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "ID of the target backup repository.",
-						},
-						"worker_role_id": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "IAM role ID for worker instances.",
-						},
-						"default_credentials": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "Default database credentials used when per-instance credentials are not set.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"database_credentials_id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "ID of the stored database credentials.",
-									},
-									"username": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Database username.",
-									},
-									"password": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Sensitive:   true,
-										Description: "Database password.",
-									},
-								},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"rds_ids": schema.ListAttribute{
+								Description: "IDs of RDS instances to exclude.",
+								Optional:    true,
+								ElementType: types.StringType,
 							},
-						},
-						"credentials": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "Per-instance database credentials.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"database_credentials_id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "ID of the stored database credentials.",
-									},
-									"rds_id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "ID of the RDS instance these credentials apply to.",
-									},
-									"database_credentials_username": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Database username for this specific RDS instance.",
-									},
-								},
+							"tag_ids": schema.ListAttribute{
+								Description: "Tag IDs whose matching RDS instances are excluded.",
+								Optional:    true,
+								ElementType: types.StringType,
 							},
 						},
 					},
 				},
-			},
-			"rds_archive_settings": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Settings for archiving RDS backups.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"target_repository_id": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "ID of the target archive repository.",
-						},
+				"snapshot_settings": schema.ListNestedBlock{
+					Description: "Settings for snapshot operations.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
 					},
-				},
-			},
-			"schedule_settings": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Schedule settings for the policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"daily_schedule_enabled": {
-							Type:     schema.TypeBool,
-							Required: true,
-						},
-						"weekly_schedule_enabled": {
-							Type:     schema.TypeBool,
-							Required: true,
-						},
-						"monthly_schedule_enabled": {
-							Type:     schema.TypeBool,
-							Required: true,
-						},
-						"yearly_schedule_enabled": {
-							Type:     schema.TypeBool,
-							Required: true,
-						},
-						"daily_schedule": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "Daily schedule configuration.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"kind": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Schedule kind (e.g. RunsPerHour, Continues).",
-									},
-									"runs_per_hour": {
-										Type:        schema.TypeInt,
-										Required:    true,
-										Description: "Number of times to run per hour.",
-									},
-									"days": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Days of the week to run the daily schedule.",
-										Elem:        &schema.Schema{Type: schema.TypeString},
-									},
-									"snapshot_options": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"retention_count": {
-													Type:        schema.TypeInt,
-													Required:    true,
-													Description: "Number of snapshots to retain.",
-												},
-												"schedule_hours": {
-													Type:        schema.TypeList,
-													Required:    true,
-													Description: "Hours of the day to run (0-23).",
-													Elem:        &schema.Schema{Type: schema.TypeInt},
-												},
-											},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{},
+						Blocks: map[string]schema.Block{
+							"additional_tags": schema.ListNestedBlock{
+								Description: "Additional tags to apply to snapshots.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"key": schema.StringAttribute{
+											Optional: true,
 										},
-									},
-									"replica_options": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"retention_count": {Type: schema.TypeInt, Required: true},
-												"schedule_hours": {
-													Type:     schema.TypeList,
-													Required: true,
-													Elem:     &schema.Schema{Type: schema.TypeInt},
-												},
-											},
-										},
-									},
-									"backup_options": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"retention_type":  {Type: schema.TypeString, Required: true},
-												"retention_count": {Type: schema.TypeInt, Required: true},
-												"schedule_hours": {
-													Type:     schema.TypeList,
-													Required: true,
-													Elem:     &schema.Schema{Type: schema.TypeInt},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-						"weekly_schedule": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "Weekly schedule configuration.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"time_local": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Time of day to run (HH:mm).",
-									},
-									"days": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Days of the week to run.",
-										Elem:        &schema.Schema{Type: schema.TypeString},
-									},
-									"snapshot_options": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"retention_count": {Type: schema.TypeInt, Required: true},
-												"schedule_days": {
-													Type:     schema.TypeList,
-													Required: true,
-													Elem:     &schema.Schema{Type: schema.TypeString},
-												},
-											},
-										},
-									},
-									"replica_options": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"retention_count": {Type: schema.TypeInt, Required: true},
-												"schedule_days": {
-													Type:     schema.TypeList,
-													Required: true,
-													Elem:     &schema.Schema{Type: schema.TypeString},
-												},
-											},
-										},
-									},
-									"backup_options": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"retention_type":  {Type: schema.TypeString, Required: true},
-												"retention_count": {Type: schema.TypeInt, Required: true},
-												"schedule_days": {
-													Type:     schema.TypeList,
-													Required: true,
-													Elem:     &schema.Schema{Type: schema.TypeString},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-						"monthly_schedule": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "Monthly schedule configuration.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"time_local":           {Type: schema.TypeString, Required: true},
-									"day_number_in_month":  {Type: schema.TypeString, Required: true, Description: "e.g. First, Second, Third, Fourth, Last."},
-									"day_of_week":          {Type: schema.TypeString, Required: true},
-									"day_of_month":         {Type: schema.TypeInt, Optional: true},
-									"send_backups_to_archive": {Type: schema.TypeBool, Optional: true},
-									"snapshot_options": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"retention_count": {Type: schema.TypeInt, Required: true},
-												"schedule_months": {
-													Type:     schema.TypeList,
-													Required: true,
-													Elem:     &schema.Schema{Type: schema.TypeString},
-												},
-											},
-										},
-									},
-									"replica_options": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"retention_count": {Type: schema.TypeInt, Required: true},
-												"schedule_months": {
-													Type:     schema.TypeList,
-													Required: true,
-													Elem:     &schema.Schema{Type: schema.TypeString},
-												},
-											},
-										},
-									},
-									"backup_options": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"retention_type":  {Type: schema.TypeString, Required: true},
-												"retention_count": {Type: schema.TypeInt, Required: true},
-												"schedule_months": {
-													Type:     schema.TypeList,
-													Required: true,
-													Elem:     &schema.Schema{Type: schema.TypeString},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-						"yearly_schedule": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "Yearly schedule configuration.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"time_local":              {Type: schema.TypeString, Required: true},
-									"day_number_in_month":     {Type: schema.TypeString, Required: true},
-									"month":                   {Type: schema.TypeString, Required: true},
-									"day_of_week":             {Type: schema.TypeString, Required: true},
-									"day_of_month":            {Type: schema.TypeInt, Optional: true},
-									"retention_type":          {Type: schema.TypeString, Required: true},
-									"retention_count":         {Type: schema.TypeInt, Required: true},
-									"send_backups_to_archive": {Type: schema.TypeBool, Optional: true},
-									"health_check_schedule_enabled": {Type: schema.TypeBool, Optional: true},
-									"health_check_schedule": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"months": {
-													Type:     schema.TypeList,
-													Optional: true,
-													Elem:     &schema.Schema{Type: schema.TypeString},
-												},
-												"day_number_in_month": {Type: schema.TypeString, Optional: true},
-												"day_of_month":        {Type: schema.TypeInt, Optional: true},
-												"day_of_week": {
-													Type:     schema.TypeList,
-													Optional: true,
-													Elem:     &schema.Schema{Type: schema.TypeString},
-												},
-											},
+										"value": schema.StringAttribute{
+											Optional: true,
 										},
 									},
 								},
@@ -917,119 +504,575 @@ func ResourceAwsRDSBackupPolicy() *schema.Resource {
 						},
 					},
 				},
-			},
-			"retry_settings": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Retry settings for failed policy sessions.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"retry_times": {
-							Type:        schema.TypeInt,
-							Required:    true,
-							Description: "Number of times to retry a failed job.",
+				"replica_settings": schema.ListNestedBlock{
+					Description: "Settings for snapshot replication to other regions.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"copy_tags_from_volume_enabled": schema.BoolAttribute{
+								Description: "Copy tags from source volumes to replicated snapshots.",
+								Optional:    true,
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"mapping": schema.ListNestedBlock{
+								Description: "Source-to-target region replication mappings.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"source_region_id": schema.StringAttribute{
+											Description: "System ID of the source region.",
+											Required:    true,
+										},
+										"target_region_id": schema.StringAttribute{
+											Description: "System ID of the target region.",
+											Required:    true,
+										},
+										"target_iam_role_id": schema.StringAttribute{
+											Description: "IAM role ID used in the target region.",
+											Required:    true,
+										},
+										"encryption_key": schema.StringAttribute{
+											Description: "KMS key ID for encrypting replicated snapshots.",
+											Optional:    true,
+										},
+										"encrypt_only_encrypted_volumes": schema.BoolAttribute{
+											Description: "Only encrypt volumes that are already encrypted.",
+											Optional:    true,
+										},
+									},
+								},
+							},
+							"additional_tags": schema.ListNestedBlock{
+								Description: "Additional tags to apply to replicated snapshots.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"key": schema.StringAttribute{
+											Optional: true,
+										},
+										"value": schema.StringAttribute{
+											Optional: true,
+										},
+									},
+								},
+							},
 						},
 					},
 				},
-			},
-			"policy_notification_settings": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Email notification settings for policy session results.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"email":             {Type: schema.TypeString, Required: true},
-						"notify_on_success": {Type: schema.TypeBool, Required: true},
-						"notify_on_warning": {Type: schema.TypeBool, Required: true},
-						"notify_on_failure": {Type: schema.TypeBool, Required: true},
-						"suppress_notifications_until_last_retry": {
-							Type:     schema.TypeBool,
-							Required: true,
+				"rds_backup_settings": schema.ListNestedBlock{
+					Description: "Settings for RDS backup-to-repository operations.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"target_repository_id": schema.StringAttribute{
+								Description: "ID of the target backup repository.",
+								Required:    true,
+							},
+							"worker_role_id": schema.StringAttribute{
+								Description: "IAM role ID for worker instances.",
+								Optional:    true,
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"default_credentials": schema.ListNestedBlock{
+								Description: "Default database credentials used when per-instance credentials are not set.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"database_credentials_id": schema.StringAttribute{
+											Description: "ID of the stored database credentials.",
+											Required:    true,
+										},
+										"username": schema.StringAttribute{
+											Description: "Database username.",
+											Required:    true,
+										},
+										"password": schema.StringAttribute{
+											Description: "Database password.",
+											Sensitive:   true,
+											Required:    true,
+										},
+									},
+								},
+							},
+							"credentials": schema.ListNestedBlock{
+								Description: "Per-instance database credentials.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"database_credentials_id": schema.StringAttribute{
+											Description: "ID of the stored database credentials.",
+											Required:    true,
+										},
+										"rds_id": schema.StringAttribute{
+											Description: "ID of the RDS instance these credentials apply to.",
+											Required:    true,
+										},
+										"database_credentials_username": schema.StringAttribute{
+											Description: "Database username for this specific RDS instance.",
+											Required:    true,
+										},
+									},
+								},
+							},
 						},
 					},
 				},
-			},
-			"organization_settings": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Organization scope settings for the policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"limited_scope_id": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "ID of the organizational unit to limit policy scope.",
-						},
-						"exclude_members": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Member account IDs excluded from the policy scope.",
-							Elem:        &schema.Schema{Type: schema.TypeString},
+				"rds_archive_settings": schema.ListNestedBlock{
+					Description: "Settings for archiving RDS backups.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"target_repository_id": schema.StringAttribute{
+								Description: "ID of the target archive repository.",
+								Required:    true,
+							},
 						},
 					},
 				},
-			},
-			// ── Computed ────────────────────────────────────────────
-			"last_policy_session_status": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Status of the last policy session.",
+				"schedule_settings": schema.ListNestedBlock{
+					Description: "Schedule settings for the policy.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"daily_schedule_enabled": schema.BoolAttribute{
+								Required: true,
+							},
+							"weekly_schedule_enabled": schema.BoolAttribute{
+								Required: true,
+							},
+							"monthly_schedule_enabled": schema.BoolAttribute{
+								Required: true,
+							},
+							"yearly_schedule_enabled": schema.BoolAttribute{
+								Required: true,
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"daily_schedule": schema.ListNestedBlock{
+								Description: "Daily schedule configuration.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"kind": schema.StringAttribute{
+											Description: "Schedule kind (e.g. RunsPerHour, Continues).",
+											Required:    true,
+										},
+										"runs_per_hour": schema.Int64Attribute{
+											Description: "Number of times to run per hour.",
+											Required:    true,
+										},
+										"days": schema.ListAttribute{
+											Description: "Days of the week to run the daily schedule.",
+											Optional:    true,
+											ElementType: types.StringType,
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"snapshot_options": schema.ListNestedBlock{
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"retention_count": schema.Int64Attribute{
+														Description: "Number of snapshots to retain.",
+														Required:    true,
+													},
+													"schedule_hours": schema.ListAttribute{
+														Description: "Hours of the day to run (0-23).",
+														Required:    true,
+														ElementType: types.Int64Type,
+													},
+												},
+											},
+										},
+										"replica_options": schema.ListNestedBlock{
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"retention_count": schema.Int64Attribute{
+														Required: true,
+													},
+													"schedule_hours": schema.ListAttribute{
+														Required:    true,
+														ElementType: types.Int64Type,
+													},
+												},
+											},
+										},
+										"backup_options": schema.ListNestedBlock{
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"retention_type": schema.StringAttribute{
+														Required: true,
+													},
+													"retention_count": schema.Int64Attribute{
+														Required: true,
+													},
+													"schedule_hours": schema.ListAttribute{
+														Required:    true,
+														ElementType: types.Int64Type,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+							"weekly_schedule": schema.ListNestedBlock{
+								Description: "Weekly schedule configuration.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"time_local": schema.StringAttribute{
+											Description: "Time of day to run (HH:mm).",
+											Required:    true,
+										},
+										"days": schema.ListAttribute{
+											Description: "Days of the week to run.",
+											Optional:    true,
+											ElementType: types.StringType,
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"snapshot_options": schema.ListNestedBlock{
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"retention_count": schema.Int64Attribute{
+														Required: true,
+													},
+													"schedule_days": schema.ListAttribute{
+														Required:    true,
+														ElementType: types.StringType,
+													},
+												},
+											},
+										},
+										"replica_options": schema.ListNestedBlock{
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"retention_count": schema.Int64Attribute{
+														Required: true,
+													},
+													"schedule_days": schema.ListAttribute{
+														Required:    true,
+														ElementType: types.StringType,
+													},
+												},
+											},
+										},
+										"backup_options": schema.ListNestedBlock{
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"retention_type": schema.StringAttribute{
+														Required: true,
+													},
+													"retention_count": schema.Int64Attribute{
+														Required: true,
+													},
+													"schedule_days": schema.ListAttribute{
+														Required:    true,
+														ElementType: types.StringType,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+							"monthly_schedule": schema.ListNestedBlock{
+								Description: "Monthly schedule configuration.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"time_local": schema.StringAttribute{
+											Required: true,
+										},
+										"day_number_in_month": schema.StringAttribute{
+											Description: "e.g. First, Second, Third, Fourth, Last.",
+											Required:    true,
+										},
+										"day_of_week": schema.StringAttribute{
+											Required: true,
+										},
+										"day_of_month": schema.Int64Attribute{
+											Optional: true,
+										},
+										"send_backups_to_archive": schema.BoolAttribute{
+											Optional: true,
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"snapshot_options": schema.ListNestedBlock{
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"retention_count": schema.Int64Attribute{
+														Required: true,
+													},
+													"schedule_months": schema.ListAttribute{
+														Required:    true,
+														ElementType: types.StringType,
+													},
+												},
+											},
+										},
+										"replica_options": schema.ListNestedBlock{
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"retention_count": schema.Int64Attribute{
+														Required: true,
+													},
+													"schedule_months": schema.ListAttribute{
+														Required:    true,
+														ElementType: types.StringType,
+													},
+												},
+											},
+										},
+										"backup_options": schema.ListNestedBlock{
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"retention_type": schema.StringAttribute{
+														Required: true,
+													},
+													"retention_count": schema.Int64Attribute{
+														Required: true,
+													},
+													"schedule_months": schema.ListAttribute{
+														Required:    true,
+														ElementType: types.StringType,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+							"yearly_schedule": schema.ListNestedBlock{
+								Description: "Yearly schedule configuration.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"time_local": schema.StringAttribute{
+											Required: true,
+										},
+										"day_number_in_month": schema.StringAttribute{
+											Required: true,
+										},
+										"month": schema.StringAttribute{
+											Required: true,
+										},
+										"day_of_week": schema.StringAttribute{
+											Required: true,
+										},
+										"day_of_month": schema.Int64Attribute{
+											Optional: true,
+										},
+										"retention_type": schema.StringAttribute{
+											Required: true,
+										},
+										"retention_count": schema.Int64Attribute{
+											Required: true,
+										},
+										"send_backups_to_archive": schema.BoolAttribute{
+											Optional: true,
+										},
+										"health_check_schedule_enabled": schema.BoolAttribute{
+											Optional: true,
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"health_check_schedule": schema.ListNestedBlock{
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"months": schema.ListAttribute{
+														Optional:    true,
+														ElementType: types.StringType,
+													},
+													"day_number_in_month": schema.StringAttribute{
+														Optional: true,
+													},
+													"day_of_month": schema.Int64Attribute{
+														Optional: true,
+													},
+													"day_of_week": schema.ListAttribute{
+														Optional:    true,
+														ElementType: types.StringType,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"retry_settings": schema.ListNestedBlock{
+					Description: "Retry settings for failed policy sessions.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"retry_times": schema.Int64Attribute{
+								Description: "Number of times to retry a failed job.",
+								Required:    true,
+							},
+						},
+					},
+				},
+				"policy_notification_settings": schema.ListNestedBlock{
+					Description: "Email notification settings for policy session results.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"email": schema.StringAttribute{
+								Required: true,
+							},
+							"notify_on_success": schema.BoolAttribute{
+								Required: true,
+							},
+							"notify_on_warning": schema.BoolAttribute{
+								Required: true,
+							},
+							"notify_on_failure": schema.BoolAttribute{
+								Required: true,
+							},
+							"suppress_notifications_until_last_retry": schema.BoolAttribute{
+								Required: true,
+							},
+						},
+					},
+				},
+				"organization_settings": schema.ListNestedBlock{
+					Description: "Organization scope settings for the policy.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"limited_scope_id": schema.StringAttribute{
+								Description: "ID of the organizational unit to limit policy scope.",
+								Optional:    true,
+							},
+							"exclude_members": schema.ListAttribute{
+								Description: "Member account IDs excluded from the policy scope.",
+								Optional:    true,
+								ElementType: types.StringType,
+							},
+						},
+					},
+				},
 			},
 		},
-	}
+		tf.ResourceOperations{
+			Create: resourceAwsRDSBackupPolicyCreate,
+			Read:   resourceAwsRDSBackupPolicyRead,
+			Update: resourceAwsRDSBackupPolicyUpdate,
+			Delete: resourceAwsRDSBackupPolicyDelete,
+		},
+		tf.Timeouts{},
+		false,
+	)
 }
 
-func resourceAwsRDSBackupPolicyCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceAwsRDSBackupPolicyCreate(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAWSClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	req := buildRDSBackupPolicyRequest(d)
 
 	bodyBytes, err := json.Marshal(req)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to marshal RDS backup policy request: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to marshal RDS backup policy request: %w", err))
 	}
 
 	apiURL := client.BuildAPIURL("/rds/policies")
 	resp, err := client.MakeAuthenticatedRequestAWS("POST", apiURL, bytes.NewBuffer(bodyBytes))
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to create RDS backup policy: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to create RDS backup policy: %w", err))
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read response body: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read response body: %w", err))
 	}
 
 	if resp.StatusCode != 200 && resp.StatusCode != 201 {
-		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody)))
+		return tf.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody)))
 	}
 
 	var policyResp AWSRDSBackupPolicyResponse
 	if err := json.Unmarshal(respBody, &policyResp); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to parse RDS backup policy response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to parse RDS backup policy response: %w", err))
 	}
 
 	d.SetId(policyResp.ID)
 	return resourceAwsRDSBackupPolicyRead(ctx, d, meta)
 }
 
-func resourceAwsRDSBackupPolicyRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceAwsRDSBackupPolicyRead(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAWSClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	apiURL := client.BuildAPIURL(fmt.Sprintf("/rds/policies/%s", url.PathEscape(d.Id())))
 	resp, err := client.MakeAuthenticatedRequestAWS("GET", apiURL, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read RDS backup policy: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read RDS backup policy: %w", err))
 	}
 	defer resp.Body.Close()
 
@@ -1040,97 +1083,97 @@ func resourceAwsRDSBackupPolicyRead(ctx context.Context, d *schema.ResourceData,
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read response body: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read response body: %w", err))
 	}
 
 	if resp.StatusCode != 200 {
-		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody)))
+		return tf.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody)))
 	}
 
 	var policyResp AWSRDSBackupPolicyResponse
 	if err := json.Unmarshal(respBody, &policyResp); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to parse RDS backup policy response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to parse RDS backup policy response: %w", err))
 	}
 
 	if err := d.Set("name", policyResp.Name); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set name: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set name: %w", err))
 	}
 	if err := d.Set("region_ids", policyResp.RegionIDs); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set region_ids: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set region_ids: %w", err))
 	}
 	if err := d.Set("identity_id", policyResp.IdentityId); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set identity_id: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set identity_id: %w", err))
 	}
 	if err := d.Set("backup_type", policyResp.BackupType); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set backup_type: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set backup_type: %w", err))
 	}
 	if policyResp.Description != nil {
 		if err := d.Set("description", *policyResp.Description); err != nil {
-			return diag.FromErr(fmt.Errorf("failed to set description: %w", err))
+			return tf.FromErr(fmt.Errorf("failed to set description: %w", err))
 		}
 	}
 	if err := d.Set("last_policy_session_status", policyResp.LastPolicySessionStatus); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set last_policy_session_status: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set last_policy_session_status: %w", err))
 	}
 
 	return nil
 }
 
-func resourceAwsRDSBackupPolicyUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceAwsRDSBackupPolicyUpdate(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAWSClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	req := buildRDSBackupPolicyRequest(d)
 
 	bodyBytes, err := json.Marshal(req)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to marshal RDS backup policy request: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to marshal RDS backup policy request: %w", err))
 	}
 
 	apiURL := client.BuildAPIURL(fmt.Sprintf("/rds/policies/%s", url.PathEscape(d.Id())))
 	resp, err := client.MakeAuthenticatedRequestAWS("PUT", apiURL, bytes.NewBuffer(bodyBytes))
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to update RDS backup policy: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to update RDS backup policy: %w", err))
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read response body: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read response body: %w", err))
 	}
 
 	if resp.StatusCode != 200 && resp.StatusCode != 204 {
-		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody)))
+		return tf.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody)))
 	}
 
 	return resourceAwsRDSBackupPolicyRead(ctx, d, meta)
 }
 
-func resourceAwsRDSBackupPolicyDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceAwsRDSBackupPolicyDelete(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAWSClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	apiURL := client.BuildAPIURL(fmt.Sprintf("/rds/policies/%s", url.PathEscape(d.Id())))
 	resp, err := client.MakeAuthenticatedRequestAWS("DELETE", apiURL, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to delete RDS backup policy: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to delete RDS backup policy: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 && resp.StatusCode != 204 {
 		respBody, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody)))
+		return tf.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody)))
 	}
 
 	d.SetId("")
 	return nil
 }
 
-func buildRDSBackupPolicyRequest(d *schema.ResourceData) AWSRDSBackupPolicyRequest {
+func buildRDSBackupPolicyRequest(d *tf.Data) AWSRDSBackupPolicyRequest {
 	req := AWSRDSBackupPolicyRequest{
 		Name:       d.Get("name").(string),
 		IdentityId: d.Get("identity_id").(string),
@@ -1261,12 +1304,12 @@ func buildRDSBackupPolicyRequest(d *schema.ResourceData) AWSRDSBackupPolicyReque
 		if len(rbs) > 0 && rbs[0] != nil {
 			m := rbs[0].(map[string]interface{})
 			settings := &struct {
-				TargetRepositoryID string `json:"targetRepositoryId"`
-				WorkerRoleID *string `json:"workerRoleId,omitempty"`
+				TargetRepositoryID string  `json:"targetRepositoryId"`
+				WorkerRoleID       *string `json:"workerRoleId,omitempty"`
 				DefaultCredentials *struct {
 					DatabaseCredentialsID string `json:"databaseCredentialsId"`
-					Username string `json:"username"`
-					Password string `json:"password"`
+					Username              string `json:"username"`
+					Password              string `json:"password"`
 				} `json:"defaultCredentials,omitempty"`
 				Credentials *struct {
 					DatabaseCredentialsID       string `json:"databaseCredentialsId"`
@@ -1283,8 +1326,8 @@ func buildRDSBackupPolicyRequest(d *schema.ResourceData) AWSRDSBackupPolicyReque
 				dcm := dc[0].(map[string]interface{})
 				settings.DefaultCredentials = &struct {
 					DatabaseCredentialsID string `json:"databaseCredentialsId"`
-					Username string `json:"username"`
-					Password string `json:"password"`
+					Username              string `json:"username"`
+					Password              string `json:"password"`
 				}{
 					DatabaseCredentialsID: dcm["database_credentials_id"].(string),
 					Username:              dcm["username"].(string),
@@ -1328,76 +1371,106 @@ func buildRDSBackupPolicyRequest(d *schema.ResourceData) AWSRDSBackupPolicyReque
 				WeeklyScheduleEnabled  bool `json:"weeklyScheduleEnabled"`
 				MonthlyScheduleEnabled bool `json:"monthlyScheduleEnabled"`
 				YearlyScheduleEnabled  bool `json:"yearlyScheduleEnabled"`
-				DailySchedule *struct {
+				DailySchedule          *struct {
 					Kind            string   `json:"kind"`
 					RunsPerHour     int      `json:"runsPerHour"`
 					Days            []string `json:"days,omitempty"`
 					SnapshotOptions *struct {
-						Retention *struct{ Count int `json:"count"` } `json:"retention"`
-						Schedule  *struct{ Hours []int `json:"hours"` } `json:"schedule"`
+						Retention *struct {
+							Count int `json:"count"`
+						} `json:"retention"`
+						Schedule *struct {
+							Hours []int `json:"hours"`
+						} `json:"schedule"`
 					} `json:"snapshotOptions,omitempty"`
 					ReplicaOptions *struct {
-						Retention *struct{ Count int `json:"count"` } `json:"retention"`
-						Schedule  *struct{ Hours []int `json:"hours"` } `json:"schedule"`
+						Retention *struct {
+							Count int `json:"count"`
+						} `json:"retention"`
+						Schedule *struct {
+							Hours []int `json:"hours"`
+						} `json:"schedule"`
 					} `json:"replicaOptions,omitempty"`
 					BackupOptions *struct {
 						Retention *struct {
 							Type  string `json:"type"`
 							Count int    `json:"count"`
 						} `json:"retention"`
-						Schedule *struct{ Hours []int `json:"hours"` } `json:"schedule"`
+						Schedule *struct {
+							Hours []int `json:"hours"`
+						} `json:"schedule"`
 					} `json:"backupOptions,omitempty"`
 				} `json:"dailySchedule,omitempty"`
 				WeeklySchedule *struct {
 					TimeLocal       string   `json:"timeLocal"`
 					Days            []string `json:"days,omitempty"`
 					SnapshotOptions *struct {
-						Retention *struct{ Count int `json:"count"` } `json:"retention"`
-						Schedule  *struct{ Days []string `json:"days"` } `json:"schedule"`
+						Retention *struct {
+							Count int `json:"count"`
+						} `json:"retention"`
+						Schedule *struct {
+							Days []string `json:"days"`
+						} `json:"schedule"`
 					} `json:"snapshotOptions,omitempty"`
 					ReplicaOptions *struct {
-						Retention *struct{ Count int `json:"count"` } `json:"retention"`
-						Schedule  *struct{ Days []string `json:"days"` } `json:"schedule"`
+						Retention *struct {
+							Count int `json:"count"`
+						} `json:"retention"`
+						Schedule *struct {
+							Days []string `json:"days"`
+						} `json:"schedule"`
 					} `json:"replicaOptions,omitempty"`
 					BackupOptions *struct {
 						Retention *struct {
 							Type  string `json:"type"`
 							Count int    `json:"count"`
 						} `json:"retention"`
-						Schedule *struct{ Days []string `json:"days"` } `json:"schedule"`
+						Schedule *struct {
+							Days []string `json:"days"`
+						} `json:"schedule"`
 					} `json:"backupOptions,omitempty"`
 				} `json:"weeklySchedule,omitempty"`
 				MonthlySchedule *struct {
-					TimeLocal            string   `json:"timeLocal"`
-					DayNumberInMonth     string   `json:"dayNumberInMonth"`
-					DayOfWeek            string   `json:"dayOfWeek"`
-					DayOfMonth           int      `json:"dayOfMonth"`
-					SendBackupsToArchive bool     `json:"sendBackupsToArchive"`
-					SnapshotOptions *struct {
-						Retention *struct{ Count int `json:"count"` } `json:"retention"`
-						Schedule  *struct{ Months []string `json:"months"` } `json:"schedule"`
+					TimeLocal            string `json:"timeLocal"`
+					DayNumberInMonth     string `json:"dayNumberInMonth"`
+					DayOfWeek            string `json:"dayOfWeek"`
+					DayOfMonth           int    `json:"dayOfMonth"`
+					SendBackupsToArchive bool   `json:"sendBackupsToArchive"`
+					SnapshotOptions      *struct {
+						Retention *struct {
+							Count int `json:"count"`
+						} `json:"retention"`
+						Schedule *struct {
+							Months []string `json:"months"`
+						} `json:"schedule"`
 					} `json:"snapshotOptions,omitempty"`
 					ReplicaOptions *struct {
-						Retention *struct{ Count int `json:"count"` } `json:"retention"`
-						Schedule  *struct{ Months []string `json:"months"` } `json:"schedule,omitempty"`
+						Retention *struct {
+							Count int `json:"count"`
+						} `json:"retention"`
+						Schedule *struct {
+							Months []string `json:"months"`
+						} `json:"schedule,omitempty"`
 					} `json:"replicaOptions,omitempty"`
 					BackupOptions *struct {
 						Retention *struct {
 							Type  string `json:"type"`
 							Count int    `json:"count"`
 						} `json:"retention"`
-						Schedule *struct{ Months []string `json:"months"` } `json:"schedule,omitempty"`
+						Schedule *struct {
+							Months []string `json:"months"`
+						} `json:"schedule,omitempty"`
 					} `json:"backupOptions,omitempty"`
 				} `json:"monthlySchedule,omitempty"`
 				YearlySchedule *struct {
-					TimeLocal                  string   `json:"timeLocal"`
-					DayNumberInMonth           string   `json:"dayNumberInMonth"`
-					Month                      string   `json:"month"`
-					DayOfWeek                  string   `json:"dayOfWeek"`
-					DayOfMonth                 int      `json:"dayOfMonth"`
-					SendBackupsToArchive       bool     `json:"sendBackupsToArchive"`
-					HealthCheckScheduleEnabled bool     `json:"healthCheckScheduleEnabled"`
-					Retention *struct {
+					TimeLocal                  string `json:"timeLocal"`
+					DayNumberInMonth           string `json:"dayNumberInMonth"`
+					Month                      string `json:"month"`
+					DayOfWeek                  string `json:"dayOfWeek"`
+					DayOfMonth                 int    `json:"dayOfMonth"`
+					SendBackupsToArchive       bool   `json:"sendBackupsToArchive"`
+					HealthCheckScheduleEnabled bool   `json:"healthCheckScheduleEnabled"`
+					Retention                  *struct {
 						Type  string `json:"type"`
 						Count int    `json:"count"`
 					} `json:"retention"`
@@ -1422,19 +1495,29 @@ func buildRDSBackupPolicyRequest(d *schema.ResourceData) AWSRDSBackupPolicyReque
 					RunsPerHour     int      `json:"runsPerHour"`
 					Days            []string `json:"days,omitempty"`
 					SnapshotOptions *struct {
-						Retention *struct{ Count int `json:"count"` } `json:"retention"`
-						Schedule  *struct{ Hours []int `json:"hours"` } `json:"schedule"`
+						Retention *struct {
+							Count int `json:"count"`
+						} `json:"retention"`
+						Schedule *struct {
+							Hours []int `json:"hours"`
+						} `json:"schedule"`
 					} `json:"snapshotOptions,omitempty"`
 					ReplicaOptions *struct {
-						Retention *struct{ Count int `json:"count"` } `json:"retention"`
-						Schedule  *struct{ Hours []int `json:"hours"` } `json:"schedule"`
+						Retention *struct {
+							Count int `json:"count"`
+						} `json:"retention"`
+						Schedule *struct {
+							Hours []int `json:"hours"`
+						} `json:"schedule"`
 					} `json:"replicaOptions,omitempty"`
 					BackupOptions *struct {
 						Retention *struct {
 							Type  string `json:"type"`
 							Count int    `json:"count"`
 						} `json:"retention"`
-						Schedule *struct{ Hours []int `json:"hours"` } `json:"schedule"`
+						Schedule *struct {
+							Hours []int `json:"hours"`
+						} `json:"schedule"`
 					} `json:"backupOptions,omitempty"`
 				}{
 					Kind:        dm["kind"].(string),
@@ -1450,11 +1533,19 @@ func buildRDSBackupPolicyRequest(d *schema.ResourceData) AWSRDSBackupPolicyReque
 						hours = append(hours, h.(int))
 					}
 					daily.SnapshotOptions = &struct {
-						Retention *struct{ Count int `json:"count"` } `json:"retention"`
-						Schedule  *struct{ Hours []int `json:"hours"` } `json:"schedule"`
+						Retention *struct {
+							Count int `json:"count"`
+						} `json:"retention"`
+						Schedule *struct {
+							Hours []int `json:"hours"`
+						} `json:"schedule"`
 					}{
-						Retention: &struct{ Count int `json:"count"` }{Count: som["retention_count"].(int)},
-						Schedule:  &struct{ Hours []int `json:"hours"` }{Hours: hours},
+						Retention: &struct {
+							Count int `json:"count"`
+						}{Count: som["retention_count"].(int)},
+						Schedule: &struct {
+							Hours []int `json:"hours"`
+						}{Hours: hours},
 					}
 				}
 				if ro := dm["replica_options"].([]interface{}); len(ro) > 0 && ro[0] != nil {
@@ -1464,11 +1555,19 @@ func buildRDSBackupPolicyRequest(d *schema.ResourceData) AWSRDSBackupPolicyReque
 						hours = append(hours, h.(int))
 					}
 					daily.ReplicaOptions = &struct {
-						Retention *struct{ Count int `json:"count"` } `json:"retention"`
-						Schedule  *struct{ Hours []int `json:"hours"` } `json:"schedule"`
+						Retention *struct {
+							Count int `json:"count"`
+						} `json:"retention"`
+						Schedule *struct {
+							Hours []int `json:"hours"`
+						} `json:"schedule"`
 					}{
-						Retention: &struct{ Count int `json:"count"` }{Count: rom["retention_count"].(int)},
-						Schedule:  &struct{ Hours []int `json:"hours"` }{Hours: hours},
+						Retention: &struct {
+							Count int `json:"count"`
+						}{Count: rom["retention_count"].(int)},
+						Schedule: &struct {
+							Hours []int `json:"hours"`
+						}{Hours: hours},
 					}
 				}
 				if bo := dm["backup_options"].([]interface{}); len(bo) > 0 && bo[0] != nil {
@@ -1482,13 +1581,17 @@ func buildRDSBackupPolicyRequest(d *schema.ResourceData) AWSRDSBackupPolicyReque
 							Type  string `json:"type"`
 							Count int    `json:"count"`
 						} `json:"retention"`
-						Schedule *struct{ Hours []int `json:"hours"` } `json:"schedule"`
+						Schedule *struct {
+							Hours []int `json:"hours"`
+						} `json:"schedule"`
 					}{
 						Retention: &struct {
 							Type  string `json:"type"`
 							Count int    `json:"count"`
 						}{Type: bom["retention_type"].(string), Count: bom["retention_count"].(int)},
-						Schedule: &struct{ Hours []int `json:"hours"` }{Hours: hours},
+						Schedule: &struct {
+							Hours []int `json:"hours"`
+						}{Hours: hours},
 					}
 				}
 				sched.DailySchedule = daily
@@ -1500,19 +1603,29 @@ func buildRDSBackupPolicyRequest(d *schema.ResourceData) AWSRDSBackupPolicyReque
 					TimeLocal       string   `json:"timeLocal"`
 					Days            []string `json:"days,omitempty"`
 					SnapshotOptions *struct {
-						Retention *struct{ Count int `json:"count"` } `json:"retention"`
-						Schedule  *struct{ Days []string `json:"days"` } `json:"schedule"`
+						Retention *struct {
+							Count int `json:"count"`
+						} `json:"retention"`
+						Schedule *struct {
+							Days []string `json:"days"`
+						} `json:"schedule"`
 					} `json:"snapshotOptions,omitempty"`
 					ReplicaOptions *struct {
-						Retention *struct{ Count int `json:"count"` } `json:"retention"`
-						Schedule  *struct{ Days []string `json:"days"` } `json:"schedule"`
+						Retention *struct {
+							Count int `json:"count"`
+						} `json:"retention"`
+						Schedule *struct {
+							Days []string `json:"days"`
+						} `json:"schedule"`
 					} `json:"replicaOptions,omitempty"`
 					BackupOptions *struct {
 						Retention *struct {
 							Type  string `json:"type"`
 							Count int    `json:"count"`
 						} `json:"retention"`
-						Schedule *struct{ Days []string `json:"days"` } `json:"schedule"`
+						Schedule *struct {
+							Days []string `json:"days"`
+						} `json:"schedule"`
 					} `json:"backupOptions,omitempty"`
 				}{
 					TimeLocal: wm["time_local"].(string),
@@ -1527,11 +1640,19 @@ func buildRDSBackupPolicyRequest(d *schema.ResourceData) AWSRDSBackupPolicyReque
 						days = append(days, d.(string))
 					}
 					weekly.SnapshotOptions = &struct {
-						Retention *struct{ Count int `json:"count"` } `json:"retention"`
-						Schedule  *struct{ Days []string `json:"days"` } `json:"schedule"`
+						Retention *struct {
+							Count int `json:"count"`
+						} `json:"retention"`
+						Schedule *struct {
+							Days []string `json:"days"`
+						} `json:"schedule"`
 					}{
-						Retention: &struct{ Count int `json:"count"` }{Count: som["retention_count"].(int)},
-						Schedule:  &struct{ Days []string `json:"days"` }{Days: days},
+						Retention: &struct {
+							Count int `json:"count"`
+						}{Count: som["retention_count"].(int)},
+						Schedule: &struct {
+							Days []string `json:"days"`
+						}{Days: days},
 					}
 				}
 				if ro := wm["replica_options"].([]interface{}); len(ro) > 0 && ro[0] != nil {
@@ -1541,11 +1662,19 @@ func buildRDSBackupPolicyRequest(d *schema.ResourceData) AWSRDSBackupPolicyReque
 						days = append(days, d.(string))
 					}
 					weekly.ReplicaOptions = &struct {
-						Retention *struct{ Count int `json:"count"` } `json:"retention"`
-						Schedule  *struct{ Days []string `json:"days"` } `json:"schedule"`
+						Retention *struct {
+							Count int `json:"count"`
+						} `json:"retention"`
+						Schedule *struct {
+							Days []string `json:"days"`
+						} `json:"schedule"`
 					}{
-						Retention: &struct{ Count int `json:"count"` }{Count: rom["retention_count"].(int)},
-						Schedule:  &struct{ Days []string `json:"days"` }{Days: days},
+						Retention: &struct {
+							Count int `json:"count"`
+						}{Count: rom["retention_count"].(int)},
+						Schedule: &struct {
+							Days []string `json:"days"`
+						}{Days: days},
 					}
 				}
 				if bo := wm["backup_options"].([]interface{}); len(bo) > 0 && bo[0] != nil {
@@ -1559,13 +1688,17 @@ func buildRDSBackupPolicyRequest(d *schema.ResourceData) AWSRDSBackupPolicyReque
 							Type  string `json:"type"`
 							Count int    `json:"count"`
 						} `json:"retention"`
-						Schedule *struct{ Days []string `json:"days"` } `json:"schedule"`
+						Schedule *struct {
+							Days []string `json:"days"`
+						} `json:"schedule"`
 					}{
 						Retention: &struct {
 							Type  string `json:"type"`
 							Count int    `json:"count"`
 						}{Type: bom["retention_type"].(string), Count: bom["retention_count"].(int)},
-						Schedule: &struct{ Days []string `json:"days"` }{Days: days},
+						Schedule: &struct {
+							Days []string `json:"days"`
+						}{Days: days},
 					}
 				}
 				sched.WeeklySchedule = weekly
@@ -1574,31 +1707,41 @@ func buildRDSBackupPolicyRequest(d *schema.ResourceData) AWSRDSBackupPolicyReque
 			if ms := m["monthly_schedule"].([]interface{}); len(ms) > 0 && ms[0] != nil {
 				mm := ms[0].(map[string]interface{})
 				monthly := &struct {
-					TimeLocal            string   `json:"timeLocal"`
-					DayNumberInMonth     string   `json:"dayNumberInMonth"`
-					DayOfWeek            string   `json:"dayOfWeek"`
-					DayOfMonth           int      `json:"dayOfMonth"`
-					SendBackupsToArchive bool     `json:"sendBackupsToArchive"`
-					SnapshotOptions *struct {
-						Retention *struct{ Count int `json:"count"` } `json:"retention"`
-						Schedule  *struct{ Months []string `json:"months"` } `json:"schedule"`
+					TimeLocal            string `json:"timeLocal"`
+					DayNumberInMonth     string `json:"dayNumberInMonth"`
+					DayOfWeek            string `json:"dayOfWeek"`
+					DayOfMonth           int    `json:"dayOfMonth"`
+					SendBackupsToArchive bool   `json:"sendBackupsToArchive"`
+					SnapshotOptions      *struct {
+						Retention *struct {
+							Count int `json:"count"`
+						} `json:"retention"`
+						Schedule *struct {
+							Months []string `json:"months"`
+						} `json:"schedule"`
 					} `json:"snapshotOptions,omitempty"`
 					ReplicaOptions *struct {
-						Retention *struct{ Count int `json:"count"` } `json:"retention"`
-						Schedule  *struct{ Months []string `json:"months"` } `json:"schedule,omitempty"`
+						Retention *struct {
+							Count int `json:"count"`
+						} `json:"retention"`
+						Schedule *struct {
+							Months []string `json:"months"`
+						} `json:"schedule,omitempty"`
 					} `json:"replicaOptions,omitempty"`
 					BackupOptions *struct {
 						Retention *struct {
 							Type  string `json:"type"`
 							Count int    `json:"count"`
 						} `json:"retention"`
-						Schedule *struct{ Months []string `json:"months"` } `json:"schedule,omitempty"`
+						Schedule *struct {
+							Months []string `json:"months"`
+						} `json:"schedule,omitempty"`
 					} `json:"backupOptions,omitempty"`
 				}{
-					TimeLocal:        mm["time_local"].(string),
-					DayNumberInMonth: mm["day_number_in_month"].(string),
-					DayOfWeek:        mm["day_of_week"].(string),
-					DayOfMonth:       mm["day_of_month"].(int),
+					TimeLocal:            mm["time_local"].(string),
+					DayNumberInMonth:     mm["day_number_in_month"].(string),
+					DayOfWeek:            mm["day_of_week"].(string),
+					DayOfMonth:           mm["day_of_month"].(int),
 					SendBackupsToArchive: mm["send_backups_to_archive"].(bool),
 				}
 				if so := mm["snapshot_options"].([]interface{}); len(so) > 0 && so[0] != nil {
@@ -1608,11 +1751,19 @@ func buildRDSBackupPolicyRequest(d *schema.ResourceData) AWSRDSBackupPolicyReque
 						months = append(months, mn.(string))
 					}
 					monthly.SnapshotOptions = &struct {
-						Retention *struct{ Count int `json:"count"` } `json:"retention"`
-						Schedule  *struct{ Months []string `json:"months"` } `json:"schedule"`
+						Retention *struct {
+							Count int `json:"count"`
+						} `json:"retention"`
+						Schedule *struct {
+							Months []string `json:"months"`
+						} `json:"schedule"`
 					}{
-						Retention: &struct{ Count int `json:"count"` }{Count: som["retention_count"].(int)},
-						Schedule:  &struct{ Months []string `json:"months"` }{Months: months},
+						Retention: &struct {
+							Count int `json:"count"`
+						}{Count: som["retention_count"].(int)},
+						Schedule: &struct {
+							Months []string `json:"months"`
+						}{Months: months},
 					}
 				}
 				if ro := mm["replica_options"].([]interface{}); len(ro) > 0 && ro[0] != nil {
@@ -1622,11 +1773,19 @@ func buildRDSBackupPolicyRequest(d *schema.ResourceData) AWSRDSBackupPolicyReque
 						months = append(months, mn.(string))
 					}
 					monthly.ReplicaOptions = &struct {
-						Retention *struct{ Count int `json:"count"` } `json:"retention"`
-						Schedule  *struct{ Months []string `json:"months"` } `json:"schedule,omitempty"`
+						Retention *struct {
+							Count int `json:"count"`
+						} `json:"retention"`
+						Schedule *struct {
+							Months []string `json:"months"`
+						} `json:"schedule,omitempty"`
 					}{
-						Retention: &struct{ Count int `json:"count"` }{Count: rom["retention_count"].(int)},
-						Schedule:  &struct{ Months []string `json:"months"` }{Months: months},
+						Retention: &struct {
+							Count int `json:"count"`
+						}{Count: rom["retention_count"].(int)},
+						Schedule: &struct {
+							Months []string `json:"months"`
+						}{Months: months},
 					}
 				}
 				if bo := mm["backup_options"].([]interface{}); len(bo) > 0 && bo[0] != nil {
@@ -1640,13 +1799,17 @@ func buildRDSBackupPolicyRequest(d *schema.ResourceData) AWSRDSBackupPolicyReque
 							Type  string `json:"type"`
 							Count int    `json:"count"`
 						} `json:"retention"`
-						Schedule *struct{ Months []string `json:"months"` } `json:"schedule,omitempty"`
+						Schedule *struct {
+							Months []string `json:"months"`
+						} `json:"schedule,omitempty"`
 					}{
 						Retention: &struct {
 							Type  string `json:"type"`
 							Count int    `json:"count"`
 						}{Type: bom["retention_type"].(string), Count: bom["retention_count"].(int)},
-						Schedule: &struct{ Months []string `json:"months"` }{Months: months},
+						Schedule: &struct {
+							Months []string `json:"months"`
+						}{Months: months},
 					}
 				}
 				sched.MonthlySchedule = monthly
@@ -1655,14 +1818,14 @@ func buildRDSBackupPolicyRequest(d *schema.ResourceData) AWSRDSBackupPolicyReque
 			if ys := m["yearly_schedule"].([]interface{}); len(ys) > 0 && ys[0] != nil {
 				ym := ys[0].(map[string]interface{})
 				yearly := &struct {
-					TimeLocal                  string   `json:"timeLocal"`
-					DayNumberInMonth           string   `json:"dayNumberInMonth"`
-					Month                      string   `json:"month"`
-					DayOfWeek                  string   `json:"dayOfWeek"`
-					DayOfMonth                 int      `json:"dayOfMonth"`
-					SendBackupsToArchive       bool     `json:"sendBackupsToArchive"`
-					HealthCheckScheduleEnabled bool     `json:"healthCheckScheduleEnabled"`
-					Retention *struct {
+					TimeLocal                  string `json:"timeLocal"`
+					DayNumberInMonth           string `json:"dayNumberInMonth"`
+					Month                      string `json:"month"`
+					DayOfWeek                  string `json:"dayOfWeek"`
+					DayOfMonth                 int    `json:"dayOfMonth"`
+					SendBackupsToArchive       bool   `json:"sendBackupsToArchive"`
+					HealthCheckScheduleEnabled bool   `json:"healthCheckScheduleEnabled"`
+					Retention                  *struct {
 						Type  string `json:"type"`
 						Count int    `json:"count"`
 					} `json:"retention"`

@@ -1,16 +1,19 @@
-﻿package azure
+package azure
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
 	"strconv"
+	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 // Represents the get Azure Resource Groups api request
@@ -42,94 +45,82 @@ type AzureResourceGroupsResults struct {
 	RegionID         *string `json:"regionId,omitempty"`
 }
 
-func DataSourceAzureResourceGroups() *schema.Resource {
-	return &schema.Resource{
-		ReadContext: DataSourceAzureResourceGroupsRead,
-		Schema: map[string]*schema.Schema{
-			"subscription_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Returns only resource groups that belong to the specified subscription ID.",
-			},
-			"tenant_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Returns only resource groups that belong to the specified tenant ID.",
-			},
-			"service_account_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Returns only resource groups associated with the specified service account ID.",
-			},
-			"search_pattern": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "A search pattern to filter resource groups by name.",
-			},
-			"region_ids": {
-				Type:        schema.TypeList,
-				Elem:        &schema.Schema{Type: schema.TypeString},
-				Optional:    true,
-				Description: "Returns only resource groups located in the specified region IDs.",
-			},
-			"offset": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Description: "The number of resource groups to skip in the result set.",
-			},
-			"limit": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Description: "The maximum number of resource groups to return.",
-			}, // compute only fields
-			"id": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"results": {
-				Type:     schema.TypeList,
-				Computed: true,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"id": {
-							Type:     schema.TypeString,
-							Computed: true,
-						},
-						"resource_id": {
-							Type:     schema.TypeString,
-							Computed: true,
-						},
-						"name": {
-							Type:     schema.TypeString,
-							Computed: true,
-						},
-						"azure_environment": {
-							Type:     schema.TypeString,
-							Computed: true,
-						},
-						"subscription_id": {
-							Type:     schema.TypeString,
-							Computed: true,
-						},
-						"tenant_id": {
-							Type:     schema.TypeString,
-							Computed: true,
-						},
-						"region_id": {
-							Type:     schema.TypeString,
-							Computed: true,
+func DataSourceAzureResourceGroups() datasource.DataSource {
+	return tf.NewDataSource(
+		"azure_resource_groups",
+		schema.Schema{
+			Attributes: map[string]schema.Attribute{
+				"subscription_id": schema.StringAttribute{
+					Description: "Returns only resource groups that belong to the specified subscription ID.",
+					Optional:    true,
+				},
+				"tenant_id": schema.StringAttribute{
+					Description: "Returns only resource groups that belong to the specified tenant ID.",
+					Optional:    true,
+				},
+				"service_account_id": schema.StringAttribute{
+					Description: "Returns only resource groups associated with the specified service account ID.",
+					Optional:    true,
+				},
+				"search_pattern": schema.StringAttribute{
+					Description: "A search pattern to filter resource groups by name.",
+					Optional:    true,
+				},
+				"region_ids": schema.ListAttribute{
+					Description: "Returns only resource groups located in the specified region IDs.",
+					Optional:    true,
+					ElementType: types.StringType,
+				},
+				"offset": schema.Int64Attribute{
+					Description: "The number of resource groups to skip in the result set.",
+					Optional:    true,
+				},
+				"limit": schema.Int64Attribute{
+					Description: "The maximum number of resource groups to return.",
+					Optional:    true,
+				},
+				"id": schema.StringAttribute{
+					Computed: true,
+				},
+				"results": schema.ListNestedAttribute{
+					Computed: true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"id": schema.StringAttribute{
+								Computed: true,
+							},
+							"resource_id": schema.StringAttribute{
+								Computed: true,
+							},
+							"name": schema.StringAttribute{
+								Computed: true,
+							},
+							"azure_environment": schema.StringAttribute{
+								Computed: true,
+							},
+							"subscription_id": schema.StringAttribute{
+								Computed: true,
+							},
+							"tenant_id": schema.StringAttribute{
+								Computed: true,
+							},
+							"region_id": schema.StringAttribute{
+								Computed: true,
+							},
 						},
 					},
 				},
 			},
 		},
-	}
+		DataSourceAzureResourceGroupsRead,
+		map[string]interface{}{},
+	)
 }
 
-func DataSourceAzureResourceGroupsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func DataSourceAzureResourceGroupsRead(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	request := AzureResourceGroupsDataModel{}
 
@@ -173,18 +164,18 @@ func DataSourceAzureResourceGroupsRead(ctx context.Context, d *schema.ResourceDa
 	// Make API request
 	resp, err := client.MakeAuthenticatedRequest("GET", apiUrl, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("error retrieving Azure Resource Groups: %s", err))
+		return tf.FromErr(fmt.Errorf("error retrieving Azure Resource Groups: %s", err))
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("error reading response body: %s", err))
+		return tf.FromErr(fmt.Errorf("error reading response body: %s", err))
 	}
 
 	// Parse response
 	var responseModel AzureResourceGroupsResponseModel
 	if err := json.Unmarshal(body, &responseModel); err != nil {
-		return diag.FromErr(fmt.Errorf("error parsing response JSON: %s", err))
+		return tf.FromErr(fmt.Errorf("error parsing response JSON: %s", err))
 	}
 
 	// Set results in schema
@@ -205,7 +196,7 @@ func DataSourceAzureResourceGroupsRead(ctx context.Context, d *schema.ResourceDa
 		}
 	}
 	if err := d.Set("results", results); err != nil {
-		return diag.FromErr(fmt.Errorf("error setting results: %s", err))
+		return tf.FromErr(fmt.Errorf("error setting results: %s", err))
 	}
 
 	// Set ID for the data source

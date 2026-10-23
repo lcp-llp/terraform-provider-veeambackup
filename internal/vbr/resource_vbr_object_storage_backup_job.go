@@ -1,13 +1,18 @@
-﻿package vbr
+package vbr
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"strings"
+	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 type VbrObjectStorageBackupJob struct {
@@ -17,7 +22,7 @@ type VbrObjectStorageBackupJob struct {
 	BackupRepository  VbrObjectStorageBackupJobBackupRepository `json:"backupRepository"`
 	Description       *string                                   `json:"description,omitempty"`
 	IsHighPriority    *bool                                     `json:"isHighPriority,omitempty"`
-	IsDisabled		  *bool                                     `json:"isDisabled,omitempty"`  // Used for update operations
+	IsDisabled        *bool                                     `json:"isDisabled,omitempty"` // Used for update operations
 	ArchiveRepository *VbrBackupJobArchiveRepository            `json:"archiveRepository,omitempty"`
 	Schedule          *VbrBackupJobSchedule                     `json:"schedule,omitempty"`
 	ID                *string                                   `json:"id,omitempty"` // Used for update operations
@@ -154,460 +159,420 @@ type VbrObjectStorageBackupJobResponse struct {
 
 // Schema
 
-func ResourceVbrObjectStorageBackupJob() *schema.Resource {
-	return &schema.Resource{
-		Description:   "Schema for VBR Object Storage Backup Job.",
-		CreateContext: resourceVBRObjectStorageBackupJobCreate,
-		ReadContext:   resourceVBRObjectStorageBackupJobRead,
-		UpdateContext: resourceVBRObjectStorageBackupJobUpdate,
-		DeleteContext: resourceVBRObjectStorageBackupJobDelete,
-		Schema: map[string]*schema.Schema{
-			"name": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "The name of the backup job.",
+func ResourceVbrObjectStorageBackupJob() resource.Resource {
+	return tf.NewResource(
+		"vbr_object_storage_backup_job",
+		schema.Schema{
+			Description: "Schema for VBR Object Storage Backup Job.",
+			Attributes: map[string]schema.Attribute{
+				"name": schema.StringAttribute{
+					Description: "The name of the backup job.",
+					Required:    true,
+				},
+				"description": schema.StringAttribute{
+					Description: "The description of the backup job.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"is_high_priority": schema.BoolAttribute{
+					Description: "Specifies if the backup job is high priority.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"is_disabled": schema.BoolAttribute{
+					Description: "Specifies if the backup job is disabled. (Required when updating an existing job)",
+					Optional:    true,
+				},
 			},
-			"description": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The description of the backup job.",
-			},
-			"is_high_priority": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Specifies if the backup job is high priority.",
-			},
-			"is_disabled": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Specifies if the backup job is disabled. (Required when updating an existing job)",
-			},
-			"objects": {
-				Type:        schema.TypeList,
-				Required:    true,
-				Description: "The list of object storage backup job objects.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"object_storage_server_id": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "The ID of the object storage server.",
+			Blocks: map[string]schema.Block{
+				"objects": schema.ListNestedBlock{
+					Description: "The list of object storage backup job objects.",
+					Validators: []validator.List{
+						listvalidator.SizeAtLeast(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"object_storage_server_id": schema.StringAttribute{
+								Description: "The ID of the object storage server.",
+								Required:    true,
+							},
+							"container": schema.StringAttribute{
+								Description: "The container name in the object storage.",
+								Optional:    true,
+							},
+							"path": schema.StringAttribute{
+								Description: "The path within the container.",
+								Optional:    true,
+							},
+							"exclusion_path_mask": schema.ListAttribute{
+								Description: "The list of exclusion path masks.",
+								Optional:    true,
+								ElementType: types.StringType,
+							},
 						},
-						"container": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "The container name in the object storage.",
-						},
-						"path": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "The path within the container.",
-						},
-						"inclusion_tag_mask": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "The list of inclusion tag masks.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"name": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "The name of the inclusion tag.",
-									},
-									"value": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "The value of the inclusion tag.",
-									},
-									"is_object_tag": {
-										Type:        schema.TypeBool,
-										Required:    true,
-										Description: "Specifies if it is an object tag.",
+						Blocks: map[string]schema.Block{
+							"inclusion_tag_mask": schema.ListNestedBlock{
+								Description: "The list of inclusion tag masks.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"name": schema.StringAttribute{
+											Description: "The name of the inclusion tag.",
+											Required:    true,
+										},
+										"value": schema.StringAttribute{
+											Description: "The value of the inclusion tag.",
+											Required:    true,
+										},
+										"is_object_tag": schema.BoolAttribute{
+											Description: "Specifies if it is an object tag.",
+											Required:    true,
+										},
 									},
 								},
 							},
-						},
-						"exclusion_tag_mask": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "The list of exclusion tag masks.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"name": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "The name of the exclusion tag.",
-									},
-									"value": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "The value of the exclusion tag.",
-									},
-									"is_object_tag": {
-										Type:        schema.TypeBool,
-										Required:    true,
-										Description: "Specifies if it is an object tag.",
+							"exclusion_tag_mask": schema.ListNestedBlock{
+								Description: "The list of exclusion tag masks.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"name": schema.StringAttribute{
+											Description: "The name of the exclusion tag.",
+											Required:    true,
+										},
+										"value": schema.StringAttribute{
+											Description: "The value of the exclusion tag.",
+											Required:    true,
+										},
+										"is_object_tag": schema.BoolAttribute{
+											Description: "Specifies if it is an object tag.",
+											Required:    true,
+										},
 									},
 								},
-							},
-						},
-						"exclusion_path_mask": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "The list of exclusion path masks.",
-							Elem: &schema.Schema{
-								Type: schema.TypeString,
 							},
 						},
 					},
 				},
-			},
-			"backup_repository": {
-				Type:        schema.TypeList,
-				Required:    true,
-				MaxItems:    1,
-				Description: "The backup repository settings for the backup job.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"backup_repository_id": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "The ID of the backup repository.",
+				"backup_repository": schema.ListNestedBlock{
+					Description: "The backup repository settings for the backup job.",
+					Validators: []validator.List{
+						listvalidator.SizeAtLeast(1),
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"backup_repository_id": schema.StringAttribute{
+								Description: "The ID of the backup repository.",
+								Required:    true,
+							},
+							"source_backup_id": schema.StringAttribute{
+								Description: "The source backup ID for the backup repository.",
+								Optional:    true,
+							},
 						},
-						"source_backup_id": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "The source backup ID for the backup repository.",
-						},
-						"retention_policy": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "The retention policy for the backup repository.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"type": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "The type of the retention policy.",
-									},
-									"quantity": {
-										Type:        schema.TypeInt,
-										Required:    true,
-										Description: "The quantity for the retention policy.",
+						Blocks: map[string]schema.Block{
+							"retention_policy": schema.ListNestedBlock{
+								Description: "The retention policy for the backup repository.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"type": schema.StringAttribute{
+											Description: "The type of the retention policy.",
+											Required:    true,
+										},
+										"quantity": schema.Int64Attribute{
+											Description: "The quantity for the retention policy.",
+											Required:    true,
+										},
 									},
 								},
 							},
-						},
-						"advanced_settings": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "The advanced settings for the backup repository.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"object_versions": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										MaxItems:    1,
-										Description: "The object versions settings.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"version_retention_type": {
-													Type:        schema.TypeString,
-													Optional:    true,
-													Description: "The version retention type.",
-												},
-												"action_version_rention": {
-													Type:        schema.TypeInt,
-													Optional:    true,
-													Description: "The action version retention.",
-												},
-												"delete_version_retention": {
-													Type:        schema.TypeInt,
-													Optional:    true,
-													Description: "The delete version retention.",
-												},
+							"advanced_settings": schema.ListNestedBlock{
+								Description: "The advanced settings for the backup repository.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{},
+									Blocks: map[string]schema.Block{
+										"object_versions": schema.ListNestedBlock{
+											Description: "The object versions settings.",
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
 											},
-										},
-									},
-									"storage_data": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										MaxItems:    1,
-										Description: "The storage data settings.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"compression_level": {
-													Type:        schema.TypeString,
-													Optional:    true,
-													Description: "The compression level.",
-												},
-												"encryption": {
-													Type:        schema.TypeList,
-													Optional:    true,
-													MaxItems:    1,
-													Description: "The encryption settings.",
-													Elem: &schema.Resource{
-														Schema: map[string]*schema.Schema{
-															"is_enabled": {
-																Type:        schema.TypeBool,
-																Required:    true,
-																Description: "Specifies if encryption is enabled.",
-															},
-															"encryption_type": {
-																Type:        schema.TypeString,
-																Optional:    true,
-																Description: "The type of encryption.",
-															},
-															"encryption_password": {
-																Type:        schema.TypeString,
-																Optional:    true,
-																Description: "The encryption password.",
-															},
-															"encryption_password_id": {
-																Type:        schema.TypeString,
-																Optional:    true,
-																Description: "The ID of the encryption password.",
-															},
-															"kms_server_id": {
-																Type:        schema.TypeString,
-																Optional:    true,
-																Description: "The ID of the KMS server.",
-															},
-														},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"version_retention_type": schema.StringAttribute{
+														Description: "The version retention type.",
+														Optional:    true,
+													},
+													"action_version_rention": schema.Int64Attribute{
+														Description: "The action version retention.",
+														Optional:    true,
+													},
+													"delete_version_retention": schema.Int64Attribute{
+														Description: "The delete version retention.",
+														Optional:    true,
 													},
 												},
 											},
 										},
-									},
-									"backup_health": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										MaxItems:    1,
-										Description: "The backup health settings.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"is_enabled": {
-													Type:        schema.TypeBool,
-													Required:    true,
-													Description: "Specifies if backup health is enabled.",
+										"storage_data": schema.ListNestedBlock{
+											Description: "The storage data settings.",
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"compression_level": schema.StringAttribute{
+														Description: "The compression level.",
+														Optional:    true,
+													},
 												},
-												"weekly": {
-													Type:        schema.TypeList,
-													Optional:    true,
-													MaxItems:    1,
-													Description: "The weekly backup health settings.",
-													Elem: &schema.Resource{
-														Schema: map[string]*schema.Schema{
-															"is_enabled": {
-																Type:        schema.TypeBool,
-																Required:    true,
-																Description: "Specifies if weekly backup health is enabled.",
-															},
-															"days": {
-																Type:        schema.TypeList,
-																Optional:    true,
-																Description: "The days for weekly backup health.",
-																Elem: &schema.Schema{
-																	Type: schema.TypeString,
+												Blocks: map[string]schema.Block{
+													"encryption": schema.ListNestedBlock{
+														Description: "The encryption settings.",
+														Validators: []validator.List{
+															listvalidator.SizeAtMost(1),
+														},
+														NestedObject: schema.NestedBlockObject{
+															Attributes: map[string]schema.Attribute{
+																"is_enabled": schema.BoolAttribute{
+																	Description: "Specifies if encryption is enabled.",
+																	Required:    true,
+																},
+																"encryption_type": schema.StringAttribute{
+																	Description: "The type of encryption.",
+																	Optional:    true,
+																},
+																"encryption_password": schema.StringAttribute{
+																	Description: "The encryption password.",
+																	Optional:    true,
+																},
+																"encryption_password_id": schema.StringAttribute{
+																	Description: "The ID of the encryption password.",
+																	Optional:    true,
+																},
+																"kms_server_id": schema.StringAttribute{
+																	Description: "The ID of the KMS server.",
+																	Optional:    true,
 																},
 															},
-															"local_time": {
-																Type:        schema.TypeString,
-																Optional:    true,
-																Description: "The local time for weekly backup health.",
-															},
 														},
 													},
 												},
-												"monthly": {
-													Type:        schema.TypeList,
-													Optional:    true,
-													MaxItems:    1,
-													Description: "The monthly backup health settings.",
-													Elem: &schema.Resource{
-														Schema: map[string]*schema.Schema{
-															"is_enabled": {
-																Type:        schema.TypeBool,
-																Required:    true,
-																Description: "Specifies if monthly backup health is enabled.",
-															},
-															"day_of_week": {
-																Type:        schema.TypeString,
-																Optional:    true,
-																Description: "The day of the week for monthly backup health.",
-															},
-															"day_number_in_month": {
-																Type:        schema.TypeString,
-																Optional:    true,
-																Description: "The day number in month for monthly backup health.",
-															},
-															"day_of_month": {
-																Type:        schema.TypeInt,
-																Optional:    true,
-																Description: "The day of month for monthly backup health.",
-															},
-															"months": {
-																Type:        schema.TypeList,
-																Optional:    true,
-																Description: "The months for monthly backup health.",
-																Elem: &schema.Schema{
-																	Type: schema.TypeString,
+											},
+										},
+										"backup_health": schema.ListNestedBlock{
+											Description: "The backup health settings.",
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"is_enabled": schema.BoolAttribute{
+														Description: "Specifies if backup health is enabled.",
+														Required:    true,
+													},
+												},
+												Blocks: map[string]schema.Block{
+													"weekly": schema.ListNestedBlock{
+														Description: "The weekly backup health settings.",
+														Validators: []validator.List{
+															listvalidator.SizeAtMost(1),
+														},
+														NestedObject: schema.NestedBlockObject{
+															Attributes: map[string]schema.Attribute{
+																"is_enabled": schema.BoolAttribute{
+																	Description: "Specifies if weekly backup health is enabled.",
+																	Required:    true,
+																},
+																"days": schema.ListAttribute{
+																	Description: "The days for weekly backup health.",
+																	Optional:    true,
+																	ElementType: types.StringType,
+																},
+																"local_time": schema.StringAttribute{
+																	Description: "The local time for weekly backup health.",
+																	Optional:    true,
 																},
 															},
-															"local_time": {
-																Type:        schema.TypeString,
-																Optional:    true,
-																Description: "The local time for monthly backup health.",
-															},
-															"is_last_day_of_month": {
-																Type:        schema.TypeBool,
-																Optional:    true,
-																Description: "Specifies if it is the last day of the month for monthly backup health.",
+														},
+													},
+													"monthly": schema.ListNestedBlock{
+														Description: "The monthly backup health settings.",
+														Validators: []validator.List{
+															listvalidator.SizeAtMost(1),
+														},
+														NestedObject: schema.NestedBlockObject{
+															Attributes: map[string]schema.Attribute{
+																"is_enabled": schema.BoolAttribute{
+																	Description: "Specifies if monthly backup health is enabled.",
+																	Required:    true,
+																},
+																"day_of_week": schema.StringAttribute{
+																	Description: "The day of the week for monthly backup health.",
+																	Optional:    true,
+																},
+																"day_number_in_month": schema.StringAttribute{
+																	Description: "The day number in month for monthly backup health.",
+																	Optional:    true,
+																},
+																"day_of_month": schema.Int64Attribute{
+																	Description: "The day of month for monthly backup health.",
+																	Optional:    true,
+																},
+																"months": schema.ListAttribute{
+																	Description: "The months for monthly backup health.",
+																	Optional:    true,
+																	ElementType: types.StringType,
+																},
+																"local_time": schema.StringAttribute{
+																	Description: "The local time for monthly backup health.",
+																	Optional:    true,
+																},
+																"is_last_day_of_month": schema.BoolAttribute{
+																	Description: "Specifies if it is the last day of the month for monthly backup health.",
+																	Optional:    true,
+																},
 															},
 														},
 													},
 												},
 											},
 										},
-									},
-									"scripts": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										MaxItems:    1,
-										Description: "The scripts settings.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"pre_command": {
-													Type:        schema.TypeList,
-													Optional:    true,
-													MaxItems:    1,
-													Description: "The pre-command settings.",
-													Elem: &schema.Resource{
-														Schema: map[string]*schema.Schema{
-															"is_enabled": {
-																Type:        schema.TypeBool,
-																Required:    true,
-																Description: "Specifies if pre-command is enabled.",
-															},
-															"command": {
-																Type:        schema.TypeString,
-																Optional:    true,
-																Description: "The pre-command to execute.",
+										"scripts": schema.ListNestedBlock{
+											Description: "The scripts settings.",
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"periodicity_type": schema.StringAttribute{
+														Description: "The periodicity type for scripts.",
+														Optional:    true,
+													},
+													"run_script_every": schema.Int64Attribute{
+														Description: "The frequency to run the script.",
+														Optional:    true,
+													},
+													"day_of_week": schema.ListAttribute{
+														Description: "The days of the week to run the script.",
+														Optional:    true,
+														ElementType: types.StringType,
+													},
+												},
+												Blocks: map[string]schema.Block{
+													"pre_command": schema.ListNestedBlock{
+														Description: "The pre-command settings.",
+														Validators: []validator.List{
+															listvalidator.SizeAtMost(1),
+														},
+														NestedObject: schema.NestedBlockObject{
+															Attributes: map[string]schema.Attribute{
+																"is_enabled": schema.BoolAttribute{
+																	Description: "Specifies if pre-command is enabled.",
+																	Required:    true,
+																},
+																"command": schema.StringAttribute{
+																	Description: "The pre-command to execute.",
+																	Optional:    true,
+																},
 															},
 														},
 													},
-												},
-												"post_command": {
-													Type:        schema.TypeList,
-													Optional:    true,
-													MaxItems:    1,
-													Description: "The post-command settings.",
-													Elem: &schema.Resource{
-														Schema: map[string]*schema.Schema{
-															"is_enabled": {
-																Type:        schema.TypeBool,
-																Required:    true,
-																Description: "Specifies if post-command is enabled.",
-															},
-															"command": {
-																Type:        schema.TypeString,
-																Optional:    true,
-																Description: "The post-command to execute.",
+													"post_command": schema.ListNestedBlock{
+														Description: "The post-command settings.",
+														Validators: []validator.List{
+															listvalidator.SizeAtMost(1),
+														},
+														NestedObject: schema.NestedBlockObject{
+															Attributes: map[string]schema.Attribute{
+																"is_enabled": schema.BoolAttribute{
+																	Description: "Specifies if post-command is enabled.",
+																	Required:    true,
+																},
+																"command": schema.StringAttribute{
+																	Description: "The post-command to execute.",
+																	Optional:    true,
+																},
 															},
 														},
-													},
-												},
-												"periodicity_type": {
-													Type:        schema.TypeString,
-													Optional:    true,
-													Description: "The periodicity type for scripts.",
-												},
-												"run_script_every": {
-													Type:        schema.TypeInt,
-													Optional:    true,
-													Description: "The frequency to run the script.",
-												},
-												"day_of_week": {
-													Type:        schema.TypeList,
-													Optional:    true,
-													Description: "The days of the week to run the script.",
-													Elem: &schema.Schema{
-														Type: schema.TypeString,
 													},
 												},
 											},
 										},
-									},
-									"notifications": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										MaxItems:    1,
-										Description: "The notifications settings.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"send_snmp_notifications": {
-													Type:        schema.TypeBool,
-													Optional:    true,
-													Description: "Specifies if SNMP notifications are sent.",
+										"notifications": schema.ListNestedBlock{
+											Description: "The notifications settings.",
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"send_snmp_notifications": schema.BoolAttribute{
+														Description: "Specifies if SNMP notifications are sent.",
+														Optional:    true,
+													},
+													"trigger_issue_job_warning": schema.BoolAttribute{
+														Description: "Specifies if job warning issues trigger notifications.",
+														Optional:    true,
+													},
+													"trigger_attribute_issue_job_warning": schema.BoolAttribute{
+														Description: "Specifies if attribute issue job warnings trigger notifications.",
+														Optional:    true,
+													},
 												},
-												"email_notifications": {
-													Type:        schema.TypeList,
-													Optional:    true,
-													MaxItems:    1,
-													Description: "The email notifications settings.",
-													Elem: &schema.Resource{
-														Schema: map[string]*schema.Schema{
-															"is_enabled": {
-																Type:        schema.TypeBool,
-																Required:    true,
-																Description: "Specifies if email notifications are enabled.",
-															},
-															"recipients": {
-																Type:        schema.TypeList,
-																Optional:    true,
-																Description: "The list of email recipients.",
-																Elem: &schema.Schema{
-																	Type: schema.TypeString,
+												Blocks: map[string]schema.Block{
+													"email_notifications": schema.ListNestedBlock{
+														Description: "The email notifications settings.",
+														Validators: []validator.List{
+															listvalidator.SizeAtMost(1),
+														},
+														NestedObject: schema.NestedBlockObject{
+															Attributes: map[string]schema.Attribute{
+																"is_enabled": schema.BoolAttribute{
+																	Description: "Specifies if email notifications are enabled.",
+																	Required:    true,
+																},
+																"recipients": schema.ListAttribute{
+																	Description: "The list of email recipients.",
+																	Optional:    true,
+																	ElementType: types.StringType,
+																},
+																"notification_type": schema.StringAttribute{
+																	Description: "The type of email notification.",
+																	Optional:    true,
 																},
 															},
-															"notification_type": {
-																Type:        schema.TypeString,
-																Optional:    true,
-																Description: "The type of email notification.",
-															},
-															"custom_notification_settings": {
-																Type:        schema.TypeList,
-																Optional:    true,
-																MaxItems:    1,
-																Description: "The custom notification settings.",
-																Elem: &schema.Resource{
-																	Schema: map[string]*schema.Schema{
-																		"subject": {
-																			Type:        schema.TypeString,
-																			Optional:    true,
-																			Description: "The subject of the email notification.",
-																		},
-																		"notify_on_success": {
-																			Type:        schema.TypeBool,
-																			Optional:    true,
-																			Description: "Specifies if notification is sent on success.",
-																		},
-																		"notify_on_warning": {
-																			Type:        schema.TypeBool,
-																			Optional:    true,
-																			Description: "Specifies if notification is sent on warning.",
-																		},
-																		"notify_on_error": {
-																			Type:        schema.TypeBool,
-																			Optional:    true,
-																			Description: "Specifies if notification is sent on error.",
-																		},
-																		"suppress_notification_until_last_retry": {
-																			Type:        schema.TypeBool,
-																			Optional:    true,
-																			Description: "Specifies if notification is suppressed until the last retry.",
+															Blocks: map[string]schema.Block{
+																"custom_notification_settings": schema.ListNestedBlock{
+																	Description: "The custom notification settings.",
+																	Validators: []validator.List{
+																		listvalidator.SizeAtMost(1),
+																	},
+																	NestedObject: schema.NestedBlockObject{
+																		Attributes: map[string]schema.Attribute{
+																			"subject": schema.StringAttribute{
+																				Description: "The subject of the email notification.",
+																				Optional:    true,
+																			},
+																			"notify_on_success": schema.BoolAttribute{
+																				Description: "Specifies if notification is sent on success.",
+																				Optional:    true,
+																			},
+																			"notify_on_warning": schema.BoolAttribute{
+																				Description: "Specifies if notification is sent on warning.",
+																				Optional:    true,
+																			},
+																			"notify_on_error": schema.BoolAttribute{
+																				Description: "Specifies if notification is sent on error.",
+																				Optional:    true,
+																			},
+																			"suppress_notification_until_last_retry": schema.BoolAttribute{
+																				Description: "Specifies if notification is suppressed until the last retry.",
+																				Optional:    true,
+																			},
 																		},
 																	},
 																},
@@ -615,16 +580,6 @@ func ResourceVbrObjectStorageBackupJob() *schema.Resource {
 														},
 													},
 												},
-												"trigger_issue_job_warning": {
-													Type:        schema.TypeBool,
-													Optional:    true,
-													Description: "Specifies if job warning issues trigger notifications.",
-												},
-												"trigger_attribute_issue_job_warning": {
-													Type:        schema.TypeBool,
-													Optional:    true,
-													Description: "Specifies if attribute issue job warnings trigger notifications.",
-												},
 											},
 										},
 									},
@@ -633,75 +588,65 @@ func ResourceVbrObjectStorageBackupJob() *schema.Resource {
 						},
 					},
 				},
-			},
-			"archive_repository": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "The archive repository settings for the backup job.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"archive_repository_id": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "The ID of the archive repository.",
+				"archive_repository": schema.ListNestedBlock{
+					Description: "The archive repository settings for the backup job.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"archive_repository_id": schema.StringAttribute{
+								Description: "The ID of the archive repository.",
+								Required:    true,
+							},
+							"archive_recent_file_versions": schema.BoolAttribute{
+								Description: "Specifies if recent file versions are archived.",
+								Optional:    true,
+							},
+							"archive_previous_file_versions": schema.BoolAttribute{
+								Description: "Specifies if previous file versions are archived.",
+								Optional:    true,
+							},
 						},
-						"archive_recent_file_versions": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Description: "Specifies if recent file versions are archived.",
-						},
-						"archive_previous_file_versions": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Description: "Specifies if previous file versions are archived.",
-						},
-						"archive_retention_policy": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "The retention policy for the archive repository.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"type": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "The type of the retention policy.",
-									},
-									"quantity": {
-										Type:        schema.TypeInt,
-										Required:    true,
-										Description: "The quantity for the retention policy.",
+						Blocks: map[string]schema.Block{
+							"archive_retention_policy": schema.ListNestedBlock{
+								Description: "The retention policy for the archive repository.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"type": schema.StringAttribute{
+											Description: "The type of the retention policy.",
+											Required:    true,
+										},
+										"quantity": schema.Int64Attribute{
+											Description: "The quantity for the retention policy.",
+											Required:    true,
+										},
 									},
 								},
 							},
-						},
-						"file_archive_settings": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "The file archive settings.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"archival_type": {
-										Type:        schema.TypeString,
-										Optional:    true,
-										Description: "The archival type.",
-									},
-									"inclusion_mask": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "The list of inclusion masks for file archiving.",
-										Elem: &schema.Schema{
-											Type: schema.TypeString,
+							"file_archive_settings": schema.ListNestedBlock{
+								Description: "The file archive settings.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"archival_type": schema.StringAttribute{
+											Description: "The archival type.",
+											Optional:    true,
 										},
-									},
-									"exclusion_mask": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "The list of exclusion masks for file archiving.",
-										Elem: &schema.Schema{
-											Type: schema.TypeString,
+										"inclusion_mask": schema.ListAttribute{
+											Description: "The list of inclusion masks for file archiving.",
+											Optional:    true,
+											ElementType: types.StringType,
+										},
+										"exclusion_mask": schema.ListAttribute{
+											Description: "The list of exclusion masks for file archiving.",
+											Optional:    true,
+											ElementType: types.StringType,
 										},
 									},
 								},
@@ -709,193 +654,133 @@ func ResourceVbrObjectStorageBackupJob() *schema.Resource {
 						},
 					},
 				},
-			},
-			"schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "The schedule settings for the backup job.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"run_automatically": {
-							Type:        schema.TypeBool,
-							Required:    true,
-							Description: "Specifies if the job runs automatically.",
+				"schedule": schema.ListNestedBlock{
+					Description: "The schedule settings for the backup job.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"run_automatically": schema.BoolAttribute{
+								Description: "Specifies if the job runs automatically.",
+								Required:    true,
+							},
 						},
-						"daily": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "The daily schedule settings.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"is_enabled": {
-										Type:        schema.TypeBool,
-										Required:    true,
-										Description: "Specifies if daily schedule is enabled.",
-									},
-									"local_time": {
-										Type:        schema.TypeString,
-										Optional:    true,
-										Description: "The local time for daily schedule.",
-									},
-									"daily_kind": {
-										Type:        schema.TypeString,
-										Optional:    true,
-										Description: "The kind of daily schedule.",
-									},
-									"days": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "The days for daily schedule.",
-										Elem: &schema.Schema{
-											Type: schema.TypeString,
+						Blocks: map[string]schema.Block{
+							"daily": schema.ListNestedBlock{
+								Description: "The daily schedule settings.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"is_enabled": schema.BoolAttribute{
+											Description: "Specifies if daily schedule is enabled.",
+											Required:    true,
+										},
+										"local_time": schema.StringAttribute{
+											Description: "The local time for daily schedule.",
+											Optional:    true,
+										},
+										"daily_kind": schema.StringAttribute{
+											Description: "The kind of daily schedule.",
+											Optional:    true,
+										},
+										"days": schema.ListAttribute{
+											Description: "The days for daily schedule.",
+											Optional:    true,
+											ElementType: types.StringType,
 										},
 									},
 								},
 							},
-						},
-						"monthly": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "The monthly schedule settings.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"is_enabled": {
-										Type:        schema.TypeBool,
-										Required:    true,
-										Description: "Specifies if monthly schedule is enabled.",
-									},
-									"day_of_week": {
-										Type:        schema.TypeString,
-										Optional:    true,
-										Description: "The day of the week for monthly schedule.",
-									},
-									"day_number_in_month": {
-										Type:        schema.TypeString,
-										Optional:    true,
-										Description: "The day number in month for monthly schedule.",
-									},
-									"day_of_month": {
-										Type:        schema.TypeInt,
-										Optional:    true,
-										Description: "The day of month for monthly schedule.",
-									},
-									"months": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "The months for monthly schedule.",
-										Elem: &schema.Schema{
-											Type: schema.TypeString,
+							"monthly": schema.ListNestedBlock{
+								Description: "The monthly schedule settings.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"is_enabled": schema.BoolAttribute{
+											Description: "Specifies if monthly schedule is enabled.",
+											Required:    true,
 										},
-									},
-									"local_time": {
-										Type:        schema.TypeString,
-										Optional:    true,
-										Description: "The local time for monthly schedule.",
-									},
-									"is_last_day_of_month": {
-										Type:        schema.TypeBool,
-										Optional:    true,
-										Description: "Specifies if it is the last day of the month for monthly schedule.",
+										"day_of_week": schema.StringAttribute{
+											Description: "The day of the week for monthly schedule.",
+											Optional:    true,
+										},
+										"day_number_in_month": schema.StringAttribute{
+											Description: "The day number in month for monthly schedule.",
+											Optional:    true,
+										},
+										"day_of_month": schema.Int64Attribute{
+											Description: "The day of month for monthly schedule.",
+											Optional:    true,
+										},
+										"months": schema.ListAttribute{
+											Description: "The months for monthly schedule.",
+											Optional:    true,
+											ElementType: types.StringType,
+										},
+										"local_time": schema.StringAttribute{
+											Description: "The local time for monthly schedule.",
+											Optional:    true,
+										},
+										"is_last_day_of_month": schema.BoolAttribute{
+											Description: "Specifies if it is the last day of the month for monthly schedule.",
+											Optional:    true,
+										},
 									},
 								},
 							},
-						},
-						"periodically": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "The periodically schedule settings.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"is_enabled": {
-										Type:        schema.TypeBool,
-										Required:    true,
-										Description: "Specifies if periodically schedule is enabled.",
+							"periodically": schema.ListNestedBlock{
+								Description: "The periodically schedule settings.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"is_enabled": schema.BoolAttribute{
+											Description: "Specifies if periodically schedule is enabled.",
+											Required:    true,
+										},
+										"periodically_kind": schema.StringAttribute{
+											Description: "The kind of periodically schedule.",
+											Optional:    true,
+										},
+										"frequency": schema.Int64Attribute{
+											Description: "The frequency for periodically schedule.",
+											Optional:    true,
+										},
+										"start_time_within_hour": schema.Int64Attribute{
+											Description: "The start time within hour for periodically schedule.",
+											Optional:    true,
+										},
 									},
-									"periodically_kind": {
-										Type:        schema.TypeString,
-										Optional:    true,
-										Description: "The kind of periodically schedule.",
-									},
-									"frequency": {
-										Type:        schema.TypeInt,
-										Optional:    true,
-										Description: "The frequency for periodically schedule.",
-									},
-									"backup_window": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										MaxItems:    1,
-										Description: "The backup window for periodically schedule.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"days": {
-													Type:        schema.TypeList,
-													Required:    true,
-													Description: "The backup window days.",
-													Elem: &schema.Resource{
-														Schema: map[string]*schema.Schema{
-															"day": {
-																Type:        schema.TypeString,
-																Required:    true,
-																Description: "The day of the week.",
-															},
-															"hours": {
-																Type:        schema.TypeString,
-																Required:    true,
-																Description: "The hours for the day.",
-															},
+									Blocks: map[string]schema.Block{
+										"backup_window": schema.ListNestedBlock{
+											Description: "The backup window for periodically schedule.",
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{},
+												Blocks: map[string]schema.Block{
+													"days": schema.ListNestedBlock{
+														Description: "The backup window days.",
+														Validators: []validator.List{
+															listvalidator.SizeAtLeast(1),
 														},
-													},
-												},
-											},
-										},
-									},
-									"start_time_within_hour": {
-										Type:        schema.TypeInt,
-										Optional:    true,
-										Description: "The start time within hour for periodically schedule.",
-									},
-								},
-							},
-						},
-						"continuously": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "The continuously schedule settings.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"is_enabled": {
-										Type:        schema.TypeBool,
-										Required:    true,
-										Description: "Specifies if continuously schedule is enabled.",
-									},
-									"backup_window": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										MaxItems:    1,
-										Description: "The backup window for continuously schedule.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"days": {
-													Type:        schema.TypeList,
-													Required:    true,
-													Description: "The backup window days.",
-													Elem: &schema.Resource{
-														Schema: map[string]*schema.Schema{
-															"day": {
-																Type:        schema.TypeString,
-																Required:    true,
-																Description: "The day of the week.",
-															},
-															"hours": {
-																Type:        schema.TypeString,
-																Required:    true,
-																Description: "The hours for the day.",
+														NestedObject: schema.NestedBlockObject{
+															Attributes: map[string]schema.Attribute{
+																"day": schema.StringAttribute{
+																	Description: "The day of the week.",
+																	Required:    true,
+																},
+																"hours": schema.StringAttribute{
+																	Description: "The hours for the day.",
+																	Required:    true,
+																},
 															},
 														},
 													},
@@ -905,86 +790,127 @@ func ResourceVbrObjectStorageBackupJob() *schema.Resource {
 									},
 								},
 							},
-						},
-						"after_this_job": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "The after this job schedule settings.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"is_enabled": {
-										Type:        schema.TypeBool,
-										Required:    true,
-										Description: "Specifies if after this job schedule is enabled.",
-									},
-									"job_name": {
-										Type:        schema.TypeString,
-										Optional:    true,
-										Description: "The name of the job to run after.",
-									},
+							"continuously": schema.ListNestedBlock{
+								Description: "The continuously schedule settings.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
 								},
-							},
-						},
-						"retry": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "The retry schedule settings.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"is_enabled": {
-										Type:        schema.TypeBool,
-										Required:    true,
-										Description: "Specifies if retry is enabled.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"is_enabled": schema.BoolAttribute{
+											Description: "Specifies if continuously schedule is enabled.",
+											Required:    true,
+										},
 									},
-									"retry_count": {
-										Type:        schema.TypeInt,
-										Optional:    true,
-										Description: "The number of retries.",
-									},
-									"await_minutes": {
-										Type:        schema.TypeInt,
-										Optional:    true,
-										Description: "The number of minutes to await between retries.",
-									},
-								},
-							},
-						},
-						"backup_window": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "The backup window schedule settings.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"is_enabled": {
-										Type:        schema.TypeBool,
-										Required:    true,
-										Description: "Specifies if backup window is enabled.",
-									},
-									"backup_window": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										MaxItems:    1,
-										Description: "The backup window.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"days": {
-													Type:        schema.TypeList,
-													Required:    true,
-													Description: "The backup window days.",
-													Elem: &schema.Resource{
-														Schema: map[string]*schema.Schema{
-															"day": {
-																Type:        schema.TypeString,
-																Required:    true,
-																Description: "The day of the week.",
+									Blocks: map[string]schema.Block{
+										"backup_window": schema.ListNestedBlock{
+											Description: "The backup window for continuously schedule.",
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{},
+												Blocks: map[string]schema.Block{
+													"days": schema.ListNestedBlock{
+														Description: "The backup window days.",
+														Validators: []validator.List{
+															listvalidator.SizeAtLeast(1),
+														},
+														NestedObject: schema.NestedBlockObject{
+															Attributes: map[string]schema.Attribute{
+																"day": schema.StringAttribute{
+																	Description: "The day of the week.",
+																	Required:    true,
+																},
+																"hours": schema.StringAttribute{
+																	Description: "The hours for the day.",
+																	Required:    true,
+																},
 															},
-															"hours": {
-																Type:        schema.TypeString,
-																Required:    true,
-																Description: "The hours for the day.",
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+							"after_this_job": schema.ListNestedBlock{
+								Description: "The after this job schedule settings.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"is_enabled": schema.BoolAttribute{
+											Description: "Specifies if after this job schedule is enabled.",
+											Required:    true,
+										},
+										"job_name": schema.StringAttribute{
+											Description: "The name of the job to run after.",
+											Optional:    true,
+										},
+									},
+								},
+							},
+							"retry": schema.ListNestedBlock{
+								Description: "The retry schedule settings.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"is_enabled": schema.BoolAttribute{
+											Description: "Specifies if retry is enabled.",
+											Required:    true,
+										},
+										"retry_count": schema.Int64Attribute{
+											Description: "The number of retries.",
+											Optional:    true,
+										},
+										"await_minutes": schema.Int64Attribute{
+											Description: "The number of minutes to await between retries.",
+											Optional:    true,
+										},
+									},
+								},
+							},
+							"backup_window": schema.ListNestedBlock{
+								Description: "The backup window schedule settings.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"is_enabled": schema.BoolAttribute{
+											Description: "Specifies if backup window is enabled.",
+											Required:    true,
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"backup_window": schema.ListNestedBlock{
+											Description: "The backup window.",
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{},
+												Blocks: map[string]schema.Block{
+													"days": schema.ListNestedBlock{
+														Description: "The backup window days.",
+														Validators: []validator.List{
+															listvalidator.SizeAtLeast(1),
+														},
+														NestedObject: schema.NestedBlockObject{
+															Attributes: map[string]schema.Attribute{
+																"day": schema.StringAttribute{
+																	Description: "The day of the week.",
+																	Required:    true,
+																},
+																"hours": schema.StringAttribute{
+																	Description: "The hours for the day.",
+																	Required:    true,
+																},
 															},
 														},
 													},
@@ -999,14 +925,22 @@ func ResourceVbrObjectStorageBackupJob() *schema.Resource {
 				},
 			},
 		},
-	}
+		tf.ResourceOperations{
+			Create: resourceVBRObjectStorageBackupJobCreate,
+			Read:   resourceVBRObjectStorageBackupJobRead,
+			Update: resourceVBRObjectStorageBackupJobUpdate,
+			Delete: resourceVBRObjectStorageBackupJobDelete,
+		},
+		tf.Timeouts{},
+		false,
+	)
 }
 
 // CRUD function (Create)
-func resourceVBRObjectStorageBackupJobCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func resourceVBRObjectStorageBackupJobCreate(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	// Build the job payload
@@ -1030,18 +964,18 @@ func resourceVBRObjectStorageBackupJobCreate(ctx context.Context, d *schema.Reso
 	url := client.BuildAPIURL("/api/v1/jobs")
 	reqBodyBytes, err := json.Marshal(job)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	respBodyBytes, err := client.DoRequest(ctx, "POST", url, reqBodyBytes)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	var resp VbrObjectStorageBackupJobResponse
 	err = json.Unmarshal(respBodyBytes, &resp)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	d.SetId(resp.ID)
@@ -1049,11 +983,11 @@ func resourceVBRObjectStorageBackupJobCreate(ctx context.Context, d *schema.Reso
 }
 
 // CRUD function (Read)
-func resourceVBRObjectStorageBackupJobRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func resourceVBRObjectStorageBackupJobRead(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	jobID := d.Id()
 	url := client.BuildAPIURL("/api/v1/jobs/" + jobID)
@@ -1063,13 +997,13 @@ func resourceVBRObjectStorageBackupJobRead(ctx context.Context, d *schema.Resour
 			d.SetId("")
 			return diags
 		}
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	var resp VbrObjectStorageBackupJobResponse
 	err = json.Unmarshal(respBodyBytes, &resp)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	d.Set("name", resp.Name)
@@ -1083,10 +1017,10 @@ func resourceVBRObjectStorageBackupJobRead(ctx context.Context, d *schema.Resour
 }
 
 // CRUD function (Update)
-func resourceVBRObjectStorageBackupJobUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func resourceVBRObjectStorageBackupJobUpdate(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	jobID := d.Id()
 
@@ -1113,30 +1047,30 @@ func resourceVBRObjectStorageBackupJobUpdate(ctx context.Context, d *schema.Reso
 	url := client.BuildAPIURL("/api/v1/jobs/" + jobID)
 	reqBodyBytes, err := json.Marshal(job)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	_, err = client.DoRequest(ctx, "PUT", url, reqBodyBytes)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	return resourceVBRObjectStorageBackupJobRead(ctx, d, m)
 }
 
 // CRUD function (Delete)
-func resourceVBRObjectStorageBackupJobDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func resourceVBRObjectStorageBackupJobDelete(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	jobID := d.Id()
 	url := client.BuildAPIURL("/api/v1/jobs/" + jobID)
 	_, err = client.DoRequest(ctx, "DELETE", url, nil)
 	if err != nil {
 		if !strings.Contains(err.Error(), "404") {
-			return diag.FromErr(err)
+			return tf.FromErr(err)
 		}
 	}
 	d.SetId("")

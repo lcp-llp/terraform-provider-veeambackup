@@ -1,14 +1,21 @@
-﻿package vbr
+package vbr
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"strings"
+	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 type VBRRepository struct {
@@ -47,323 +54,248 @@ type VBRRepositoryResponse struct {
 	RelatedSessionID  string              `json:"relatedSessionId"`
 }
 
-func ResourceVbrRepository() *schema.Resource {
-	return &schema.Resource{
-		Description:   "Schema for VBR Repository.",
-		CreateContext: resourceVBRRepositoryCreate,
-		ReadContext:   resourceVBRRepositoryRead,
-		UpdateContext: resourceVBRRepositoryUpdate,
-		DeleteContext: resourceVBRRepositoryDelete,
-		Schema: map[string]*schema.Schema{
-			"name": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ValidateFunc: validation.StringLenBetween(1, 256),
-				Description:  "Specifies the name of the repository.",
-			},
-			"description": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ValidateFunc: validation.StringLenBetween(0, 1024),
-				Description:  "Specifies the description of the repository.",
-			},
-			"type": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ValidateFunc: validation.StringInSlice([]string{"AmazonS3", "AmazonGlacier", "AzureBlob", "AzureArchive", "Nfs", "Smb"}, false),
-				Description:  "Specifies the type of the repository. Valid values are AmazonS3, AmazonGlacier, AzureBlob, AzureArchive, Nfs, Smb.",
-			},
-			"account": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Account settings for the repository. Required for types AzureBlob, AzureArchive, AmazonS3.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"credential_id": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Specifies the ID of the credential to use for the repository.",
-						},
-						"region_type": {
-							Type:         schema.TypeString,
-							Required:     true,
-							ValidateFunc: validation.StringInSlice([]string{"China", "Global", "Government"}, false),
-							Description:  "Specifies the region type for the repository. Valid values are China, Global, Government.",
-						},
-						"connection_settings": {
-							Type:        schema.TypeList,
-							Required:    true,
-							MaxItems:    1,
-							Description: "Connection settings for the account.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"connection_type": {
-										Type:         schema.TypeString,
-										Required:     true,
-										ValidateFunc: validation.StringInSlice([]string{"Direct", "SelectedGateway"}, false),
-										Description:  "Specifies the connection type for the account. Valid values are Direct, SelectedGateway.",
-									},
-									"gateway_server_ids": {
-										Type:        schema.TypeSet,
-										Elem:        &schema.Schema{Type: schema.TypeString},
-										MinItems:    1,
-										Optional:    true,
-										Description: "Specifies the IDs of the gateway servers to use for the repository.",
-									},
-								},
+func ResourceVbrRepository() resource.Resource {
+	return tf.NewResource(
+		"vbr_repository",
+		schema.Schema{
+			Description: "Schema for VBR Repository.",
+			Attributes: map[string]schema.Attribute{
+				"name": schema.StringAttribute{
+					Description: "Specifies the name of the repository.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.LengthBetween(1, 256),
+					},
+				},
+				"description": schema.StringAttribute{
+					Description: "Specifies the description of the repository.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.LengthBetween(0, 1024),
+					},
+				},
+				"type": schema.StringAttribute{
+					Description: "Specifies the type of the repository. Valid values are AmazonS3, AmazonGlacier, AzureBlob, AzureArchive, Nfs, Smb.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.OneOf([]string{"AmazonS3", "AmazonGlacier", "AzureBlob", "AzureArchive", "Nfs", "Smb"}...),
+					},
+				},
+				"unique_id": schema.StringAttribute{
+					Description: "Specifies the unique ID of the repository.",
+					Optional:    true,
+				},
+				"import_backup": schema.BoolAttribute{
+					Description: "Specifies whether to import backup.",
+					Optional:    true,
+				},
+				"import_index": schema.BoolAttribute{
+					Description: "Specifies whether to import index.",
+					Optional:    true,
+				},
+				"task_limit_enabled": schema.BoolAttribute{
+					Description: "Specifies whether the task limit is enabled.",
+					Optional:    true,
+				},
+				"max_task_count": schema.Int64Attribute{
+					Description: "Specifies the maximum task count for the repository.",
+					Optional:    true,
+				},
+				"job_id": schema.StringAttribute{
+					Description: "ID of the job or job-related activity.",
+					Computed:    true,
+				},
+				"creation_time": schema.StringAttribute{
+					Description: "The time when the repository was created.",
+					Computed:    true,
+				},
+				"id": schema.StringAttribute{
+					Description: "The ID of the repository.",
+					Computed:    true,
+				},
+				"session_type": schema.StringAttribute{
+					Description: "The session type of the repository.",
+					Computed:    true,
+				},
+				"state": schema.StringAttribute{
+					Description: "The current state of the repository.",
+					Computed:    true,
+				},
+				"usn": schema.Int64Attribute{
+					Description: "The update sequence number of the repository.",
+					Computed:    true,
+				},
+				"end_time": schema.StringAttribute{
+					Description: "The time when the repository operation ended.",
+					Computed:    true,
+				},
+				"progress_percent": schema.Int64Attribute{
+					Description: "The progress percentage of the repository operation.",
+					Computed:    true,
+				},
+				"result": schema.ListNestedAttribute{
+					Description: "The result of the repository operation.",
+					Computed:    true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"result": schema.StringAttribute{
+								Description: "The result status of the repository operation.",
+								Computed:    true,
+							},
+							"message": schema.StringAttribute{
+								Description: "The message associated with the repository operation result.",
+								Computed:    true,
+							},
+							"is_cancelled": schema.BoolAttribute{
+								Description: "Indicates whether the repository operation was cancelled.",
+								Computed:    true,
 							},
 						},
 					},
 				},
-			},
-			"container": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Container settings for the repository. Required for types AzureBlob, AzureArchive.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"container_name": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Specifies the name of the container.",
-						},
-						"folder_name": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Specifies the folder name within the container.",
-						},
-						"storage_consumption_limit": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "Storage consumption limit settings for the container.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"is_enabled": {
-										Type:        schema.TypeBool,
-										Required:    true,
-										Description: "Specifies whether the storage consumption limit is enabled.",
-									},
-									"consumption_limit_count": {
-										Type:        schema.TypeInt,
-										Optional:    true,
-										Description: "Specifies the storage consumption limit count.",
-									},
-									"consumption_limit_kind": {
-										Type:         schema.TypeString,
-										Optional:     true,
-										ValidateFunc: validation.StringInSlice([]string{"PB", "TB"}, false),
-										Description:  "Specifies the storage consumption limit kind. Valid values are PB, TB.",
-									},
-								},
-							},
-						},
-						"immutability": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "Immutability settings for the container.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"is_enabled": {
-										Type:        schema.TypeBool,
-										Optional:    true,
-										Default:     true,
-										Description: "Specifies whether immutability is enabled.",
-									},
-									"days_count": {
-										Type:        schema.TypeInt,
-										Required:    true,
-										Description: "Specifies the number of days for immutability.",
-									},
-									"immutability_mode": {
-										Type:         schema.TypeString,
-										Required:     true,
-										ValidateFunc: validation.StringInSlice([]string{"RepositorySettings", "RetentionSettings"}, false),
-										Description:  "Specifies the immutability mode. Valid values are RepositorySettings, RetentionSettings.",
-									},
-								},
-							},
-						},
-					},
+				"resource_id": schema.StringAttribute{
+					Description: "The resource ID of the repository.",
+					Computed:    true,
+				},
+				"resource_reference": schema.StringAttribute{
+					Description: "The resource reference of the repository.",
+					Computed:    true,
+				},
+				"parent_session_id": schema.StringAttribute{
+					Description: "The parent session ID of the repository.",
+					Computed:    true,
+				},
+				"platform_name": schema.StringAttribute{
+					Description: "The platform name of the repository.",
+					Computed:    true,
+				},
+				"platform_id": schema.StringAttribute{
+					Description: "The platform ID of the repository.",
+					Computed:    true,
+				},
+				"initiated_by": schema.StringAttribute{
+					Description: "The user who initiated the repository operation.",
+					Computed:    true,
+				},
+				"related_session_id": schema.StringAttribute{
+					Description: "The related session ID of the repository.",
+					Computed:    true,
 				},
 			},
-			"bucket": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Bucket settings for the repository. Required for types AmazonS3, AmazonGlacier.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"bucket_name": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Specifies the name of the bucket.",
-						},
-						"folder_name": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Specifies the folder name within the bucket.",
-						},
-						"region_id": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Specifies the region ID of the bucket.",
-						},
-						"storage_consumption_limit": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "Storage consumption limit settings for the container.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"is_enabled": {
-										Type:        schema.TypeBool,
-										Required:    true,
-										Description: "Specifies whether the storage consumption limit is enabled.",
-									},
-									"consumption_limit_count": {
-										Type:        schema.TypeInt,
-										Optional:    true,
-										Description: "Specifies the storage consumption limit count.",
-									},
-									"consumption_limit_kind": {
-										Type:         schema.TypeString,
-										Optional:     true,
-										ValidateFunc: validation.StringInSlice([]string{"PB", "TB"}, false),
-										Description:  "Specifies the storage consumption limit kind. Valid values are PB, TB.",
-									},
-								},
-							},
-						},
-						"immutability": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "Immutability settings for the container.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"is_enabled": {
-										Type:        schema.TypeBool,
-										Required:    true,
-										Description: "Specifies whether immutability is enabled.",
-									},
-									"days_count": {
-										Type:        schema.TypeInt,
-										Required:    true,
-										Description: "Specifies the number of days for immutability.",
-									},
-									"immutability_mode": {
-										Type:         schema.TypeString,
-										Required:     true,
-										ValidateFunc: validation.StringInSlice([]string{"RepositorySettings", "RetentionSettings"}, false),
-										Description:  "Specifies the immutability mode. Valid values are RepositorySettings, RetentionSettings.",
-									},
-								},
-							},
-						},
+			Blocks: map[string]schema.Block{
+				"account": schema.ListNestedBlock{
+					Description: "Account settings for the repository. Required for types AzureBlob, AzureArchive, AmazonS3.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
 					},
-				},
-			},
-			"mount_server": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Mount server settings for the repository. Required for type AzureBlob, AzureArchive, AmazonS3.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"mount_server_settings_type": {
-							Type:         schema.TypeString,
-							Required:     true,
-							ValidateFunc: validation.StringInSlice([]string{"Windows", "Linux", "Both"}, false),
-							Description:  "Specifies the mount server settings type. Valid values are Windows, Linux, Both.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"credential_id": schema.StringAttribute{
+								Description: "Specifies the ID of the credential to use for the repository.",
+								Required:    true,
+							},
+							"region_type": schema.StringAttribute{
+								Description: "Specifies the region type for the repository. Valid values are China, Global, Government.",
+								Required:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"China", "Global", "Government"}...),
+								},
+							},
 						},
-						"windows": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "Windows mount server settings.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"mount_server_id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Specifies the ID of the Windows mount server.",
-									},
-									"v_power_nfs_enabled": {
-										Type:        schema.TypeBool,
-										Required:    true,
-										Description: "Specifies whether VPower NFS is enabled for the Windows mount server.",
-									},
-									"write_cache_folder": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Specifies the write cache folder for the Windows mount server.",
-									},
-									"v_power_nfs_port_settings": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										MaxItems:    1,
-										Description: "VPower NFS port settings for the Windows mount server.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"mount_port": {
-													Type:        schema.TypeInt,
-													Optional:    true,
-													Description: "Specifies the mount port for VPower NFS.",
-												},
-												"v_power_nfs_port": {
-													Type:        schema.TypeInt,
-													Optional:    true,
-													Description: "Specifies the VPower NFS port.",
-												},
+						Blocks: map[string]schema.Block{
+							"connection_settings": schema.ListNestedBlock{
+								Description: "Connection settings for the account.",
+								Validators: []validator.List{
+									listvalidator.SizeAtLeast(1),
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"connection_type": schema.StringAttribute{
+											Description: "Specifies the connection type for the account. Valid values are Direct, SelectedGateway.",
+											Required:    true,
+											Validators: []validator.String{
+												stringvalidator.OneOf([]string{"Direct", "SelectedGateway"}...),
 											},
+										},
+										"gateway_server_ids": schema.SetAttribute{
+											Description: "Specifies the IDs of the gateway servers to use for the repository.",
+											Optional:    true,
+											Validators: []validator.Set{
+												setvalidator.SizeAtLeast(1),
+											},
+											ElementType: types.StringType,
 										},
 									},
 								},
 							},
 						},
-						"linux": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "Linux mount server settings.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"mount_server_id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Specifies the ID of the Linux mount server.",
+					},
+				},
+				"container": schema.ListNestedBlock{
+					Description: "Container settings for the repository. Required for types AzureBlob, AzureArchive.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"container_name": schema.StringAttribute{
+								Description: "Specifies the name of the container.",
+								Required:    true,
+							},
+							"folder_name": schema.StringAttribute{
+								Description: "Specifies the folder name within the container.",
+								Optional:    true,
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"storage_consumption_limit": schema.ListNestedBlock{
+								Description: "Storage consumption limit settings for the container.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"is_enabled": schema.BoolAttribute{
+											Description: "Specifies whether the storage consumption limit is enabled.",
+											Required:    true,
+										},
+										"consumption_limit_count": schema.Int64Attribute{
+											Description: "Specifies the storage consumption limit count.",
+											Optional:    true,
+										},
+										"consumption_limit_kind": schema.StringAttribute{
+											Description: "Specifies the storage consumption limit kind. Valid values are PB, TB.",
+											Optional:    true,
+											Validators: []validator.String{
+												stringvalidator.OneOf([]string{"PB", "TB"}...),
+											},
+										},
 									},
-									"v_power_nfs_enabled": {
-										Type:        schema.TypeBool,
-										Required:    true,
-										Description: "Specifies whether VPower NFS is enabled for the Linux mount server.",
-									},
-									"write_cache_folder": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Specifies the write cache folder for the Linux mount server.",
-									},
-									"v_power_nfs_port_settings": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										MaxItems:    1,
-										Description: "VPower NFS port settings for the Linux mount server.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"mount_port": {
-													Type:        schema.TypeInt,
-													Optional:    true,
-													Description: "Specifies the mount port for VPower NFS.",
-												},
-												"v_power_nfs_port": {
-													Type:        schema.TypeInt,
-													Optional:    true,
-													Description: "Specifies the VPower NFS port.",
-												},
+								},
+							},
+							"immutability": schema.ListNestedBlock{
+								Description: "Immutability settings for the container.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"is_enabled": schema.BoolAttribute{
+											Description: "Specifies whether immutability is enabled.",
+											Optional:    true,
+											Computed:    true,
+											Default:     booldefault.StaticBool(true),
+										},
+										"days_count": schema.Int64Attribute{
+											Description: "Specifies the number of days for immutability.",
+											Required:    true,
+										},
+										"immutability_mode": schema.StringAttribute{
+											Description: "Specifies the immutability mode. Valid values are RepositorySettings, RetentionSettings.",
+											Required:    true,
+											Validators: []validator.String{
+												stringvalidator.OneOf([]string{"RepositorySettings", "RetentionSettings"}...),
 											},
 										},
 									},
@@ -372,211 +304,260 @@ func ResourceVbrRepository() *schema.Resource {
 						},
 					},
 				},
-			},
-			"unique_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Specifies the unique ID of the repository.",
-			},
-			"import_backup": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Specifies whether to import backup.",
-			},
-			"import_index": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Specifies whether to import index.",
-			},
-			"task_limit_enabled": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Specifies whether the task limit is enabled.",
-			},
-			"max_task_count": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Description: "Specifies the maximum task count for the repository.",
-			},
-			"proxy_appliance": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Proxy appliance settings for the repository. Used for types AzureBlob, AmazonS3 but required for AzureArchive.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"subscription_id": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "ID that Veeam Backup & Replication assigned to the Microsoft Azure subscription. Required for type AzureBlob, AzureArchive.",
+				"bucket": schema.ListNestedBlock{
+					Description: "Bucket settings for the repository. Required for types AmazonS3, AmazonGlacier.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"bucket_name": schema.StringAttribute{
+								Description: "Specifies the name of the bucket.",
+								Required:    true,
+							},
+							"folder_name": schema.StringAttribute{
+								Description: "Specifies the folder name within the bucket.",
+								Required:    true,
+							},
+							"region_id": schema.StringAttribute{
+								Description: "Specifies the region ID of the bucket.",
+								Required:    true,
+							},
 						},
-						"instance_size": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Specifies the instance size of the proxy appliance. Required for type AzureBlob, AzureArchive.",
-						},
-						"resource_group": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Specifies the resource group of the proxy appliance. Required for type AzureBlob, AzureArchive.",
-						},
-						"virtual_network": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Specifies the virtual network of the proxy appliance. Required for type AzureBlob, AzureArchive.",
-						},
-						"subnet": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Specifies the subnet of the proxy appliance. Required for type AzureBlob, AzureArchive.",
-						},
-						"redirector_port": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "Specifies the redirector port of the proxy appliance. Required for type AzureBlob, AzureArchive, AmazonS3.",
-						},
-						"ec2_instance_type": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Specifies the EC2 instance type of the proxy appliance. Required for type AmazonS3.",
-						},
-						"vpc_name": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Specifies the VPC name of the proxy appliance. Required for type AmazonS3.",
-						},
-						"vpc_id": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Specifies the VPC ID of the proxy appliance. Required for type AmazonS3.",
-						},
-						"subnet_name": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Specifies the subnet name of the proxy appliance. Required for type AmazonS3.",
-						},
-						"subnet_id": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Specifies the subnet ID of the proxy appliance. Required for type AmazonS3.",
-						},
-						"security_group": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Specifies the security group of the proxy appliance. Optional for type AmazonS3.",
+						Blocks: map[string]schema.Block{
+							"storage_consumption_limit": schema.ListNestedBlock{
+								Description: "Storage consumption limit settings for the container.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"is_enabled": schema.BoolAttribute{
+											Description: "Specifies whether the storage consumption limit is enabled.",
+											Required:    true,
+										},
+										"consumption_limit_count": schema.Int64Attribute{
+											Description: "Specifies the storage consumption limit count.",
+											Optional:    true,
+										},
+										"consumption_limit_kind": schema.StringAttribute{
+											Description: "Specifies the storage consumption limit kind. Valid values are PB, TB.",
+											Optional:    true,
+											Validators: []validator.String{
+												stringvalidator.OneOf([]string{"PB", "TB"}...),
+											},
+										},
+									},
+								},
+							},
+							"immutability": schema.ListNestedBlock{
+								Description: "Immutability settings for the container.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"is_enabled": schema.BoolAttribute{
+											Description: "Specifies whether immutability is enabled.",
+											Required:    true,
+										},
+										"days_count": schema.Int64Attribute{
+											Description: "Specifies the number of days for immutability.",
+											Required:    true,
+										},
+										"immutability_mode": schema.StringAttribute{
+											Description: "Specifies the immutability mode. Valid values are RepositorySettings, RetentionSettings.",
+											Required:    true,
+											Validators: []validator.String{
+												stringvalidator.OneOf([]string{"RepositorySettings", "RetentionSettings"}...),
+											},
+										},
+									},
+								},
+							},
 						},
 					},
 				},
-			}, // Computed fields
-			"job_id": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "ID of the job or job-related activity.",
-			},
-			"creation_time": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "The time when the repository was created.",
-			},
-			"id": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "The ID of the repository.",
-			},
-			"session_type": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "The session type of the repository.",
-			},
-			"state": {
-				Type:         schema.TypeString,
-				Computed:     true,
-				Description:  "The current state of the repository.",
-			},
-			"usn": {
-				Type:        schema.TypeInt,
-				Computed:    true,
-				Description: "The update sequence number of the repository.",
-			},
-			"end_time": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "The time when the repository operation ended.",
-			},
-			"progress_percent": {
-				Type:        schema.TypeInt,
-				Computed:    true,
-				Description: "The progress percentage of the repository operation.",
-			},
-			"result": {
-				Type:        schema.TypeList,
-				Computed:    true,
-				Description: "The result of the repository operation.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"result": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The result status of the repository operation.",
+				"mount_server": schema.ListNestedBlock{
+					Description: "Mount server settings for the repository. Required for type AzureBlob, AzureArchive, AmazonS3.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"mount_server_settings_type": schema.StringAttribute{
+								Description: "Specifies the mount server settings type. Valid values are Windows, Linux, Both.",
+								Required:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"Windows", "Linux", "Both"}...),
+								},
+							},
 						},
-						"message": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The message associated with the repository operation result.",
-						},
-						"is_cancelled": {
-							Type:        schema.TypeBool,
-							Computed:    true,
-							Description: "Indicates whether the repository operation was cancelled.",
+						Blocks: map[string]schema.Block{
+							"windows": schema.ListNestedBlock{
+								Description: "Windows mount server settings.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"mount_server_id": schema.StringAttribute{
+											Description: "Specifies the ID of the Windows mount server.",
+											Required:    true,
+										},
+										"v_power_nfs_enabled": schema.BoolAttribute{
+											Description: "Specifies whether VPower NFS is enabled for the Windows mount server.",
+											Required:    true,
+										},
+										"write_cache_folder": schema.StringAttribute{
+											Description: "Specifies the write cache folder for the Windows mount server.",
+											Required:    true,
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"v_power_nfs_port_settings": schema.ListNestedBlock{
+											Description: "VPower NFS port settings for the Windows mount server.",
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"mount_port": schema.Int64Attribute{
+														Description: "Specifies the mount port for VPower NFS.",
+														Optional:    true,
+													},
+													"v_power_nfs_port": schema.Int64Attribute{
+														Description: "Specifies the VPower NFS port.",
+														Optional:    true,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+							"linux": schema.ListNestedBlock{
+								Description: "Linux mount server settings.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"mount_server_id": schema.StringAttribute{
+											Description: "Specifies the ID of the Linux mount server.",
+											Required:    true,
+										},
+										"v_power_nfs_enabled": schema.BoolAttribute{
+											Description: "Specifies whether VPower NFS is enabled for the Linux mount server.",
+											Required:    true,
+										},
+										"write_cache_folder": schema.StringAttribute{
+											Description: "Specifies the write cache folder for the Linux mount server.",
+											Required:    true,
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"v_power_nfs_port_settings": schema.ListNestedBlock{
+											Description: "VPower NFS port settings for the Linux mount server.",
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"mount_port": schema.Int64Attribute{
+														Description: "Specifies the mount port for VPower NFS.",
+														Optional:    true,
+													},
+													"v_power_nfs_port": schema.Int64Attribute{
+														Description: "Specifies the VPower NFS port.",
+														Optional:    true,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
 						},
 					},
 				},
-			},
-			"resource_id": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "The resource ID of the repository.",
-			},
-			"resource_reference": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "The resource reference of the repository.",
-			},
-			"parent_session_id": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "The parent session ID of the repository.",
-			},
-			"platform_name": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "The platform name of the repository.",
-			},
-			"platform_id": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "The platform ID of the repository.",
-			},
-			"initiated_by": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "The user who initiated the repository operation.",
-			},
-			"related_session_id": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "The related session ID of the repository.",
+				"proxy_appliance": schema.ListNestedBlock{
+					Description: "Proxy appliance settings for the repository. Used for types AzureBlob, AmazonS3 but required for AzureArchive.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"subscription_id": schema.StringAttribute{
+								Description: "ID that Veeam Backup & Replication assigned to the Microsoft Azure subscription. Required for type AzureBlob, AzureArchive.",
+								Optional:    true,
+							},
+							"instance_size": schema.StringAttribute{
+								Description: "Specifies the instance size of the proxy appliance. Required for type AzureBlob, AzureArchive.",
+								Optional:    true,
+							},
+							"resource_group": schema.StringAttribute{
+								Description: "Specifies the resource group of the proxy appliance. Required for type AzureBlob, AzureArchive.",
+								Optional:    true,
+							},
+							"virtual_network": schema.StringAttribute{
+								Description: "Specifies the virtual network of the proxy appliance. Required for type AzureBlob, AzureArchive.",
+								Optional:    true,
+							},
+							"subnet": schema.StringAttribute{
+								Description: "Specifies the subnet of the proxy appliance. Required for type AzureBlob, AzureArchive.",
+								Optional:    true,
+							},
+							"redirector_port": schema.Int64Attribute{
+								Description: "Specifies the redirector port of the proxy appliance. Required for type AzureBlob, AzureArchive, AmazonS3.",
+								Optional:    true,
+							},
+							"ec2_instance_type": schema.StringAttribute{
+								Description: "Specifies the EC2 instance type of the proxy appliance. Required for type AmazonS3.",
+								Optional:    true,
+							},
+							"vpc_name": schema.StringAttribute{
+								Description: "Specifies the VPC name of the proxy appliance. Required for type AmazonS3.",
+								Optional:    true,
+							},
+							"vpc_id": schema.StringAttribute{
+								Description: "Specifies the VPC ID of the proxy appliance. Required for type AmazonS3.",
+								Optional:    true,
+							},
+							"subnet_name": schema.StringAttribute{
+								Description: "Specifies the subnet name of the proxy appliance. Required for type AmazonS3.",
+								Optional:    true,
+							},
+							"subnet_id": schema.StringAttribute{
+								Description: "Specifies the subnet ID of the proxy appliance. Required for type AmazonS3.",
+								Optional:    true,
+							},
+							"security_group": schema.StringAttribute{
+								Description: "Specifies the security group of the proxy appliance. Optional for type AmazonS3.",
+								Optional:    true,
+							},
+						},
+					},
+				},
 			},
 		},
-	}
+		tf.ResourceOperations{
+			Create: resourceVBRRepositoryCreate,
+			Read:   resourceVBRRepositoryRead,
+			Update: resourceVBRRepositoryUpdate,
+			Delete: resourceVBRRepositoryDelete,
+		},
+		tf.Timeouts{},
+		false,
+	)
 }
 
 // CRUD function (Create)
-func resourceVBRRepositoryCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func resourceVBRRepositoryCreate(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	// Build the repository payload
@@ -614,18 +595,18 @@ func resourceVBRRepositoryCreate(ctx context.Context, d *schema.ResourceData, m 
 	url := client.BuildAPIURL("/api/v1/backupInfrastructure/repositories")
 	reqBodyBytes, err := json.Marshal(repository)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	respBodyBytes, err := client.DoRequest(ctx, "POST", url, reqBodyBytes)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	var resp VBRRepositoryResponse
 	err = json.Unmarshal(respBodyBytes, &resp)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	d.SetId(resp.ResourceID)
@@ -638,8 +619,6 @@ func resourceVBRRepositoryCreate(ctx context.Context, d *schema.ResourceData, m 
 	d.Set("usn", resp.USN)
 	d.Set("end_time", resp.EndTime)
 	d.Set("progress_percent", resp.ProgreessPercent)
-	d.Set("result_message", resp.Result.Message)
-	d.Set("result_is_cancelled", resp.Result.IsCancelled)
 	d.Set("resource_reference", resp.ResourceReference)
 	d.Set("parent_session_id", resp.ParentSessionID)
 	d.Set("platform_name", resp.PlatformName)
@@ -651,11 +630,11 @@ func resourceVBRRepositoryCreate(ctx context.Context, d *schema.ResourceData, m 
 }
 
 // CRUD function (Read)
-func resourceVBRRepositoryRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func resourceVBRRepositoryRead(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	repositoryID := d.Id()
 
@@ -666,13 +645,13 @@ func resourceVBRRepositoryRead(ctx context.Context, d *schema.ResourceData, m in
 			d.SetId("")
 			return diags
 		}
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	var resp VBRRepositoryResponse
 	err = json.Unmarshal(respBodyBytes, &resp)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	// Set computed fields
@@ -683,8 +662,6 @@ func resourceVBRRepositoryRead(ctx context.Context, d *schema.ResourceData, m in
 	d.Set("usn", resp.USN)
 	d.Set("end_time", resp.EndTime)
 	d.Set("progress_percent", resp.ProgreessPercent)
-	d.Set("result_message", resp.Result.Message)
-	d.Set("result_is_cancelled", resp.Result.IsCancelled)
 	d.Set("resource_reference", resp.ResourceReference)
 	d.Set("parent_session_id", resp.ParentSessionID)
 	d.Set("platform_name", resp.PlatformName)
@@ -696,10 +673,10 @@ func resourceVBRRepositoryRead(ctx context.Context, d *schema.ResourceData, m in
 }
 
 // CRUD function (Update)
-func resourceVBRRepositoryUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func resourceVBRRepositoryUpdate(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	repositoryID := d.Id()
 
@@ -738,18 +715,18 @@ func resourceVBRRepositoryUpdate(ctx context.Context, d *schema.ResourceData, m 
 	url := client.BuildAPIURL("/api/v1/backupInfrastructure/repositories/" + repositoryID)
 	reqBodyBytes, err := json.Marshal(repository)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	respBodyBytes, err := client.DoRequest(ctx, "PUT", url, reqBodyBytes)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	var resp VBRRepositoryResponse
 	err = json.Unmarshal(respBodyBytes, &resp)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	// Set computed fields from response
@@ -760,8 +737,6 @@ func resourceVBRRepositoryUpdate(ctx context.Context, d *schema.ResourceData, m 
 	d.Set("usn", resp.USN)
 	d.Set("end_time", resp.EndTime)
 	d.Set("progress_percent", resp.ProgreessPercent)
-	d.Set("result_message", resp.Result.Message)
-	d.Set("result_is_cancelled", resp.Result.IsCancelled)
 	d.Set("resource_reference", resp.ResourceReference)
 	d.Set("parent_session_id", resp.ParentSessionID)
 	d.Set("platform_name", resp.PlatformName)
@@ -773,11 +748,11 @@ func resourceVBRRepositoryUpdate(ctx context.Context, d *schema.ResourceData, m 
 }
 
 // CRUD function (Delete)
-func resourceVBRRepositoryDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func resourceVBRRepositoryDelete(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	repositoryID := d.Id()
 
@@ -788,7 +763,7 @@ func resourceVBRRepositoryDelete(ctx context.Context, d *schema.ResourceData, m 
 			d.SetId("")
 			return diags
 		}
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	d.SetId("")

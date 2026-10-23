@@ -1,80 +1,80 @@
-﻿package vbr
+package vbr
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
+	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 type VBRCloudCredentialDataSourceModel struct {
 	ID string `json:"id"`
 }
 
-func DataSourceVbrCloudCredential() *schema.Resource {
-	return &schema.Resource{
-		Description: "Retrieves information about an Azure cloud credential from Veeam Backup & Replication.",
-		ReadContext: DataSourceVbrCloudCredentialRead,
-		Schema: map[string]*schema.Schema{
-			"id": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "The ID of the Azure cloud credential.",
-				ValidateFunc: validation.StringIsNotEmpty,
-			},// Computed attributes
-			"type": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Cloud credential type.",
-			},	
-			"account": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Account name (for AzureStorage type).",
-			},
-			"connection_name": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Connection name (for AzureCompute type).",
-			},
-			"deployment": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Deployment (for AzureCompute type).",
-			},
-			"subscription": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Subscription (for AzureCompute type).",
-			},
-			"access_key": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Access key (for Amazon type).",
-			},
-			"description": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Cloud credential description.",
-			},
-			"unique_id": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Cloud credential unique ID.",
+func DataSourceVbrCloudCredential() datasource.DataSource {
+	return tf.NewDataSource(
+		"vbr_cloud_credential",
+		schema.Schema{
+			Description: "Retrieves information about an Azure cloud credential from Veeam Backup & Replication.",
+			Attributes: map[string]schema.Attribute{
+				"id": schema.StringAttribute{
+					Description: "The ID of the Azure cloud credential.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.LengthAtLeast(1),
+					},
+				},
+				"type": schema.StringAttribute{
+					Description: "Cloud credential type.",
+					Computed:    true,
+				},
+				"account": schema.StringAttribute{
+					Description: "Account name (for AzureStorage type).",
+					Computed:    true,
+				},
+				"connection_name": schema.StringAttribute{
+					Description: "Connection name (for AzureCompute type).",
+					Computed:    true,
+				},
+				"deployment": schema.StringAttribute{
+					Description: "Deployment (for AzureCompute type).",
+					Computed:    true,
+				},
+				"subscription": schema.StringAttribute{
+					Description: "Subscription (for AzureCompute type).",
+					Computed:    true,
+				},
+				"access_key": schema.StringAttribute{
+					Description: "Access key (for Amazon type).",
+					Computed:    true,
+				},
+				"description": schema.StringAttribute{
+					Description: "Cloud credential description.",
+					Computed:    true,
+				},
+				"unique_id": schema.StringAttribute{
+					Description: "Cloud credential unique ID.",
+					Computed:    true,
+				},
 			},
 		},
-	}
+		DataSourceVbrCloudCredentialRead,
+		map[string]interface{}{},
+	)
 }
 
-func DataSourceVbrCloudCredentialRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func DataSourceVbrCloudCredentialRead(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	var diags diag.Diagnostics
 	cloudCredentialID := d.Get("id").(string)
@@ -83,12 +83,12 @@ func DataSourceVbrCloudCredentialRead(ctx context.Context, d *schema.ResourceDat
 	fullUrl := client.BuildAPIURL(apiUrl)
 	respBody, err := client.DoRequest(ctx, "GET", fullUrl, nil)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	var responseData VBRCloudCredentialsResponseData
 	err = json.Unmarshal(respBody, &responseData)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to parse cloud credential response: %s", err))
+		return tf.FromErr(fmt.Errorf("failed to parse cloud credential response: %s", err))
 	}
 	// Map response data to schema
 	d.SetId(responseData.ID)
@@ -109,6 +109,6 @@ func DataSourceVbrCloudCredentialRead(ctx context.Context, d *schema.ResourceDat
 	}
 	if responseData.UniqueID != nil {
 		d.Set("unique_id", *responseData.UniqueID)
-	} 
+	}
 	return diags
 }

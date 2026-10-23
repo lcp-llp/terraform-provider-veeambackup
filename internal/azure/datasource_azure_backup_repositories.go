@@ -1,16 +1,22 @@
-﻿package azure
+package azure
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
 	"strconv"
+	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 // BackupRepository represents a backup repository from the Veeam API
@@ -78,285 +84,221 @@ type StorageConsumptionLimit struct {
 	LimitValue int    `json:"limitValue"`
 }
 
-func DataSourceAzureBackupRepositories() *schema.Resource {
-	return &schema.Resource{
-		Description: "Retrieves a list of Azure backup repositories from Veeam Backup for Microsoft Azure.",
-		ReadContext: DataSourceAzureBackupRepositoriesRead,
-
-		Schema: map[string]*schema.Schema{
-			"status": {
-				Type:        schema.TypeSet,
-				Optional:    true,
-				Description: "Filter repositories by status.",
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-					ValidateFunc: func(val interface{}, key string) (warns []string, errs []error) {
-						v := val.(string)
-						validStatuses := []string{"Creating", "Importing", "Ready", "Failed", "Unknown", "ReadOnly"}
-						for _, status := range validStatuses {
-							if v == status {
-								return
-							}
-						}
-						errs = append(errs, fmt.Errorf("%q must be one of %v", key, validStatuses))
-						return
+func DataSourceAzureBackupRepositories() datasource.DataSource {
+	return tf.NewDataSource(
+		"azure_backup_repositories",
+		schema.Schema{
+			Description: "Retrieves a list of Azure backup repositories from Veeam Backup for Microsoft Azure.",
+			Attributes: map[string]schema.Attribute{
+				"status": schema.SetAttribute{
+					Description: "Filter repositories by status.",
+					Optional:    true,
+					Validators: []validator.Set{
+						setvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"Creating", "Importing", "Ready", "Failed", "Unknown", "ReadOnly"}...)),
 					},
+					ElementType: types.StringType,
 				},
-			},
-			"type": {
-				Type:        schema.TypeSet,
-				Optional:    true,
-				Description: "Filter repositories by type.",
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-					ValidateFunc: func(val interface{}, key string) (warns []string, errs []error) {
-						v := val.(string)
-						validTypes := []string{"Backup", "VeeamVault", "Unknown"}
-						for _, typ := range validTypes {
-							if v == typ {
-								return
-							}
-						}
-						errs = append(errs, fmt.Errorf("%q must be one of %v", key, validTypes))
-						return
+				"type": schema.SetAttribute{
+					Description: "Filter repositories by type.",
+					Optional:    true,
+					Validators: []validator.Set{
+						setvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"Backup", "VeeamVault", "Unknown"}...)),
 					},
+					ElementType: types.StringType,
 				},
-			},
-			"tier": {
-				Type:        schema.TypeSet,
-				Optional:    true,
-				Description: "Filter repositories by storage tier.",
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-					ValidateFunc: func(val interface{}, key string) (warns []string, errs []error) {
-						v := val.(string)
-						validTiers := []string{"Inferred", "Hot", "Cool", "Archive", "Unknown", "Cold"}
-						for _, tier := range validTiers {
-							if v == tier {
-								return
-							}
-						}
-						errs = append(errs, fmt.Errorf("%q must be one of %v", key, validTiers))
-						return
+				"tier": schema.SetAttribute{
+					Description: "Filter repositories by storage tier.",
+					Optional:    true,
+					Validators: []validator.Set{
+						setvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"Inferred", "Hot", "Cool", "Archive", "Unknown", "Cold"}...)),
 					},
+					ElementType: types.StringType,
 				},
-			},
-			"search_pattern": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Search pattern to filter repositories by name.",
-			},
-			"is_encrypted": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Filter repositories by encryption status.",
-			},
-			"offset": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Default:     0,
-				Description: "Number of items to skip from the beginning of the result set.",
-			},
-			"limit": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Default:     -1,
-				Description: "Maximum number of items to return. Use -1 for all items.",
-			},
-			"tenant_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Filter repositories by tenant ID.",
-			},
-			"service_account_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Filter repositories by service account ID.",
-			},
-			"immutability_enabled": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Filter repositories by immutability status.",
-			},
-			"repositories": {
-				Type:        schema.TypeMap,
-				Computed:    true,
-				Description: "Map of repository names to their complete details as JSON strings.",
-				Elem:        &schema.Schema{Type: schema.TypeString},
-			},
-			"repository_details": {
-				Type:        schema.TypeList,
-				Computed:    true,
-				Description: "Detailed list of backup repositories matching the specified criteria.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"veeam_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Repository ID.",
-						},
-						"name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Repository name.",
-						},
-						"description": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Repository description.",
-						},
-						"status": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Repository status.",
-						},
-						"repository_type": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Repository type.",
-						},
-						"storage_tier": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Storage tier.",
-						},
-						"encryption_enabled": {
-							Type:        schema.TypeBool,
-							Computed:    true,
-							Description: "Whether encryption is enabled.",
-						},
-						"immutability_enabled": {
-							Type:        schema.TypeBool,
-							Computed:    true,
-							Description: "Whether immutability is enabled.",
-						},
-						"azure_storage_account_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Azure storage account ID.",
-						},
-						"azure_storage_container": {
-							Type:        schema.TypeList,
-							Computed:    true,
-							Description: "Azure storage container information.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"name": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Name of the Azure storage container.",
-									},
-									"supports_versioning": {
-										Type:        schema.TypeBool,
-										Computed:    true,
-										Description: "Whether the container supports versioning.",
-									},
-									"immutability_policy_state": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "State of the immutability policy (NotPresent, Unlocked, Locked).",
+				"search_pattern": schema.StringAttribute{
+					Description: "Search pattern to filter repositories by name.",
+					Optional:    true,
+				},
+				"is_encrypted": schema.BoolAttribute{
+					Description: "Filter repositories by encryption status.",
+					Optional:    true,
+				},
+				"offset": schema.Int64Attribute{
+					Description: "Number of items to skip from the beginning of the result set.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"limit": schema.Int64Attribute{
+					Description: "Maximum number of items to return. Use -1 for all items.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"tenant_id": schema.StringAttribute{
+					Description: "Filter repositories by tenant ID.",
+					Optional:    true,
+				},
+				"service_account_id": schema.StringAttribute{
+					Description: "Filter repositories by service account ID.",
+					Optional:    true,
+				},
+				"immutability_enabled": schema.BoolAttribute{
+					Description: "Filter repositories by immutability status.",
+					Optional:    true,
+				},
+				"repositories": schema.MapAttribute{
+					Description: "Map of repository names to their complete details as JSON strings.",
+					Computed:    true,
+					ElementType: types.StringType,
+				},
+				"repository_details": schema.ListNestedAttribute{
+					Description: "Detailed list of backup repositories matching the specified criteria.",
+					Computed:    true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"veeam_id": schema.StringAttribute{
+								Description: "Repository ID.",
+								Computed:    true,
+							},
+							"name": schema.StringAttribute{
+								Description: "Repository name.",
+								Computed:    true,
+							},
+							"description": schema.StringAttribute{
+								Description: "Repository description.",
+								Computed:    true,
+							},
+							"status": schema.StringAttribute{
+								Description: "Repository status.",
+								Computed:    true,
+							},
+							"repository_type": schema.StringAttribute{
+								Description: "Repository type.",
+								Computed:    true,
+							},
+							"storage_tier": schema.StringAttribute{
+								Description: "Storage tier.",
+								Computed:    true,
+							},
+							"encryption_enabled": schema.BoolAttribute{
+								Description: "Whether encryption is enabled.",
+								Computed:    true,
+							},
+							"immutability_enabled": schema.BoolAttribute{
+								Description: "Whether immutability is enabled.",
+								Computed:    true,
+							},
+							"azure_storage_account_id": schema.StringAttribute{
+								Description: "Azure storage account ID.",
+								Computed:    true,
+							},
+							"azure_storage_container": schema.ListNestedAttribute{
+								Description: "Azure storage container information.",
+								Computed:    true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"name": schema.StringAttribute{
+											Description: "Name of the Azure storage container.",
+											Computed:    true,
+										},
+										"supports_versioning": schema.BoolAttribute{
+											Description: "Whether the container supports versioning.",
+											Computed:    true,
+										},
+										"immutability_policy_state": schema.StringAttribute{
+											Description: "State of the immutability policy (NotPresent, Unlocked, Locked).",
+											Computed:    true,
+										},
 									},
 								},
 							},
-						},
-						"azure_storage_folder": {
-							Type:        schema.TypeList,
-							Computed:    true,
-							Description: "Azure storage folder information.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"name": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Name of the Azure storage folder.",
-									},
-									"supports_versioning": {
-										Type:        schema.TypeBool,
-										Computed:    true,
-										Description: "Whether the folder supports versioning.",
-									},
-									"immutability_policy_state": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "State of the immutability policy (NotPresent, Unlocked, Locked).",
+							"azure_storage_folder": schema.ListNestedAttribute{
+								Description: "Azure storage folder information.",
+								Computed:    true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"name": schema.StringAttribute{
+											Description: "Name of the Azure storage folder.",
+											Computed:    true,
+										},
+										"supports_versioning": schema.BoolAttribute{
+											Description: "Whether the folder supports versioning.",
+											Computed:    true,
+										},
+										"immutability_policy_state": schema.StringAttribute{
+											Description: "State of the immutability policy (NotPresent, Unlocked, Locked).",
+											Computed:    true,
+										},
 									},
 								},
 							},
-						},
-						"region_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Region ID.",
-						},
-						"region_name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Region name.",
-						},
-						"azure_account_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Azure account ID.",
-						},
-						"repository_ownership": {
-							Type:        schema.TypeList,
-							Computed:    true,
-							Description: "Repository ownership information.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"has_another_owner": {
-										Type:        schema.TypeBool,
-										Computed:    true,
-										Description: "Whether another owner exists.",
-									},
-									"current_owner_identifier": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Current owner identifier.",
-									},
-									"current_owner_name": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Current owner name.",
+							"region_id": schema.StringAttribute{
+								Description: "Region ID.",
+								Computed:    true,
+							},
+							"region_name": schema.StringAttribute{
+								Description: "Region name.",
+								Computed:    true,
+							},
+							"azure_account_id": schema.StringAttribute{
+								Description: "Azure account ID.",
+								Computed:    true,
+							},
+							"repository_ownership": schema.ListNestedAttribute{
+								Description: "Repository ownership information.",
+								Computed:    true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"has_another_owner": schema.BoolAttribute{
+											Description: "Whether another owner exists.",
+											Computed:    true,
+										},
+										"current_owner_identifier": schema.StringAttribute{
+											Description: "Current owner identifier.",
+											Computed:    true,
+										},
+										"current_owner_name": schema.StringAttribute{
+											Description: "Current owner name.",
+											Computed:    true,
+										},
 									},
 								},
 							},
-						},
-						"storage_consumption_limit": {
-							Type:        schema.TypeList,
-							Computed:    true,
-							Description: "Storage consumption limit information.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"limit_type": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Type of limit.",
-									},
-									"limit_value": {
-										Type:        schema.TypeInt,
-										Computed:    true,
-										Description: "Limit value.",
+							"storage_consumption_limit": schema.ListNestedAttribute{
+								Description: "Storage consumption limit information.",
+								Computed:    true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"limit_type": schema.StringAttribute{
+											Description: "Type of limit.",
+											Computed:    true,
+										},
+										"limit_value": schema.Int64Attribute{
+											Description: "Limit value.",
+											Computed:    true,
+										},
 									},
 								},
 							},
 						},
 					},
 				},
-			},
-			"total_count": {
-				Type:        schema.TypeInt,
-				Computed:    true,
-				Description: "Total number of repositories matching the criteria.",
+				"total_count": schema.Int64Attribute{
+					Description: "Total number of repositories matching the criteria.",
+					Computed:    true,
+				},
 			},
 		},
-	}
+		DataSourceAzureBackupRepositoriesRead,
+		map[string]interface{}{
+			"offset": 0,
+			"limit":  -1,
+		},
+	)
 }
 
-func DataSourceAzureBackupRepositoriesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func DataSourceAzureBackupRepositoriesRead(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	// Build query parameters
@@ -364,21 +306,21 @@ func DataSourceAzureBackupRepositoriesRead(ctx context.Context, d *schema.Resour
 
 	// Add filter parameters if provided
 	if v, ok := d.GetOk("status"); ok {
-		statusSet := v.(*schema.Set)
+		statusSet := v.(*tf.Set)
 		for _, status := range statusSet.List() {
 			params.Add("Status", status.(string))
 		}
 	}
 
 	if v, ok := d.GetOk("type"); ok {
-		typeSet := v.(*schema.Set)
+		typeSet := v.(*tf.Set)
 		for _, typ := range typeSet.List() {
 			params.Add("Type", typ.(string))
 		}
 	}
 
 	if v, ok := d.GetOk("tier"); ok {
-		tierSet := v.(*schema.Set)
+		tierSet := v.(*tf.Set)
 		for _, tier := range tierSet.List() {
 			params.Add("Tier", tier.(string))
 		}
@@ -421,23 +363,23 @@ func DataSourceAzureBackupRepositoriesRead(ctx context.Context, d *schema.Resour
 	// Make the API request
 	resp, err := client.MakeAuthenticatedRequest("GET", apiURL, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to retrieve backup repositories: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to retrieve backup repositories: %w", err))
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read response body: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read response body: %w", err))
 	}
 
 	if resp.StatusCode != 200 {
-		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
+		return tf.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
 	}
 
 	// Parse the response
 	var repositoriesResp BackupRepositoriesResponse
 	if err := json.Unmarshal(body, &repositoriesResp); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to parse response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to parse response: %w", err))
 	}
 
 	// Convert repositories to Terraform format
@@ -490,22 +432,22 @@ func DataSourceAzureBackupRepositoriesRead(ctx context.Context, d *schema.Resour
 		// Create JSON string for the repositories map
 		detailJSON, err := json.Marshal(repositoryDetails[i])
 		if err != nil {
-			return diag.FromErr(fmt.Errorf("failed to marshal repository details: %w", err))
+			return tf.FromErr(fmt.Errorf("failed to marshal repository details: %w", err))
 		}
 		repositories[repo.Name] = string(detailJSON)
 	}
 
 	// Set the data in the resource
 	if err := d.Set("repositories", repositories); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set repositories: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set repositories: %w", err))
 	}
 
 	if err := d.Set("repository_details", repositoryDetails); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set repository_details: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set repository_details: %w", err))
 	}
 
 	if err := d.Set("total_count", repositoriesResp.TotalCount); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set total_count: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set total_count: %w", err))
 	}
 
 	// Set the ID (use a combination of hostname and parameters for uniqueness)

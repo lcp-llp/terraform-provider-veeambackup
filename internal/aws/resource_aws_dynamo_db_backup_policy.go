@@ -9,9 +9,15 @@ import (
 	"net/url"
 	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 type AWSdynamodbBackupPolicyRequest struct {
@@ -332,456 +338,578 @@ type AWSdynamodbBackupPolicyResponse struct {
 }
 
 // backupVaultSpecSchema returns the shared schema element for a BackupVaultSpec block.
-func backupVaultSpecSchema() *schema.Resource {
-	return &schema.Resource{
-		Schema: map[string]*schema.Schema{
-			"by_id_spec": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Identify a backup vault by its ID.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"vault_id": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "ID of the AWS Backup vault.",
+
+func ResourceAwsDynamoDbBackupPolicy() resource.Resource {
+	return tf.NewResource(
+		"aws_dynamo_db_backup_policy",
+		schema.Schema{
+			Attributes: map[string]schema.Attribute{
+				"name": schema.StringAttribute{
+					Description: "Name of the DynamoDB backup policy.",
+					Required:    true,
+				},
+				"identity_id": schema.StringAttribute{
+					Description: "ID of the AWS identity (cloud credential) used by the policy.",
+					Required:    true,
+				},
+				"backup_type": schema.StringAttribute{
+					Description: "Type of backup operations performed by the policy.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.OneOf([]string{
+							"Backup",
+							"BackupCopy",
+							"BackupAndBackupCopy",
+						}...),
+					},
+				},
+				"description": schema.StringAttribute{
+					Description: "Description of the backup policy.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"priority": schema.Int64Attribute{
+					Description: "Priority of the policy.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"is_enabled": schema.BoolAttribute{
+					Description: "Whether the policy is enabled.",
+					Optional:    true,
+					Computed:    true,
+					Default:     booldefault.StaticBool(true),
+				},
+			},
+			Blocks: map[string]schema.Block{
+				"regions": schema.ListNestedBlock{
+					Description: "AWS regions and their target vault specifications.",
+					Validators: []validator.List{
+						listvalidator.SizeAtLeast(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"source_region_id": schema.StringAttribute{
+								Description: "System ID of the source AWS region.",
+								Required:    true,
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"backup_vault_spec": schema.ListNestedBlock{
+								Description: "Specification of the target AWS Backup vault.",
+								Validators: []validator.List{
+									listvalidator.SizeAtLeast(1),
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{},
+									Blocks: map[string]schema.Block{
+										"by_id_spec": schema.ListNestedBlock{
+											Description: "Identify a backup vault by its ID.",
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"vault_id": schema.StringAttribute{
+														Description: "ID of the AWS Backup vault.",
+														Required:    true,
+													},
+												},
+											},
+										},
+										"by_tag_spec": schema.ListNestedBlock{
+											Description: "Identify a backup vault by a tag.",
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"tag_key": schema.StringAttribute{
+														Description: "Tag key used to locate the vault.",
+														Required:    true,
+													},
+													"tag_value": schema.StringAttribute{
+														Description: "Tag value used to locate the vault.",
+														Required:    true,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
 						},
 					},
 				},
-			},
-			"by_tag_spec": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Identify a backup vault by a tag.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"tag_key": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Tag key used to locate the vault.",
+				"selected_items": schema.ListNestedBlock{
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"tag_ids": schema.ListAttribute{
+								Optional:    true,
+								ElementType: types.StringType,
+							},
+							"dynamo_db_ids": schema.ListAttribute{
+								Optional:    true,
+								ElementType: types.StringType,
+							},
 						},
-						"tag_value": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Tag value used to locate the vault.",
+					},
+				},
+				"excluded_items": schema.ListNestedBlock{
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"tag_ids": schema.ListAttribute{
+								Optional:    true,
+								ElementType: types.StringType,
+							},
+							"dynamo_db_ids": schema.ListAttribute{
+								Optional:    true,
+								ElementType: types.StringType,
+							},
+						},
+					},
+				},
+				"backup_settings": schema.ListNestedBlock{
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"copy_tags_from_tables": schema.BoolAttribute{
+								Optional: true,
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"additional_tags": schema.ListNestedBlock{
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"key": schema.StringAttribute{
+											Required: true,
+										},
+										"value": schema.StringAttribute{
+											Required: true,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"backup_copy_settings": schema.ListNestedBlock{
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{},
+						Blocks: map[string]schema.Block{
+							"backup_regions": schema.ListNestedBlock{
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"source_region_id": schema.StringAttribute{
+											Required: true,
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"backup_vault_spec": schema.ListNestedBlock{
+											Validators: []validator.List{
+												listvalidator.SizeAtLeast(1),
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{},
+												Blocks: map[string]schema.Block{
+													"by_id_spec": schema.ListNestedBlock{
+														Description: "Identify a backup vault by its ID.",
+														Validators: []validator.List{
+															listvalidator.SizeAtMost(1),
+														},
+														NestedObject: schema.NestedBlockObject{
+															Attributes: map[string]schema.Attribute{
+																"vault_id": schema.StringAttribute{
+																	Description: "ID of the AWS Backup vault.",
+																	Required:    true,
+																},
+															},
+														},
+													},
+													"by_tag_spec": schema.ListNestedBlock{
+														Description: "Identify a backup vault by a tag.",
+														Validators: []validator.List{
+															listvalidator.SizeAtMost(1),
+														},
+														NestedObject: schema.NestedBlockObject{
+															Attributes: map[string]schema.Attribute{
+																"tag_key": schema.StringAttribute{
+																	Description: "Tag key used to locate the vault.",
+																	Required:    true,
+																},
+																"tag_value": schema.StringAttribute{
+																	Description: "Tag value used to locate the vault.",
+																	Required:    true,
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"schedule_settings": schema.ListNestedBlock{
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"daily_schedule_enabled": schema.BoolAttribute{
+								Required: true,
+							},
+							"weekly_schedule_enabled": schema.BoolAttribute{
+								Required: true,
+							},
+							"monthly_schedule_enabled": schema.BoolAttribute{
+								Required: true,
+							},
+							"yearly_schedule_enabled": schema.BoolAttribute{
+								Required: true,
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"daily_schedule": schema.ListNestedBlock{
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"kind": schema.StringAttribute{
+											Required: true,
+										},
+										"runs_per_hour": schema.Int64Attribute{
+											Optional: true,
+										},
+										"days": schema.ListAttribute{
+											Optional:    true,
+											ElementType: types.StringType,
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"backup_options": schema.ListNestedBlock{
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"retention_type": schema.StringAttribute{
+														Required: true,
+													},
+													"retention_count": schema.Int64Attribute{
+														Required: true,
+													},
+													"schedule_hours": schema.ListAttribute{
+														Optional:    true,
+														ElementType: types.StringType,
+													},
+												},
+											},
+										},
+										"backup_copy_options": schema.ListNestedBlock{
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"retention_type": schema.StringAttribute{
+														Required: true,
+													},
+													"retention_count": schema.Int64Attribute{
+														Required: true,
+													},
+													"schedule_hours": schema.ListAttribute{
+														Optional:    true,
+														ElementType: types.Int64Type,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+							"weekly_schedule": schema.ListNestedBlock{
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"time_local": schema.StringAttribute{
+											Required: true,
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"backup_options": schema.ListNestedBlock{
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"retention_type": schema.StringAttribute{
+														Required: true,
+													},
+													"retention_count": schema.Int64Attribute{
+														Required: true,
+													},
+													"schedule_days": schema.ListAttribute{
+														Optional:    true,
+														ElementType: types.StringType,
+													},
+												},
+											},
+										},
+										"backup_copy_options": schema.ListNestedBlock{
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"retention_type": schema.StringAttribute{
+														Required: true,
+													},
+													"retention_count": schema.Int64Attribute{
+														Required: true,
+													},
+													"schedule_days": schema.ListAttribute{
+														Optional:    true,
+														ElementType: types.StringType,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+							"monthly_schedule": schema.ListNestedBlock{
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"time_local": schema.StringAttribute{
+											Required: true,
+										},
+										"day_number_in_month": schema.StringAttribute{
+											Optional: true,
+										},
+										"day_of_week": schema.StringAttribute{
+											Optional: true,
+										},
+										"day_of_month": schema.StringAttribute{
+											Optional: true,
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"backup_options": schema.ListNestedBlock{
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"retention_type": schema.StringAttribute{
+														Required: true,
+													},
+													"retention_count": schema.Int64Attribute{
+														Required: true,
+													},
+													"schedule_months": schema.ListAttribute{
+														Optional:    true,
+														ElementType: types.StringType,
+													},
+												},
+											},
+										},
+										"backup_copy_options": schema.ListNestedBlock{
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"retention_type": schema.StringAttribute{
+														Required: true,
+													},
+													"retention_count": schema.Int64Attribute{
+														Required: true,
+													},
+													"schedule_months": schema.ListAttribute{
+														Optional:    true,
+														ElementType: types.StringType,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+							"yearly_schedule": schema.ListNestedBlock{
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"time_local": schema.StringAttribute{
+											Required: true,
+										},
+										"day_number_in_month": schema.StringAttribute{
+											Optional: true,
+										},
+										"month": schema.StringAttribute{
+											Required: true,
+										},
+										"day_of_week": schema.StringAttribute{
+											Optional: true,
+										},
+										"day_of_month": schema.StringAttribute{
+											Optional: true,
+										},
+										"retention_type": schema.StringAttribute{
+											Required: true,
+										},
+										"retention_count": schema.Int64Attribute{
+											Required: true,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"retry_settings": schema.ListNestedBlock{
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"retry_times": schema.Int64Attribute{
+								Required: true,
+							},
+						},
+					},
+				},
+				"notification_settings": schema.ListNestedBlock{
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"email": schema.StringAttribute{
+								Required: true,
+							},
+							"notify_on_success": schema.BoolAttribute{
+								Required: true,
+							},
+							"notify_on_failure": schema.BoolAttribute{
+								Required: true,
+							},
+							"notify_on_warning": schema.BoolAttribute{
+								Required: true,
+							},
+							"suppress_notifications_until_last_retry": schema.BoolAttribute{
+								Required: true,
+							},
+						},
+					},
+				},
+				"cold_storage_settings": schema.ListNestedBlock{
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"transfer_enabled": schema.BoolAttribute{
+								Required: true,
+							},
+							"transfer_period": schema.Int64Attribute{
+								Required: true,
+							},
+						},
+					},
+				},
+				"organization_settings": schema.ListNestedBlock{
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"limited_scope_id": schema.StringAttribute{
+								Optional: true,
+							},
+							"excluded_members": schema.ListAttribute{
+								Optional:    true,
+								ElementType: types.StringType,
+							},
 						},
 					},
 				},
 			},
 		},
-	}
-}
-
-func ResourceAwsDynamoDbBackupPolicy() *schema.Resource {
-	return &schema.Resource{
-		CreateContext: resourceAwsDynamoDbBackupPolicyCreate,
-		ReadContext:   resourceAwsDynamoDbBackupPolicyRead,
-		UpdateContext: resourceAwsDynamoDbBackupPolicyUpdate,
-		DeleteContext: resourceAwsDynamoDbBackupPolicyDelete,
-		Schema: map[string]*schema.Schema{
-			"name": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "Name of the DynamoDB backup policy.",
-			},
-			"identity_id": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "ID of the AWS identity (cloud credential) used by the policy.",
-			},
-			"backup_type": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "Type of backup operations performed by the policy.",
-				ValidateFunc: validation.StringInSlice([]string{
-					"Backup",
-					"BackupCopy",
-					"BackupAndBackupCopy",
-				}, false),
-			},
-			"regions": {
-				Type:        schema.TypeList,
-				Required:    true,
-				Description: "AWS regions and their target vault specifications.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"source_region_id": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "System ID of the source AWS region.",
-						},
-						"backup_vault_spec": {
-							Type:        schema.TypeList,
-							Required:    true,
-							MaxItems:    1,
-							Description: "Specification of the target AWS Backup vault.",
-							Elem:        backupVaultSpecSchema(),
-						},
-					},
-				},
-			},
-			"description": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Description of the backup policy.",
-			},
-			"priority": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Computed:    true,
-				Description: "Priority of the policy.",
-			},
-			"is_enabled": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Default:     true,
-				Description: "Whether the policy is enabled.",
-			},
-			"selected_items": {
-				Type:     schema.TypeList,
-				Optional: true,
-				MaxItems: 1,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"tag_ids": {
-							Type:     schema.TypeList,
-							Optional: true,
-							Elem:     &schema.Schema{Type: schema.TypeString},
-						},
-						"dynamo_db_ids": {
-							Type:     schema.TypeList,
-							Optional: true,
-							Elem:     &schema.Schema{Type: schema.TypeString},
-						},
-					},
-				},
-			},
-			"excluded_items": {
-				Type:     schema.TypeList,
-				Optional: true,
-				MaxItems: 1,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"tag_ids": {
-							Type:     schema.TypeList,
-							Optional: true,
-							Elem:     &schema.Schema{Type: schema.TypeString},
-						},
-						"dynamo_db_ids": {
-							Type:     schema.TypeList,
-							Optional: true,
-							Elem:     &schema.Schema{Type: schema.TypeString},
-						},
-					},
-				},
-			},
-			"backup_settings": {
-				Type:     schema.TypeList,
-				Optional: true,
-				MaxItems: 1,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"additional_tags": {
-							Type:     schema.TypeList,
-							Optional: true,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"key":   {Type: schema.TypeString, Required: true},
-									"value": {Type: schema.TypeString, Required: true},
-								},
-							},
-						},
-						"copy_tags_from_tables": {
-							Type:     schema.TypeBool,
-							Optional: true,
-						},
-					},
-				},
-			},
-			"backup_copy_settings": {
-				Type:     schema.TypeList,
-				Optional: true,
-				MaxItems: 1,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"backup_regions": {
-							Type:     schema.TypeList,
-							Optional: true,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"source_region_id": {Type: schema.TypeString, Required: true},
-									"backup_vault_spec": {
-										Type:     schema.TypeList,
-										Required: true,
-										MaxItems: 1,
-										Elem:     backupVaultSpecSchema(),
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			"schedule_settings": {
-				Type:     schema.TypeList,
-				Optional: true,
-				MaxItems: 1,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"daily_schedule_enabled":   {Type: schema.TypeBool, Required: true},
-						"weekly_schedule_enabled":  {Type: schema.TypeBool, Required: true},
-						"monthly_schedule_enabled": {Type: schema.TypeBool, Required: true},
-						"yearly_schedule_enabled":  {Type: schema.TypeBool, Required: true},
-						"daily_schedule": {
-							Type:     schema.TypeList,
-							Optional: true,
-							MaxItems: 1,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"kind":          {Type: schema.TypeString, Required: true},
-									"runs_per_hour": {Type: schema.TypeInt, Optional: true},
-									"days": {
-										Type:     schema.TypeList,
-										Optional: true,
-										Elem:     &schema.Schema{Type: schema.TypeString},
-									},
-									"backup_options": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"retention_type":  {Type: schema.TypeString, Required: true},
-												"retention_count": {Type: schema.TypeInt, Required: true},
-												"schedule_hours": {
-													Type:     schema.TypeList,
-													Optional: true,
-													Elem:     &schema.Schema{Type: schema.TypeString},
-												},
-											},
-										},
-									},
-									"backup_copy_options": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"retention_type":  {Type: schema.TypeString, Required: true},
-												"retention_count": {Type: schema.TypeInt, Required: true},
-												"schedule_hours": {
-													Type:     schema.TypeList,
-													Optional: true,
-													Elem:     &schema.Schema{Type: schema.TypeInt},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-						"weekly_schedule": {
-							Type:     schema.TypeList,
-							Optional: true,
-							MaxItems: 1,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"time_local": {Type: schema.TypeString, Required: true},
-									"backup_options": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"retention_type":  {Type: schema.TypeString, Required: true},
-												"retention_count": {Type: schema.TypeInt, Required: true},
-												"schedule_days": {
-													Type:     schema.TypeList,
-													Optional: true,
-													Elem:     &schema.Schema{Type: schema.TypeString},
-												},
-											},
-										},
-									},
-									"backup_copy_options": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"retention_type":  {Type: schema.TypeString, Required: true},
-												"retention_count": {Type: schema.TypeInt, Required: true},
-												"schedule_days": {
-													Type:     schema.TypeList,
-													Optional: true,
-													Elem:     &schema.Schema{Type: schema.TypeString},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-						"monthly_schedule": {
-							Type:     schema.TypeList,
-							Optional: true,
-							MaxItems: 1,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"time_local":          {Type: schema.TypeString, Required: true},
-									"day_number_in_month": {Type: schema.TypeString, Optional: true},
-									"day_of_week":         {Type: schema.TypeString, Optional: true},
-									"day_of_month":        {Type: schema.TypeString, Optional: true},
-									"backup_options": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"retention_type":  {Type: schema.TypeString, Required: true},
-												"retention_count": {Type: schema.TypeInt, Required: true},
-												"schedule_months": {
-													Type:     schema.TypeList,
-													Optional: true,
-													Elem:     &schema.Schema{Type: schema.TypeString},
-												},
-											},
-										},
-									},
-									"backup_copy_options": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"retention_type":  {Type: schema.TypeString, Required: true},
-												"retention_count": {Type: schema.TypeInt, Required: true},
-												"schedule_months": {
-													Type:     schema.TypeList,
-													Optional: true,
-													Elem:     &schema.Schema{Type: schema.TypeString},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-						"yearly_schedule": {
-							Type:     schema.TypeList,
-							Optional: true,
-							MaxItems: 1,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"time_local":          {Type: schema.TypeString, Required: true},
-									"day_number_in_month": {Type: schema.TypeString, Optional: true},
-									"month":               {Type: schema.TypeString, Required: true},
-									"day_of_week":         {Type: schema.TypeString, Optional: true},
-									"day_of_month":        {Type: schema.TypeString, Optional: true},
-									"retention_type":      {Type: schema.TypeString, Required: true},
-									"retention_count":     {Type: schema.TypeInt, Required: true},
-								},
-							},
-						},
-					},
-				},
-			},
-			"retry_settings": {
-				Type:     schema.TypeList,
-				Optional: true,
-				MaxItems: 1,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"retry_times": {Type: schema.TypeInt, Required: true},
-					},
-				},
-			},
-			"notification_settings": {
-				Type:     schema.TypeList,
-				Optional: true,
-				MaxItems: 1,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"email":             {Type: schema.TypeString, Required: true},
-						"notify_on_success": {Type: schema.TypeBool, Required: true},
-						"notify_on_failure": {Type: schema.TypeBool, Required: true},
-						"notify_on_warning": {Type: schema.TypeBool, Required: true},
-						"suppress_notifications_until_last_retry": {Type: schema.TypeBool, Required: true},
-					},
-				},
-			},
-			"cold_storage_settings": {
-				Type:     schema.TypeList,
-				Optional: true,
-				MaxItems: 1,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"transfer_enabled": {Type: schema.TypeBool, Required: true},
-						"transfer_period":  {Type: schema.TypeInt, Required: true},
-					},
-				},
-			},
-			"organization_settings": {
-				Type:     schema.TypeList,
-				Optional: true,
-				MaxItems: 1,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"limited_scope_id": {Type: schema.TypeString, Optional: true},
-						"excluded_members": {
-							Type:     schema.TypeList,
-							Optional: true,
-							Elem:     &schema.Schema{Type: schema.TypeString},
-						},
-					},
-				},
-			},
+		tf.ResourceOperations{
+			Create: resourceAwsDynamoDbBackupPolicyCreate,
+			Read:   resourceAwsDynamoDbBackupPolicyRead,
+			Update: resourceAwsDynamoDbBackupPolicyUpdate,
+			Delete: resourceAwsDynamoDbBackupPolicyDelete,
 		},
-	}
+		tf.Timeouts{},
+		false,
+	)
 }
 
-func resourceAwsDynamoDbBackupPolicyCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceAwsDynamoDbBackupPolicyCreate(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAWSClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	req := buildDynamoDbBackupPolicyRequest(d)
 	bodyBytes, err := json.Marshal(req)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to marshal DynamoDB backup policy request: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to marshal DynamoDB backup policy request: %w", err))
 	}
 	apiURL := client.BuildAPIURL("/dynamoDb/policies")
 	resp, err := client.MakeAuthenticatedRequestAWS("POST", apiURL, bytes.NewBuffer(bodyBytes))
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to create DynamoDB backup policy: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to create DynamoDB backup policy: %w", err))
 	}
 	defer resp.Body.Close()
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read response body: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read response body: %w", err))
 	}
 	if resp.StatusCode != 200 && resp.StatusCode != 201 {
-		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody)))
+		return tf.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody)))
 	}
 	var policyResp AWSdynamodbBackupPolicyResponse
 	if err := json.Unmarshal(respBody, &policyResp); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to parse DynamoDB backup policy response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to parse DynamoDB backup policy response: %w", err))
 	}
 	d.SetId(policyResp.ID)
 	return resourceAwsDynamoDbBackupPolicyRead(ctx, d, meta)
 }
 
-func resourceAwsDynamoDbBackupPolicyRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceAwsDynamoDbBackupPolicyRead(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAWSClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	apiURL := client.BuildAPIURL(fmt.Sprintf("/dynamoDb/policies/%s", url.PathEscape(d.Id())))
 	resp, err := client.MakeAuthenticatedRequestAWS("GET", apiURL, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read DynamoDB backup policy: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read DynamoDB backup policy: %w", err))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 404 {
@@ -790,14 +918,14 @@ func resourceAwsDynamoDbBackupPolicyRead(ctx context.Context, d *schema.Resource
 	}
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read response body: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read response body: %w", err))
 	}
 	if resp.StatusCode != 200 {
-		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody)))
+		return tf.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody)))
 	}
 	var p AWSdynamodbBackupPolicyResponse
 	if err := json.Unmarshal(respBody, &p); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to parse DynamoDB backup policy response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to parse DynamoDB backup policy response: %w", err))
 	}
 	_ = d.Set("name", p.Name)
 	_ = d.Set("identity_id", p.IdentityID)
@@ -840,52 +968,52 @@ func resourceAwsDynamoDbBackupPolicyRead(ctx context.Context, d *schema.Resource
 	return nil
 }
 
-func resourceAwsDynamoDbBackupPolicyUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceAwsDynamoDbBackupPolicyUpdate(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAWSClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	req := buildDynamoDbBackupPolicyRequest(d)
 	bodyBytes, err := json.Marshal(req)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to marshal DynamoDB backup policy request: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to marshal DynamoDB backup policy request: %w", err))
 	}
 	apiURL := client.BuildAPIURL(fmt.Sprintf("/dynamoDb/policies/%s", url.PathEscape(d.Id())))
 	resp, err := client.MakeAuthenticatedRequestAWS("PUT", apiURL, bytes.NewBuffer(bodyBytes))
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to update DynamoDB backup policy: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to update DynamoDB backup policy: %w", err))
 	}
 	defer resp.Body.Close()
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read response body: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read response body: %w", err))
 	}
 	if resp.StatusCode != 200 && resp.StatusCode != 204 {
-		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody)))
+		return tf.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody)))
 	}
 	return resourceAwsDynamoDbBackupPolicyRead(ctx, d, meta)
 }
 
-func resourceAwsDynamoDbBackupPolicyDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceAwsDynamoDbBackupPolicyDelete(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAWSClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	apiURL := client.BuildAPIURL(fmt.Sprintf("/dynamoDb/policies/%s", url.PathEscape(d.Id())))
 	resp, err := client.MakeAuthenticatedRequestAWS("DELETE", apiURL, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to delete DynamoDB backup policy: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to delete DynamoDB backup policy: %w", err))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 && resp.StatusCode != 204 {
 		respBody, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody)))
+		return tf.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody)))
 	}
 	d.SetId("")
 	return nil
 }
 
-func buildDynamoDbBackupPolicyRequest(d *schema.ResourceData) AWSdynamodbBackupPolicyRequest {
+func buildDynamoDbBackupPolicyRequest(d *tf.Data) AWSdynamodbBackupPolicyRequest {
 	req := AWSdynamodbBackupPolicyRequest{
 		Name:       d.Get("name").(string),
 		IdentityID: d.Get("identity_id").(string),
