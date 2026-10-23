@@ -1,136 +1,128 @@
-﻿package vbr
+package vbr
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
+	vc "terraform-provider-veeambackup/internal/client"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 type VBRCloudCredentialsDataSourceModel struct {
-	Skip     	*int 	`json:"skip,omitempty"`
-	Limit		*int 	`json:"limit,omitempty"`
+	Skip        *int    `json:"skip,omitempty"`
+	Limit       *int    `json:"limit,omitempty"`
 	OrderColumn *string `json:"orderColumn,omitempty"`
-	OrderAsc  	*bool   `json:"orderAsc,omitempty"`
-	NameFilter 	*string `json:"nameFilter,omitempty"`
-	TypeFilter 	*string `json:"typeFilter,omitempty"`
+	OrderAsc    *bool   `json:"orderAsc,omitempty"`
+	NameFilter  *string `json:"nameFilter,omitempty"`
+	TypeFilter  *string `json:"typeFilter,omitempty"`
 }
 
 type VBRCloudCredentialsResponse struct {
-	Data 		[]VBRCloudCredentialsResponseData 	`json:"data"`
-	Pagination 	PaginationResponse          		`json:"pagination"`
+	Data       []VBRCloudCredentialsResponseData `json:"data"`
+	Pagination PaginationResponse                `json:"pagination"`
 }
 
-func DataSourceVbrCloudCredentials() *schema.Resource {
-	return &schema.Resource{
-		Description: "Retrieves information about cloud credentials from Veeam Backup & Replication.",
-		ReadContext: DataSourceVbrCloudCredentialsRead,
-		Schema: map[string]*schema.Schema{
-			"skip": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Description: "Number of items to skip.",
-			},
-			"limit": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Description: "Maximum number of items to return.",
-			},
-			"order_column": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Column to order the results by.",
-			},
-			"order_asc": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Whether to order the results in ascending order.",
-			},
-			"name_filter": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Filter results by name.",
-			},
-			"type_filter": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Filter results by type. Valid values: AzureStorage, AzureCompute, Amazon, Google, GoogleService.",
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-					ValidateFunc: validation.StringInSlice([]string{"AzureStorage", "AzureCompute", "Amazon", "Google", "GoogleService",}, false),
+func DataSourceVbrCloudCredentials() datasource.DataSource {
+	return tf.NewDataSource(
+		"vbr_cloud_credentials",
+		schema.Schema{
+			Description: "Retrieves information about cloud credentials from Veeam Backup & Replication.",
+			Attributes: map[string]schema.Attribute{
+				"skip": schema.Int64Attribute{
+					Description: "Number of items to skip.",
+					Optional:    true,
 				},
-			},
-			// Computed attributes
-			"cloud_credentials": {
-				Type:        schema.TypeList,
-				Computed:    true,
-				Description: "List of cloud credentials.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Cloud credential ID.",
-						},
-						"type": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Cloud credential type.",
-						},	
-						"account": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Account name (for AzureStorage type).",
-						},
-						"connection_name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Connection name (for AzureCompute type).",
-						},
-						"deployment": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Deployment (for AzureCompute type).",
-						},
-						"subscription": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Subscription (for AzureCompute type).",
-						},
-						"access_key": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Access key (for Amazon type).",
-						},
-						"description": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Cloud credential description.",
-						},
-						"unique_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Cloud credential unique ID.",
+				"limit": schema.Int64Attribute{
+					Description: "Maximum number of items to return.",
+					Optional:    true,
+				},
+				"order_column": schema.StringAttribute{
+					Description: "Column to order the results by.",
+					Optional:    true,
+				},
+				"order_asc": schema.BoolAttribute{
+					Description: "Whether to order the results in ascending order.",
+					Optional:    true,
+				},
+				"name_filter": schema.StringAttribute{
+					Description: "Filter results by name.",
+					Optional:    true,
+				},
+				"type_filter": schema.ListAttribute{
+					Description: "Filter results by type. Valid values: AzureStorage, AzureCompute, Amazon, Google, GoogleService.",
+					Optional:    true,
+					Validators: []validator.List{
+						listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"AzureStorage", "AzureCompute", "Amazon", "Google", "GoogleService"}...)),
+					},
+					ElementType: types.StringType,
+				},
+				"cloud_credentials": schema.ListNestedAttribute{
+					Description: "List of cloud credentials.",
+					Computed:    true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"id": schema.StringAttribute{
+								Description: "Cloud credential ID.",
+								Computed:    true,
+							},
+							"type": schema.StringAttribute{
+								Description: "Cloud credential type.",
+								Computed:    true,
+							},
+							"account": schema.StringAttribute{
+								Description: "Account name (for AzureStorage type).",
+								Computed:    true,
+							},
+							"connection_name": schema.StringAttribute{
+								Description: "Connection name (for AzureCompute type).",
+								Computed:    true,
+							},
+							"deployment": schema.StringAttribute{
+								Description: "Deployment (for AzureCompute type).",
+								Computed:    true,
+							},
+							"subscription": schema.StringAttribute{
+								Description: "Subscription (for AzureCompute type).",
+								Computed:    true,
+							},
+							"access_key": schema.StringAttribute{
+								Description: "Access key (for Amazon type).",
+								Computed:    true,
+							},
+							"description": schema.StringAttribute{
+								Description: "Cloud credential description.",
+								Computed:    true,
+							},
+							"unique_id": schema.StringAttribute{
+								Description: "Cloud credential unique ID.",
+								Computed:    true,
+							},
 						},
 					},
 				},
 			},
 		},
-	}
+		DataSourceVbrCloudCredentialsRead,
+		map[string]interface{}{},
+	)
 }
 
-func DataSourceVbrCloudCredentialsRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func DataSourceVbrCloudCredentialsRead(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	apiUrl := "/api/v1/cloudCredentials"
 	// Build query parameters
@@ -158,21 +150,21 @@ func DataSourceVbrCloudCredentialsRead(ctx context.Context, d *schema.ResourceDa
 	}
 	// Make the API request
 	fullUrl := client.BuildAPIURL(fmt.Sprintf("%s?%s", apiUrl, queryParams.Encode()))
-	respBody, err := client.DoRequest(ctx, "GET", fullUrl, nil)	
+	respBody, err := client.DoRequest(ctx, "GET", fullUrl, nil)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	var cloudCredentialsResponse VBRCloudCredentialsResponse
 	err = json.Unmarshal(respBody, &cloudCredentialsResponse)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	// Set the cloud_credentials attribute
 	cloudCredentialsList := make([]map[string]interface{}, 0)
 	for _, credential := range cloudCredentialsResponse.Data {
 		credentialMap := map[string]interface{}{
-			"id":              		credential.ID,
-			"type":            		credential.Type,
+			"id":   credential.ID,
+			"type": credential.Type,
 		}
 		if credential.Account != nil {
 			credentialMap["account"] = *credential.Account

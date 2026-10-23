@@ -9,8 +9,11 @@ import (
 	"strconv"
 	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 type AWSDynamoDbTableDataSourceRequest struct {
@@ -53,173 +56,144 @@ type AWSDynamoDbTableDataSourceResponse struct {
 	} `json:"Results"`
 }
 
-func DataSourceAwsDynamoDbTables() *schema.Resource {
-	return &schema.Resource{
-		ReadContext: DataSourceAwsDynamoDbTablesRead,
-		Schema: map[string]*schema.Schema{
-			"search_pattern": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Returns only those items whose names match the specified search pattern.",
-			},
-			"aws_account_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Returns only DynamoDB tables that belong to an AWS account with the specified AWS ID.",
-			},
-			"aws_organization_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Returns only DynamoDB tables that belong to an AWS organization with the specified AWS ID.",
-			},
-			"region_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Returns only DynamoDB tables that reside in the region with the specified ID.",
-			},
-			"offset": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Default:     0,
-				Description: "Excludes from a response the first N items of a resource collection.",
-			},
-			"limit": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Default:     -1,
-				Description: "Specifies the maximum number of items of a resource collection to return in a response.",
-			},
-			"sort": {
-				Type:        schema.TypeSet,
-				Optional:    true,
-				Description: "Specifies the order of items in the response.",
-				Elem:        &schema.Schema{Type: schema.TypeString},
-			},
-			// Computed
-			"total_count": {
-				Type:        schema.TypeInt,
-				Computed:    true,
-				Description: "Total number of DynamoDB tables.",
-			},
-			"results": {
-				Type:        schema.TypeList,
-				Computed:    true,
-				Description: "Information on each DynamoDB table.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"veeam_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "System ID assigned to the DynamoDB table in the Veeam Backup for AWS REST API.",
-						},
-						"aws_resource_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "AWS resource ID of the DynamoDB table.",
-						},
-						"resource_aws_account_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "AWS account ID that the DynamoDB table belongs to.",
-						},
-						"name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Name of the DynamoDB table.",
-						},
-						"is_deleted": {
-							Type:        schema.TypeBool,
-							Computed:    true,
-							Description: "Indicates whether the DynamoDB table has been deleted from AWS.",
-						},
-						"creation_time": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Date and time when the DynamoDB table was created.",
-						},
-						"write_capacity_units": {
-							Type:        schema.TypeInt,
-							Computed:    true,
-							Description: "Provisioned write capacity units for the DynamoDB table.",
-						},
-						"read_capacity_units": {
-							Type:        schema.TypeInt,
-							Computed:    true,
-							Description: "Provisioned read capacity units for the DynamoDB table.",
-						},
-						"table_class": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Storage class of the DynamoDB table (e.g. STANDARD, STANDARD_INFREQUENT_ACCESS).",
-						},
-						"deletion_protection": {
-							Type:        schema.TypeBool,
-							Computed:    true,
-							Description: "Whether deletion protection is enabled for the DynamoDB table.",
-						},
-						"size": {
-							Type:        schema.TypeInt,
-							Computed:    true,
-							Description: "Size of the DynamoDB table in bytes.",
-						},
-						"item_count": {
-							Type:        schema.TypeInt,
-							Computed:    true,
-							Description: "Number of items in the DynamoDB table.",
-						},
-						"region": {
-							Type:        schema.TypeList,
-							Computed:    true,
-							Description: "AWS region in which the DynamoDB table resides.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"id": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "System ID of the AWS region.",
-									},
-									"name": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Name of the AWS region.",
+func DataSourceAwsDynamoDbTables() datasource.DataSource {
+	return tf.NewDataSource(
+		"aws_dynamo_db_tables",
+		schema.Schema{
+			Attributes: map[string]schema.Attribute{
+				"search_pattern": schema.StringAttribute{
+					Description: "Returns only those items whose names match the specified search pattern.",
+					Optional:    true,
+				},
+				"aws_account_id": schema.StringAttribute{
+					Description: "Returns only DynamoDB tables that belong to an AWS account with the specified AWS ID.",
+					Optional:    true,
+				},
+				"aws_organization_id": schema.StringAttribute{
+					Description: "Returns only DynamoDB tables that belong to an AWS organization with the specified AWS ID.",
+					Optional:    true,
+				},
+				"region_id": schema.StringAttribute{
+					Description: "Returns only DynamoDB tables that reside in the region with the specified ID.",
+					Optional:    true,
+				},
+				"offset": schema.Int64Attribute{
+					Description: "Excludes from a response the first N items of a resource collection.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"limit": schema.Int64Attribute{
+					Description: "Specifies the maximum number of items of a resource collection to return in a response.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"sort": schema.SetAttribute{
+					Description: "Specifies the order of items in the response.",
+					Optional:    true,
+					ElementType: types.StringType,
+				},
+				"total_count": schema.Int64Attribute{
+					Description: "Total number of DynamoDB tables.",
+					Computed:    true,
+				},
+				"results": schema.ListNestedAttribute{
+					Description: "Information on each DynamoDB table.",
+					Computed:    true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"veeam_id": schema.StringAttribute{
+								Description: "System ID assigned to the DynamoDB table in the Veeam Backup for AWS REST API.",
+								Computed:    true,
+							},
+							"aws_resource_id": schema.StringAttribute{
+								Description: "AWS resource ID of the DynamoDB table.",
+								Computed:    true,
+							},
+							"resource_aws_account_id": schema.StringAttribute{
+								Description: "AWS account ID that the DynamoDB table belongs to.",
+								Computed:    true,
+							},
+							"name": schema.StringAttribute{
+								Description: "Name of the DynamoDB table.",
+								Computed:    true,
+							},
+							"is_deleted": schema.BoolAttribute{
+								Description: "Indicates whether the DynamoDB table has been deleted from AWS.",
+								Computed:    true,
+							},
+							"creation_time": schema.StringAttribute{
+								Description: "Date and time when the DynamoDB table was created.",
+								Computed:    true,
+							},
+							"write_capacity_units": schema.Int64Attribute{
+								Description: "Provisioned write capacity units for the DynamoDB table.",
+								Computed:    true,
+							},
+							"read_capacity_units": schema.Int64Attribute{
+								Description: "Provisioned read capacity units for the DynamoDB table.",
+								Computed:    true,
+							},
+							"table_class": schema.StringAttribute{
+								Description: "Storage class of the DynamoDB table (e.g. STANDARD, STANDARD_INFREQUENT_ACCESS).",
+								Computed:    true,
+							},
+							"deletion_protection": schema.BoolAttribute{
+								Description: "Whether deletion protection is enabled for the DynamoDB table.",
+								Computed:    true,
+							},
+							"size": schema.Int64Attribute{
+								Description: "Size of the DynamoDB table in bytes.",
+								Computed:    true,
+							},
+							"item_count": schema.Int64Attribute{
+								Description: "Number of items in the DynamoDB table.",
+								Computed:    true,
+							},
+							"region": schema.ListNestedAttribute{
+								Description: "AWS region in which the DynamoDB table resides.",
+								Computed:    true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"id": schema.StringAttribute{
+											Description: "System ID of the AWS region.",
+											Computed:    true,
+										},
+										"name": schema.StringAttribute{
+											Description: "Name of the AWS region.",
+											Computed:    true,
+										},
 									},
 								},
 							},
-						},
-						"iam_role": {
-							Type:        schema.TypeList,
-							Computed:    true,
-							Description: "IAM role associated with the DynamoDB table.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"id": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "System ID of the IAM role.",
-									},
-									"name": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Name of the IAM role.",
+							"iam_role": schema.ListNestedAttribute{
+								Description: "IAM role associated with the DynamoDB table.",
+								Computed:    true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"id": schema.StringAttribute{
+											Description: "System ID of the IAM role.",
+											Computed:    true,
+										},
+										"name": schema.StringAttribute{
+											Description: "Name of the IAM role.",
+											Computed:    true,
+										},
 									},
 								},
 							},
-						},
-						"organization": {
-							Type:        schema.TypeList,
-							Computed:    true,
-							Description: "AWS organization the DynamoDB table belongs to.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"aws_organization_id": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "AWS organization ID.",
-									},
-									"name": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Name of the AWS organization.",
+							"organization": schema.ListNestedAttribute{
+								Description: "AWS organization the DynamoDB table belongs to.",
+								Computed:    true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"aws_organization_id": schema.StringAttribute{
+											Description: "AWS organization ID.",
+											Computed:    true,
+										},
+										"name": schema.StringAttribute{
+											Description: "Name of the AWS organization.",
+											Computed:    true,
+										},
 									},
 								},
 							},
@@ -228,13 +202,18 @@ func DataSourceAwsDynamoDbTables() *schema.Resource {
 				},
 			},
 		},
-	}
+		DataSourceAwsDynamoDbTablesRead,
+		map[string]interface{}{
+			"offset": 0,
+			"limit":  -1,
+		},
+	)
 }
 
-func DataSourceAwsDynamoDbTablesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func DataSourceAwsDynamoDbTablesRead(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAWSClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	params := url.Values{}
@@ -262,7 +241,7 @@ func DataSourceAwsDynamoDbTablesRead(ctx context.Context, d *schema.ResourceData
 		params.Set("RegionId", v.(string))
 	}
 	if v, ok := d.GetOk("sort"); ok {
-		for _, s := range v.(*schema.Set).List() {
+		for _, s := range v.(*tf.Set).List() {
 			params.Add("Sort", s.(string))
 		}
 	}
@@ -271,26 +250,26 @@ func DataSourceAwsDynamoDbTablesRead(ctx context.Context, d *schema.ResourceData
 
 	resp, err := client.MakeAuthenticatedRequestAWS("GET", apiURL, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to retrieve DynamoDB tables: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to retrieve DynamoDB tables: %w", err))
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read response body: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read response body: %w", err))
 	}
 
 	if resp.StatusCode != 200 {
-		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
+		return tf.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
 	}
 
 	var apiResp AWSDynamoDbTableDataSourceResponse
 	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to parse DynamoDB tables response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to parse DynamoDB tables response: %w", err))
 	}
 
 	if err := d.Set("total_count", apiResp.TotalCount); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set total_count: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set total_count: %w", err))
 	}
 
 	results := make([]interface{}, 0, len(apiResp.Results))
@@ -343,7 +322,7 @@ func DataSourceAwsDynamoDbTablesRead(ctx context.Context, d *schema.ResourceData
 	}
 
 	if err := d.Set("results", results); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set results: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set results: %w", err))
 	}
 
 	d.SetId(fmt.Sprintf("aws-dynamodb-tables-%d", apiResp.TotalCount))

@@ -7,8 +7,10 @@ import (
 
 	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 type VbrAmazonCloudCredentialRequest struct {
@@ -20,54 +22,56 @@ type VbrAmazonCloudCredentialRequest struct {
 }
 
 type VbrAmazonCloudCredentialResponse struct {
-	ID          string  `json:"id"`
-	Type        string  `json:"type"`
-	AccessKey   string  `json:"accessKey"`
-	Description *string `json:"description,omitempty"`
+	ID           string  `json:"id"`
+	Type         string  `json:"type"`
+	AccessKey    string  `json:"accessKey"`
+	Description  *string `json:"description,omitempty"`
 	LastModified *string `json:"lastModified,omitempty"`
-	UniqueID    *string `json:"uniqueId,omitempty"`
+	UniqueID     *string `json:"uniqueId,omitempty"`
 }
 
-func ResourceVbrAmazonCloudCredential() *schema.Resource {
-	return &schema.Resource{
-		Description:   "Manages a Veeam Backup & Replication Amazon Cloud Credential.",
-		CreateContext: ResourceVbrAmazonCloudCredentialCreate,
-		ReadContext:   ResourceVbrAmazonCloudCredentialRead,
-		UpdateContext: ResourceVbrAmazonCloudCredentialUpdate,
-		DeleteContext: ResourceVbrAmazonCloudCredentialDelete,
-		Importer: &schema.ResourceImporter{
-			StateContext: schema.ImportStatePassthroughContext,
-		},
-		Schema: map[string]*schema.Schema{
-			"access_key": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "The Access Key of the IAM user used to authenticate to AWS.",
-			},
-			"secret_key": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Sensitive:   true,
-				Description: "The Secret Key of the IAM user used to authenticate to AWS.",
-			},
-			"description": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Description of the Amazon Cloud Credential.",
-			},
-			"unique_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Unique ID that identifies the cloud credentials record.",
+func ResourceVbrAmazonCloudCredential() resource.Resource {
+	return tf.NewResource(
+		"vbr_amazon_cloud_credential",
+		schema.Schema{
+			Description: "Manages a Veeam Backup & Replication Amazon Cloud Credential.",
+			Attributes: map[string]schema.Attribute{
+				"access_key": schema.StringAttribute{
+					Description: "The Access Key of the IAM user used to authenticate to AWS.",
+					Required:    true,
+				},
+				"secret_key": schema.StringAttribute{
+					Description: "The Secret Key of the IAM user used to authenticate to AWS.",
+					Sensitive:   true,
+					Required:    true,
+				},
+				"description": schema.StringAttribute{
+					Description: "Description of the Amazon Cloud Credential.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"unique_id": schema.StringAttribute{
+					Description: "Unique ID that identifies the cloud credentials record.",
+					Optional:    true,
+					Computed:    true,
+				},
 			},
 		},
-	}
+		tf.ResourceOperations{
+			Create: ResourceVbrAmazonCloudCredentialCreate,
+			Read:   ResourceVbrAmazonCloudCredentialRead,
+			Update: ResourceVbrAmazonCloudCredentialUpdate,
+			Delete: ResourceVbrAmazonCloudCredentialDelete,
+		},
+		tf.Timeouts{},
+		true,
+	)
 }
 
-func ResourceVbrAmazonCloudCredentialCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func ResourceVbrAmazonCloudCredentialCreate(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	req := VbrAmazonCloudCredentialRequest{
@@ -86,7 +90,7 @@ func ResourceVbrAmazonCloudCredentialCreate(ctx context.Context, d *schema.Resou
 
 	reqBodyBytes, err := json.Marshal(req)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	// Debug: Log the actual JSON being sent
@@ -98,13 +102,13 @@ func ResourceVbrAmazonCloudCredentialCreate(ctx context.Context, d *schema.Resou
 		if len(respBodyBytes) > 0 {
 			fmt.Printf("[DEBUG] Error response body: %s\n", string(respBodyBytes))
 		}
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	var respData VbrAmazonCloudCredentialResponse
 	err = json.Unmarshal(respBodyBytes, &respData)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	d.SetId(respData.ID)
@@ -112,10 +116,10 @@ func ResourceVbrAmazonCloudCredentialCreate(ctx context.Context, d *schema.Resou
 	return ResourceVbrAmazonCloudCredentialRead(ctx, d, m)
 }
 
-func ResourceVbrAmazonCloudCredentialRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func ResourceVbrAmazonCloudCredentialRead(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	var diags diag.Diagnostics
@@ -123,13 +127,13 @@ func ResourceVbrAmazonCloudCredentialRead(ctx context.Context, d *schema.Resourc
 	apiUrl := client.BuildAPIURL(fmt.Sprintf("/api/v1/cloudCredentials/%s", d.Id()))
 	respBodyBytes, err := client.DoRequest(ctx, "GET", apiUrl, nil)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	var respData VbrAmazonCloudCredentialResponse
 	err = json.Unmarshal(respBodyBytes, &respData)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	d.Set("access_key", respData.AccessKey)
@@ -143,10 +147,10 @@ func ResourceVbrAmazonCloudCredentialRead(ctx context.Context, d *schema.Resourc
 	return diags
 }
 
-func ResourceVbrAmazonCloudCredentialUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func ResourceVbrAmazonCloudCredentialUpdate(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	req := VbrAmazonCloudCredentialRequest{
@@ -165,7 +169,7 @@ func ResourceVbrAmazonCloudCredentialUpdate(ctx context.Context, d *schema.Resou
 
 	reqBodyBytes, err := json.Marshal(req)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	fmt.Printf("[DEBUG] UPDATE - Sending JSON payload: %s\n", string(reqBodyBytes))
@@ -176,16 +180,16 @@ func ResourceVbrAmazonCloudCredentialUpdate(ctx context.Context, d *schema.Resou
 		if len(respBodyBytes) > 0 {
 			fmt.Printf("[DEBUG] UPDATE Error response body: %s\n", string(respBodyBytes))
 		}
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	return ResourceVbrAmazonCloudCredentialRead(ctx, d, m)
 }
 
-func ResourceVbrAmazonCloudCredentialDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func ResourceVbrAmazonCloudCredentialDelete(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	var diags diag.Diagnostics
@@ -193,7 +197,7 @@ func ResourceVbrAmazonCloudCredentialDelete(ctx context.Context, d *schema.Resou
 	apiUrl := client.BuildAPIURL(fmt.Sprintf("/api/v1/cloudCredentials/%s", d.Id()))
 	_, err = client.DoRequest(ctx, "DELETE", apiUrl, nil)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	d.SetId("")

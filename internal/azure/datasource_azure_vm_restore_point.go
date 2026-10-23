@@ -1,14 +1,16 @@
-﻿package azure
+package azure
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 // Response uses the AzureVMRestorePointsResults struct in shared_azure_restores
@@ -16,126 +18,108 @@ import (
 // Request uses the AzureVMRestorePointDataSourceModel struct in shared_azure_restores
 
 // Schema
-func DataSourceAzureVMRestorePoint() *schema.Resource {
-	return &schema.Resource{
-		ReadContext: DataSourceAzureVMRestorePointRead,
-		Schema: map[string]*schema.Schema{
-			"restore_point_id": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "Specifies the system ID assigned to a restore point in the Veeam Backup for Microsoft Azure REST API.",
-			}, // computed fields
-			"id": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "System ID assigned to a restore point in the Veeam Backup for Microsoft Azure REST API.",
-			},
-			"backup_destination": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Type of the backup destination.",
-			},
-			"type": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Type of the restore point.",
-			},
-			"vbr_id": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "System ID assigned to a restore point.",
-			},
-			"point_in_time": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Date and time when the restore point was created.",
-			},
-			"point_in_time_local_time": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Data and time when the restore point was created. it contains timezone offset of the protected VM.",
-			},
-			"backup_size_btyes": {
-				Type:        schema.TypeInt,
-				Computed:    true,
-				Description: "Size of the restore point file (in bytes)",
-			},
-			"is_corrupted": {
-				Type:        schema.TypeBool,
-				Computed:    true,
-				Description: "Defines whether the restore point is corrupted. Note that corrupted restore points cannot be used.",
-			},
-			"vm_name": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Name of the Azure VM the restore point belongs to.",
-			},
-			"resource_hash_id": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Internal ID assigned to the restore point in Veeam.",
-			},
-			"region_id": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Microsoft Azure ID assigned to a region where the restore point resides.",
-			},
-			"region_name": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "name of the Azure region where the restore point resides",
-			},
-			"state": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"gfs_flags": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Retention period configured for the restore point.",
-			},
-			"job_session_id": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "System ID assigned to the session Veeam.",
-			},
-			"data_retrieval_status": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"retrieved_data_expiration_date": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Date and time when the retrieval period exceeds.",
-			},
-			"notify_before_retrieved_data_expiration_hours": {
-				Type:     schema.TypeInt,
-				Computed: true,
-			},
-			"access_tier": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Specifies an access tier of a repository that stores restore points",
-			},
-			"latest_chain_size_bytes": {
-				Type:        schema.TypeInt,
-				Computed:    true,
-				Description: "Size of the latest backup in an incremental backup chain",
-			},
-			"immutable_till": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Date and time when immutability will be automatically disabled for the restore point.",
+func DataSourceAzureVMRestorePoint() datasource.DataSource {
+	return tf.NewDataSource(
+		"azure_vm_restore_point",
+		schema.Schema{
+			Attributes: map[string]schema.Attribute{
+				"restore_point_id": schema.StringAttribute{
+					Description: "Specifies the system ID assigned to a restore point in the Veeam Backup for Microsoft Azure REST API.",
+					Required:    true,
+				},
+				"id": schema.StringAttribute{
+					Description: "System ID assigned to a restore point in the Veeam Backup for Microsoft Azure REST API.",
+					Computed:    true,
+				},
+				"backup_destination": schema.StringAttribute{
+					Description: "Type of the backup destination.",
+					Computed:    true,
+				},
+				"type": schema.StringAttribute{
+					Description: "Type of the restore point.",
+					Computed:    true,
+				},
+				"vbr_id": schema.StringAttribute{
+					Description: "System ID assigned to a restore point.",
+					Computed:    true,
+				},
+				"point_in_time": schema.StringAttribute{
+					Description: "Date and time when the restore point was created.",
+					Computed:    true,
+				},
+				"point_in_time_local_time": schema.StringAttribute{
+					Description: "Data and time when the restore point was created. it contains timezone offset of the protected VM.",
+					Computed:    true,
+				},
+				"backup_size_btyes": schema.Int64Attribute{
+					Description: "Size of the restore point file (in bytes)",
+					Computed:    true,
+				},
+				"is_corrupted": schema.BoolAttribute{
+					Description: "Defines whether the restore point is corrupted. Note that corrupted restore points cannot be used.",
+					Computed:    true,
+				},
+				"vm_name": schema.StringAttribute{
+					Description: "Name of the Azure VM the restore point belongs to.",
+					Computed:    true,
+				},
+				"resource_hash_id": schema.StringAttribute{
+					Description: "Internal ID assigned to the restore point in Veeam.",
+					Computed:    true,
+				},
+				"region_id": schema.StringAttribute{
+					Description: "Microsoft Azure ID assigned to a region where the restore point resides.",
+					Computed:    true,
+				},
+				"region_name": schema.StringAttribute{
+					Description: "name of the Azure region where the restore point resides",
+					Computed:    true,
+				},
+				"state": schema.StringAttribute{
+					Computed: true,
+				},
+				"gfs_flags": schema.StringAttribute{
+					Description: "Retention period configured for the restore point.",
+					Computed:    true,
+				},
+				"job_session_id": schema.StringAttribute{
+					Description: "System ID assigned to the session Veeam.",
+					Computed:    true,
+				},
+				"data_retrieval_status": schema.StringAttribute{
+					Computed: true,
+				},
+				"retrieved_data_expiration_date": schema.StringAttribute{
+					Description: "Date and time when the retrieval period exceeds.",
+					Computed:    true,
+				},
+				"notify_before_retrieved_data_expiration_hours": schema.Int64Attribute{
+					Computed: true,
+				},
+				"access_tier": schema.StringAttribute{
+					Description: "Specifies an access tier of a repository that stores restore points",
+					Computed:    true,
+				},
+				"latest_chain_size_bytes": schema.Int64Attribute{
+					Description: "Size of the latest backup in an incremental backup chain",
+					Computed:    true,
+				},
+				"immutable_till": schema.StringAttribute{
+					Description: "Date and time when immutability will be automatically disabled for the restore point.",
+					Computed:    true,
+				},
 			},
 		},
-	}
+		DataSourceAzureVMRestorePointRead,
+		map[string]interface{}{},
+	)
 }
 
 // Provider function - Read
-func DataSourceAzureVMRestorePointRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func DataSourceAzureVMRestorePointRead(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	restorePointID := d.Get("restore_point_id").(string)
 
@@ -145,27 +129,27 @@ func DataSourceAzureVMRestorePointRead(ctx context.Context, d *schema.ResourceDa
 	// Make the API request
 	resp, err := client.MakeAuthenticatedRequest("GET", apiUrl, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to retrieve Azure VM restore point: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to retrieve Azure VM restore point: %w", err))
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read response body: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read response body: %w", err))
 	}
 
 	if resp.StatusCode == 404 {
-		return diag.FromErr(fmt.Errorf("Azure VM restore point with ID %s not found", restorePointID))
+		return tf.FromErr(fmt.Errorf("Azure VM restore point with ID %s not found", restorePointID))
 	}
 
 	if resp.StatusCode != 200 {
-		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
+		return tf.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
 	}
 
 	// Parse the response
 	var restorePoint AzureVMRestorePointsResults
 	if err := json.Unmarshal(body, &restorePoint); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to parse response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to parse response: %w", err))
 	}
 
 	// Set all the computed attributes

@@ -1,23 +1,27 @@
 package azure
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
+	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
-
 type AzureSQLBackupPolicyCostEstimationDataSourceModelRequest struct {
-	Priority *string `json:"priority,omitempty"`
-	TenantID *string `json:"tenantId,omitempty"`
+	Priority         *string `json:"priority,omitempty"`
+	TenantID         *string `json:"tenantId,omitempty"`
 	ServiceAccountID *string `json:"serviceAccountId,omitempty"`
-	Regions *[]struct {
+	Regions          *[]struct {
 		RegionID *string `json:"regionId,omitempty"`
 	} `json:"regions,omitempty"`
 	SelectedItems *struct {
@@ -33,78 +37,78 @@ type AzureSQLBackupPolicyCostEstimationDataSourceModelRequest struct {
 			ID *string `json:"id,omitempty"`
 		} `json:"databases,omitempty"`
 	} `json:"excludedItems,omitempty"`
-	StagingServerID *string `json:"stagingServerId,omitempty"`
-	ManagedStagingServerID *string `json:"managedStagingServerId,omitempty"`
-	Name *string `json:"name,omitempty"`
-	Description *string `json:"description,omitempty"`
+	StagingServerID            *string `json:"stagingServerId,omitempty"`
+	ManagedStagingServerID     *string `json:"managedStagingServerId,omitempty"`
+	Name                       *string `json:"name,omitempty"`
+	Description                *string `json:"description,omitempty"`
 	PolicyNotificationSettings *struct {
-		Recipient *string `json:"recipient,omitempty"`
-		NotifyOnSuccess *bool `json:"notifyOnSuccess,omitempty"`
-		NotifyOnWarning *bool `json:"notifyOnWarning,omitempty"`
-		NotifyOnFailure *bool `json:"notifyOnFailure,omitempty"`
+		Recipient       *string `json:"recipient,omitempty"`
+		NotifyOnSuccess *bool   `json:"notifyOnSuccess,omitempty"`
+		NotifyOnWarning *bool   `json:"notifyOnWarning,omitempty"`
+		NotifyOnFailure *bool   `json:"notifyOnFailure,omitempty"`
 	} `json:"policyNotificationSettings,omitempty"`
-	IsEnabled *bool `json:"isEnabled,omitempty"`
-	CreatePrivateEndpointToWorkloadAutomatically *bool `json:"createPrivateEndpointToWorkloadAutomatically,omitempty"`
-	BackupType *string `json:"backupType,omitempty"`
-	DailySchedule *struct {
-		Hours *[]int `json:"hours,omitempty"`
+	IsEnabled                                    *bool   `json:"isEnabled,omitempty"`
+	CreatePrivateEndpointToWorkloadAutomatically *bool   `json:"createPrivateEndpointToWorkloadAutomatically,omitempty"`
+	BackupType                                   *string `json:"backupType,omitempty"`
+	DailySchedule                                *struct {
+		Hours              *[]int  `json:"hours,omitempty"`
 		TargetRepositoryID *string `json:"targetRepositoryId,omitempty"`
-		Retention *struct {
-			TimeRetentionDuration *int `json:"timeRetentionDuration,omitempty"`
+		Retention          *struct {
+			TimeRetentionDuration     *int    `json:"timeRetentionDuration,omitempty"`
 			TimeRetentionDurationType *string `json:"timeRetentionDurationType,omitempty"`
 		} `json:"retention,omitempty"`
 	} `json:"dailySchedule,omitempty"`
 	WeeklySchedule *struct {
-		StartTime *int `json:"startTime,omitempty"`
+		StartTime      *int `json:"startTime,omitempty"`
 		BackupSchedule *struct {
 			SelectedDays *[]string `json:"selectedDays,omitempty"`
-			Retention *struct {
-				TimeRetentionDuration *int `json:"timeRetentionDuration,omitempty"`
+			Retention    *struct {
+				TimeRetentionDuration     *int    `json:"timeRetentionDuration,omitempty"`
 				TimeRetentionDurationType *string `json:"timeRetentionDurationType,omitempty"`
 			} `json:"retention,omitempty"`
 			TargetRepositoryID *string `json:"targetRepositoryId,omitempty"`
 		} `json:"backupSchedule,omitempty"`
 	} `json:"weeklySchedule,omitempty"`
 	MonthlySchedule *struct {
-		StartTime *int `json:"startTime,omitempty"`
-		Type *string `json:"type,omitempty"`
-		DayOfWeek *string `json:"dayOfWeek,omitempty"`
-		DayOfMonth *int `json:"dayOfMonth,omitempty"`
-		MonthlyLastDay *bool `json:"monthlyLastDay,omitempty"`
+		StartTime      *int    `json:"startTime,omitempty"`
+		Type           *string `json:"type,omitempty"`
+		DayOfWeek      *string `json:"dayOfWeek,omitempty"`
+		DayOfMonth     *int    `json:"dayOfMonth,omitempty"`
+		MonthlyLastDay *bool   `json:"monthlyLastDay,omitempty"`
 		BackupSchedule *struct {
 			Retention *struct {
-				TimeRetentionDuration *int `json:"timeRetentionDuration,omitempty"`
+				TimeRetentionDuration     *int    `json:"timeRetentionDuration,omitempty"`
 				TimeRetentionDurationType *string `json:"timeRetentionDurationType,omitempty"`
 			} `json:"retention,omitempty"`
-			TargetRepositoryID *string `json:"targetRepositoryId,omitempty"`
-			SelectedMonths *[]string `json:"selectedMonths,omitempty"`
+			TargetRepositoryID *string   `json:"targetRepositoryId,omitempty"`
+			SelectedMonths     *[]string `json:"selectedMonths,omitempty"`
 		} `json:"backupSchedule,omitempty"`
 	} `json:"monthlySchedule,omitempty"`
 	YearlySchedule *struct {
-		StartTime *int `json:"startTime,omitempty"`
-		Month *string `json:"month,omitempty"`
-		Type *string `json:"type,omitempty"`
-		DayOfWeek *string `json:"dayOfWeek,omitempty"`
-		DayOfMonth *int `json:"dayOfMonth,omitempty"`
-		YearlyLastDay *bool `json:"yearlyLastDay,omitempty"`
-		RetentionYearsCount *int `json:"retentionYearsCount,omitempty"`
-		TargetRepositoryID *string `json:"targetRepositoryId,omitempty"`
+		StartTime           *int    `json:"startTime,omitempty"`
+		Month               *string `json:"month,omitempty"`
+		Type                *string `json:"type,omitempty"`
+		DayOfWeek           *string `json:"dayOfWeek,omitempty"`
+		DayOfMonth          *int    `json:"dayOfMonth,omitempty"`
+		YearlyLastDay       *bool   `json:"yearlyLastDay,omitempty"`
+		RetentionYearsCount *int    `json:"retentionYearsCount,omitempty"`
+		TargetRepositoryID  *string `json:"targetRepositoryId,omitempty"`
 	} `json:"yearlySchedule,omitempty"`
 	HealthCheckSchedule *struct {
-		HealthCheckEnabled *bool `json:"healthCheckEnabled,omitempty"`
-		LocalTime *string `json:"localTime,omitempty"`
-		DayNumberInMonth *string `json:"dayNumberInMonth,omitempty"`
-		DayOfWeek *[]string `json:"dayOfWeek,omitempty"`
-		DayOfMonth *int `json:"dayOfMonth,omitempty"`
-		Months *[]string `json:"months,omitempty"`
+		HealthCheckEnabled *bool     `json:"healthCheckEnabled,omitempty"`
+		LocalTime          *string   `json:"localTime,omitempty"`
+		DayNumberInMonth   *string   `json:"dayNumberInMonth,omitempty"`
+		DayOfWeek          *[]string `json:"dayOfWeek,omitempty"`
+		DayOfMonth         *int      `json:"dayOfMonth,omitempty"`
+		Months             *[]string `json:"months,omitempty"`
 	} `json:"healthCheckSchedule,omitempty"`
 }
 
 type AzureSQLBackupPolicyCostEstimationDataSourceModelResponse struct {
 	Results *[]struct {
 		ProtectedItemHash *string `json:"protectedItemHash,omitempty"`
-		Name *string `json:"name,omitempty"`
-		BackupCost struct {
+		Name              *string `json:"name,omitempty"`
+		BackupCost        struct {
 			PricePerMonth struct {
 				Value float64 `json:"value"`
 				Type  string  `json:"type"`
@@ -122,10 +126,10 @@ type AzureSQLBackupPolicyCostEstimationDataSourceModelResponse struct {
 					ResourceID *string  `json:"resourceId,omitempty"`
 					SizeGB     *float64 `json:"sizeGB,omitempty"`
 				} `json:"resource,omitempty"`
-				MeterID *string  `json:"meterId,omitempty"`
-				Description *string  `json:"description,omitempty"`
-				UnitPrice *float64 `json:"unitPrice,omitempty"`
-				Unit *string  `json:"unit,omitempty"`
+				MeterID      *string  `json:"meterId,omitempty"`
+				Description  *string  `json:"description,omitempty"`
+				UnitPrice    *float64 `json:"unitPrice,omitempty"`
+				Unit         *string  `json:"unit,omitempty"`
 				QuantityUsed *float64 `json:"quantityUsed,omitempty"`
 			} `json:"meters,omitempty"`
 			Warnings *[]struct {
@@ -144,10 +148,10 @@ type AzureSQLBackupPolicyCostEstimationDataSourceModelResponse struct {
 					ResourceID *string  `json:"resourceId,omitempty"`
 					SizeGB     *float64 `json:"sizeGB,omitempty"`
 				} `json:"resource,omitempty"`
-				MeterID *string  `json:"meterId,omitempty"`
-				Description *string  `json:"description,omitempty"`
-				UnitPrice *float64 `json:"unitPrice,omitempty"`
-				Unit *string  `json:"unit,omitempty"`
+				MeterID      *string  `json:"meterId,omitempty"`
+				Description  *string  `json:"description,omitempty"`
+				UnitPrice    *float64 `json:"unitPrice,omitempty"`
+				Unit         *string  `json:"unit,omitempty"`
 				QuantityUsed *float64 `json:"quantityUsed,omitempty"`
 			} `json:"meters,omitempty"`
 			Warnings *[]struct {
@@ -185,192 +189,262 @@ type AzureSQLBackupPolicyCostEstimationDataSourceModelResponse struct {
 	} `json:"metaData,omitempty"`
 }
 
-func DataSourceAzureSqlBackupPolicyCostEstimation() *schema.Resource {
-	return &schema.Resource{
-		ReadContext: DataSourceAzureSqlBackupPolicyCostEstimationRead,
-		Description: "Data source for estimating the cost of an Azure SQL backup policy. Calls POST /policies/sql/estimateCost.",
-		Schema: map[string]*schema.Schema{
-			// ── Request fields ────────────────────────────────────────────────
-			"priority": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The backup policy priority.",
-			},
-			"tenant_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The ID of the Azure tenant.",
-			},
-			"service_account_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The ID of the service account.",
-			},
-			"regions": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Azure regions to include in the cost estimation.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"region_id": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "The ID of the Azure region.",
-						},
-					},
+func DataSourceAzureSqlBackupPolicyCostEstimation() datasource.DataSource {
+	return tf.NewDataSource(
+		"azure_sql_backup_policy_cost_estimation",
+		schema.Schema{
+			Description: "Data source for estimating the cost of an Azure SQL backup policy. Calls POST /policies/sql/estimateCost.",
+			Attributes: map[string]schema.Attribute{
+				"priority": schema.StringAttribute{
+					Description: "The backup policy priority.",
+					Optional:    true,
 				},
-			},
-			"selected_items": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "SQL Servers and Databases to include in the cost estimation.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"databases": {
-							Type:     schema.TypeList,
-							Optional: true,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"id": {Type: schema.TypeString, Required: true},
-								},
-							},
-						},
-						"sql_servers": {
-							Type:     schema.TypeList,
-							Optional: true,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"id": {Type: schema.TypeString, Required: true},
-								},
-							},
-						},
-					},
+				"tenant_id": schema.StringAttribute{
+					Description: "The ID of the Azure tenant.",
+					Optional:    true,
 				},
-			},
-			"excluded_items": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "SQL Databases to exclude from the cost estimation.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"databases": {
-							Type:     schema.TypeList,
-							Optional: true,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"id": {Type: schema.TypeString, Required: true},
-								},
+				"service_account_id": schema.StringAttribute{
+					Description: "The ID of the service account.",
+					Optional:    true,
+				},
+				"staging_server_id": schema.StringAttribute{
+					Description: "The ID of the staging server.",
+					Optional:    true,
+				},
+				"managed_staging_server_id": schema.StringAttribute{
+					Description: "The ID of the managed staging server.",
+					Optional:    true,
+				},
+				"name": schema.StringAttribute{
+					Description: "The name of the backup policy.",
+					Optional:    true,
+				},
+				"description": schema.StringAttribute{
+					Description: "The description of the backup policy.",
+					Optional:    true,
+				},
+				"is_enabled": schema.BoolAttribute{
+					Description: "Specifies whether the backup policy is enabled.",
+					Optional:    true,
+				},
+				"create_private_endpoint_to_workload_automatically": schema.BoolAttribute{
+					Description: "Specifies whether to create a private endpoint to the workload automatically.",
+					Optional:    true,
+				},
+				"backup_type": schema.StringAttribute{
+					Description: "The backup type.",
+					Optional:    true,
+				},
+				"results": schema.ListNestedAttribute{
+					Description: "Cost estimation results per protected item.",
+					Computed:    true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"protected_item_hash": schema.StringAttribute{
+								Computed: true,
+							},
+							"name": schema.StringAttribute{
+								Computed: true,
+							},
+							"backup_cost_per_month_value": schema.Float64Attribute{
+								Computed: true,
+							},
+							"backup_cost_per_month_type": schema.StringAttribute{
+								Computed: true,
+							},
+							"traffic_cost_per_month_value": schema.Float64Attribute{
+								Computed: true,
+							},
+							"traffic_cost_per_month_type": schema.StringAttribute{
+								Computed: true,
+							},
+							"transaction_cost_per_month_value": schema.Float64Attribute{
+								Computed: true,
+							},
+							"transaction_cost_per_month_type": schema.StringAttribute{
+								Computed: true,
 							},
 						},
 					},
 				},
-			},
-			"staging_server_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The ID of the staging server.",
-			},
-			"managed_staging_server_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The ID of the managed staging server.",
-			},
-			"name": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The name of the backup policy.",
-			},
-			"description": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The description of the backup policy.",
-			},
-			"policy_notification_settings": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Notification settings for the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"recipient":        {Type: schema.TypeString, Optional: true},
-						"notify_on_success": {Type: schema.TypeBool, Optional: true},
-						"notify_on_warning": {Type: schema.TypeBool, Optional: true},
-						"notify_on_failure": {Type: schema.TypeBool, Optional: true},
-					},
+				"metadata_total_costs_value": schema.Float64Attribute{
+					Description: "Total estimated cost per month.",
+					Computed:    true,
+				},
+				"metadata_total_costs_type": schema.StringAttribute{
+					Description: "Currency type for the total estimated cost.",
+					Computed:    true,
+				},
+				"metadata_total_backup_costs_value": schema.Float64Attribute{
+					Description: "Total estimated backup cost per month.",
+					Computed:    true,
+				},
+				"metadata_total_traffic_costs_value": schema.Float64Attribute{
+					Description: "Total estimated traffic cost per month.",
+					Computed:    true,
+				},
+				"metadata_total_transaction_costs_value": schema.Float64Attribute{
+					Description: "Total estimated transaction cost per month.",
+					Computed:    true,
 				},
 			},
-			"is_enabled": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Specifies whether the backup policy is enabled.",
-			},
-			"create_private_endpoint_to_workload_automatically": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Specifies whether to create a private endpoint to the workload automatically.",
-			},
-			"backup_type": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The backup type.",
-			},
-			"daily_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Daily backup schedule settings.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"hours": {
-							Type:     schema.TypeList,
-							Optional: true,
-							Elem:     &schema.Schema{Type: schema.TypeInt},
-						},
-						"target_repository_id": {Type: schema.TypeString, Optional: true},
-						"retention": {
-							Type:     schema.TypeList,
-							Optional: true,
-							MaxItems: 1,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"time_retention_duration":      {Type: schema.TypeInt, Optional: true},
-									"time_retention_duration_type": {Type: schema.TypeString, Optional: true},
-								},
+			Blocks: map[string]schema.Block{
+				"regions": schema.ListNestedBlock{
+					Description: "Azure regions to include in the cost estimation.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"region_id": schema.StringAttribute{
+								Description: "The ID of the Azure region.",
+								Required:    true,
 							},
 						},
 					},
 				},
-			},
-			"weekly_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Weekly backup schedule settings.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"start_time": {Type: schema.TypeInt, Optional: true},
-						"backup_schedule": {
-							Type:     schema.TypeList,
-							Optional: true,
-							MaxItems: 1,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"selected_days": {
-										Type:     schema.TypeList,
-										Optional: true,
-										Elem:     &schema.Schema{Type: schema.TypeString},
+				"selected_items": schema.ListNestedBlock{
+					Description: "SQL Servers and Databases to include in the cost estimation.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{},
+						Blocks: map[string]schema.Block{
+							"databases": schema.ListNestedBlock{
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"id": schema.StringAttribute{
+											Required: true,
+										},
 									},
-									"target_repository_id": {Type: schema.TypeString, Optional: true},
-									"retention": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"time_retention_duration":      {Type: schema.TypeInt, Optional: true},
-												"time_retention_duration_type": {Type: schema.TypeString, Optional: true},
+								},
+							},
+							"sql_servers": schema.ListNestedBlock{
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"id": schema.StringAttribute{
+											Required: true,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"excluded_items": schema.ListNestedBlock{
+					Description: "SQL Databases to exclude from the cost estimation.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{},
+						Blocks: map[string]schema.Block{
+							"databases": schema.ListNestedBlock{
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"id": schema.StringAttribute{
+											Required: true,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"policy_notification_settings": schema.ListNestedBlock{
+					Description: "Notification settings for the backup policy.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"recipient": schema.StringAttribute{
+								Optional: true,
+							},
+							"notify_on_success": schema.BoolAttribute{
+								Optional: true,
+							},
+							"notify_on_warning": schema.BoolAttribute{
+								Optional: true,
+							},
+							"notify_on_failure": schema.BoolAttribute{
+								Optional: true,
+							},
+						},
+					},
+				},
+				"daily_schedule": schema.ListNestedBlock{
+					Description: "Daily backup schedule settings.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"hours": schema.ListAttribute{
+								Optional:    true,
+								ElementType: types.Int64Type,
+							},
+							"target_repository_id": schema.StringAttribute{
+								Optional: true,
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"retention": schema.ListNestedBlock{
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"time_retention_duration": schema.Int64Attribute{
+											Optional: true,
+										},
+										"time_retention_duration_type": schema.StringAttribute{
+											Optional: true,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"weekly_schedule": schema.ListNestedBlock{
+					Description: "Weekly backup schedule settings.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"start_time": schema.Int64Attribute{
+								Optional: true,
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"backup_schedule": schema.ListNestedBlock{
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"selected_days": schema.ListAttribute{
+											Optional:    true,
+											ElementType: types.StringType,
+										},
+										"target_repository_id": schema.StringAttribute{
+											Optional: true,
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"retention": schema.ListNestedBlock{
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"time_retention_duration": schema.Int64Attribute{
+														Optional: true,
+													},
+													"time_retention_duration_type": schema.StringAttribute{
+														Optional: true,
+													},
+												},
 											},
 										},
 									},
@@ -379,39 +453,58 @@ func DataSourceAzureSqlBackupPolicyCostEstimation() *schema.Resource {
 						},
 					},
 				},
-			},
-			"monthly_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Monthly backup schedule settings.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"start_time":       {Type: schema.TypeInt, Optional: true},
-						"type":             {Type: schema.TypeString, Optional: true},
-						"day_of_week":      {Type: schema.TypeString, Optional: true},
-						"day_of_month":     {Type: schema.TypeInt, Optional: true},
-						"monthly_last_day": {Type: schema.TypeBool, Optional: true},
-						"backup_schedule": {
-							Type:     schema.TypeList,
-							Optional: true,
-							MaxItems: 1,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"target_repository_id": {Type: schema.TypeString, Optional: true},
-									"selected_months": {
-										Type:     schema.TypeList,
-										Optional: true,
-										Elem:     &schema.Schema{Type: schema.TypeString},
+				"monthly_schedule": schema.ListNestedBlock{
+					Description: "Monthly backup schedule settings.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"start_time": schema.Int64Attribute{
+								Optional: true,
+							},
+							"type": schema.StringAttribute{
+								Optional: true,
+							},
+							"day_of_week": schema.StringAttribute{
+								Optional: true,
+							},
+							"day_of_month": schema.Int64Attribute{
+								Optional: true,
+							},
+							"monthly_last_day": schema.BoolAttribute{
+								Optional: true,
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"backup_schedule": schema.ListNestedBlock{
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"target_repository_id": schema.StringAttribute{
+											Optional: true,
+										},
+										"selected_months": schema.ListAttribute{
+											Optional:    true,
+											ElementType: types.StringType,
+										},
 									},
-									"retention": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"time_retention_duration":      {Type: schema.TypeInt, Optional: true},
-												"time_retention_duration_type": {Type: schema.TypeString, Optional: true},
+									Blocks: map[string]schema.Block{
+										"retention": schema.ListNestedBlock{
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"time_retention_duration": schema.Int64Attribute{
+														Optional: true,
+													},
+													"time_retention_duration_type": schema.StringAttribute{
+														Optional: true,
+													},
+												},
 											},
 										},
 									},
@@ -420,128 +513,109 @@ func DataSourceAzureSqlBackupPolicyCostEstimation() *schema.Resource {
 						},
 					},
 				},
-			},
-			"yearly_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Yearly backup schedule settings.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"start_time":           {Type: schema.TypeInt, Optional: true},
-						"month":                {Type: schema.TypeString, Optional: true},
-						"type":                 {Type: schema.TypeString, Optional: true},
-						"day_of_week":          {Type: schema.TypeString, Optional: true},
-						"day_of_month":         {Type: schema.TypeInt, Optional: true},
-						"yearly_last_day":      {Type: schema.TypeBool, Optional: true},
-						"retention_years_count": {Type: schema.TypeInt, Optional: true},
-						"target_repository_id": {Type: schema.TypeString, Optional: true},
+				"yearly_schedule": schema.ListNestedBlock{
+					Description: "Yearly backup schedule settings.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
 					},
-				},
-			},
-			"health_check_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Health check schedule settings.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"health_check_enabled": {Type: schema.TypeBool, Optional: true},
-						"local_time":           {Type: schema.TypeString, Optional: true},
-						"day_number_in_month":  {Type: schema.TypeString, Optional: true},
-						"day_of_week": {
-							Type:     schema.TypeList,
-							Optional: true,
-							Elem:     &schema.Schema{Type: schema.TypeString},
-						},
-						"day_of_month": {Type: schema.TypeInt, Optional: true},
-						"months": {
-							Type:     schema.TypeList,
-							Optional: true,
-							Elem:     &schema.Schema{Type: schema.TypeString},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"start_time": schema.Int64Attribute{
+								Optional: true,
+							},
+							"month": schema.StringAttribute{
+								Optional: true,
+							},
+							"type": schema.StringAttribute{
+								Optional: true,
+							},
+							"day_of_week": schema.StringAttribute{
+								Optional: true,
+							},
+							"day_of_month": schema.Int64Attribute{
+								Optional: true,
+							},
+							"yearly_last_day": schema.BoolAttribute{
+								Optional: true,
+							},
+							"retention_years_count": schema.Int64Attribute{
+								Optional: true,
+							},
+							"target_repository_id": schema.StringAttribute{
+								Optional: true,
+							},
 						},
 					},
 				},
-			},
-			// ── Computed response fields ──────────────────────────────────────
-			"results": {
-				Type:        schema.TypeList,
-				Computed:    true,
-				Description: "Cost estimation results per protected item.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"protected_item_hash":              {Type: schema.TypeString, Computed: true},
-						"name":                             {Type: schema.TypeString, Computed: true},
-						"backup_cost_per_month_value":      {Type: schema.TypeFloat, Computed: true},
-						"backup_cost_per_month_type":       {Type: schema.TypeString, Computed: true},
-						"traffic_cost_per_month_value":     {Type: schema.TypeFloat, Computed: true},
-						"traffic_cost_per_month_type":      {Type: schema.TypeString, Computed: true},
-						"transaction_cost_per_month_value": {Type: schema.TypeFloat, Computed: true},
-						"transaction_cost_per_month_type":  {Type: schema.TypeString, Computed: true},
+				"health_check_schedule": schema.ListNestedBlock{
+					Description: "Health check schedule settings.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"health_check_enabled": schema.BoolAttribute{
+								Optional: true,
+							},
+							"local_time": schema.StringAttribute{
+								Optional: true,
+							},
+							"day_number_in_month": schema.StringAttribute{
+								Optional: true,
+							},
+							"day_of_week": schema.ListAttribute{
+								Optional:    true,
+								ElementType: types.StringType,
+							},
+							"day_of_month": schema.Int64Attribute{
+								Optional: true,
+							},
+							"months": schema.ListAttribute{
+								Optional:    true,
+								ElementType: types.StringType,
+							},
+						},
 					},
 				},
-			},
-			"metadata_total_costs_value": {
-				Type:        schema.TypeFloat,
-				Computed:    true,
-				Description: "Total estimated cost per month.",
-			},
-			"metadata_total_costs_type": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Currency type for the total estimated cost.",
-			},
-			"metadata_total_backup_costs_value": {
-				Type:        schema.TypeFloat,
-				Computed:    true,
-				Description: "Total estimated backup cost per month.",
-			},
-			"metadata_total_traffic_costs_value": {
-				Type:        schema.TypeFloat,
-				Computed:    true,
-				Description: "Total estimated traffic cost per month.",
-			},
-			"metadata_total_transaction_costs_value": {
-				Type:        schema.TypeFloat,
-				Computed:    true,
-				Description: "Total estimated transaction cost per month.",
 			},
 		},
-	}
+		DataSourceAzureSqlBackupPolicyCostEstimationRead,
+		map[string]interface{}{},
+	)
 }
 
-func DataSourceAzureSqlBackupPolicyCostEstimationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func DataSourceAzureSqlBackupPolicyCostEstimationRead(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	reqMap := buildSQLCostEstimationRequestMap(d)
 
 	jsonData, err := json.Marshal(reqMap)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to marshal request body: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to marshal request body: %w", err))
 	}
 
 	apiURL := client.BuildAPIURL("/policies/sql/estimateCost")
 	resp, err := client.MakeAuthenticatedRequest("POST", apiURL, strings.NewReader(string(jsonData)))
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to call estimateCost API: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to call estimateCost API: %w", err))
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read response body: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read response body: %w", err))
 	}
 
 	if resp.StatusCode != 200 && resp.StatusCode != 202 {
-		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
+		return tf.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
 	}
 
 	var response AzureSQLBackupPolicyCostEstimationDataSourceModelResponse
 	if err := json.Unmarshal(body, &response); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to parse response JSON: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to parse response JSON: %w", err))
 	}
 
 	resultsList := make([]interface{}, 0)
@@ -574,7 +648,7 @@ func DataSourceAzureSqlBackupPolicyCostEstimationRead(ctx context.Context, d *sc
 	}
 
 	if err := d.Set("results", resultsList); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set results: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set results: %w", err))
 	}
 
 	if response.MetaData != nil && response.MetaData.Totals != nil {
@@ -598,7 +672,7 @@ func DataSourceAzureSqlBackupPolicyCostEstimationRead(ctx context.Context, d *sc
 	return nil
 }
 
-func buildSQLCostEstimationRequestMap(d *schema.ResourceData) map[string]interface{} {
+func buildSQLCostEstimationRequestMap(d *tf.Data) map[string]interface{} {
 	req := map[string]interface{}{}
 
 	if v, ok := d.GetOk("priority"); ok {

@@ -1,18 +1,27 @@
-﻿package azure
+package azure
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	vc "terraform-provider-veeambackup/internal/client"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"regexp"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 type VMBackupPolicyRequest struct {
@@ -96,335 +105,208 @@ type ScriptSettings struct {
 	IgnoreMissingScripts    bool    `json:"ignoreMissingScripts"`
 }
 
-
-
 // ResourceAzureVMBackupPolicy returns the resource for Azure VM backup policies
-func ResourceAzureVMBackupPolicy() *schema.Resource {
-	return &schema.Resource{
-		CreateContext: resourceVMBackupPolicyCreate,
-		ReadContext:   resourceVMBackupPolicyRead,
-		UpdateContext: resourceVMBackupPolicyUpdate,
-		DeleteContext: resourceVMBackupPolicyDelete,
-		Importer: &schema.ResourceImporter{
-			StateContext: schema.ImportStatePassthroughContext,
-		},
-		Schema: map[string]*schema.Schema{
-			"is_enabled": {
-				Type:        schema.TypeBool,
-				Required:    true,
-				Description: "Defines whether the policy is enabled.",
-			},
-			"name": {
-				Type:         schema.TypeString,
-				Required:     true,
-				Description:  "Specifies a name for the backup policy.",
-				ValidateFunc: validation.StringLenBetween(1, 255),
-			},
-			"regions": {
-				Type:        schema.TypeList,
-				Required:    true,
-				MinItems:    1,
-				Description: "Specifies Azure regions where the resources that will be backed up reside.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"name": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Azure region name.",
-						},
+func ResourceAzureVMBackupPolicy() resource.Resource {
+	return tf.NewResource(
+		"azure_vm_backup_policy",
+		schema.Schema{
+			Attributes: map[string]schema.Attribute{
+				"is_enabled": schema.BoolAttribute{
+					Description: "Defines whether the policy is enabled.",
+					Required:    true,
+				},
+				"name": schema.StringAttribute{
+					Description: "Specifies a name for the backup policy.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.LengthBetween(1, 255),
 					},
 				},
+				"tenant_id": schema.StringAttribute{
+					Description: "Specifies a Microsoft Azure ID assigned to a tenant.",
+					Required:    true,
+				},
+				"service_account_id": schema.StringAttribute{
+					Description: "Specifies the system ID assigned to the service account.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.RegexMatches(regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`), "must be a UUID"),
+					},
+				},
+				"description": schema.StringAttribute{
+					Description: "Specifies a description for the backup policy.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"backup_type": schema.StringAttribute{
+					Description: "Defines whether you want to include to the backup scope all resources residing in the specified Azure regions.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.OneOf([]string{"AllSubscriptions", "SelectedItems", "Unknown"}...),
+					},
+				},
+				"is_backup_configured": schema.BoolAttribute{
+					Description: "Indicates whether backup is configured for the policy.",
+					Computed:    true,
+				},
+				"is_schedule_configured": schema.BoolAttribute{
+					Description: "Indicates whether a backup schedule is configured for the policy.",
+					Computed:    true,
+				},
 			},
-			"snapshot_settings": {
-				Type:        schema.TypeList,
-				Required:    true,
-				MaxItems:    1,
-				Description: "Specifies cloud-native snapshot settings for the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"copy_original_tags": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Default:     false,
-							Description: "Defines whether to assign to the snapshots tags of virtual disks.",
-						},
-						"application_aware_snapshot": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Default:     false,
-							Description: "Defines whether to enable application-aware processing.",
-						},
-						"additional_tags": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies a list of additional tags to assign to the snapshots created by the backup policy.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"name": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Tag name.",
-									},
-									"value": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Tag value.",
-									},
-								},
-							},
-						},
-						"user_scripts": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "Specifies user script settings for the backup policy.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"windows": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										MaxItems:    1,
-										Description: "Specifies user script settings for Windows VMs.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"scripts_enabled": {
-													Type:        schema.TypeBool,
-													Required:    true,
-													Description: "Defines whether to enable user scripts execution.",
-												},
-												"pre_script_path": {
-													Type:        schema.TypeString,
-													Optional:    true,
-													Description: "Specifies the path to the pre-backup script.",
-												},
-												"pre_script_arguments": {
-													Type:        schema.TypeString,
-													Optional:    true,
-													Description: "Specifies arguments for the pre-backup script.",
-												},
-												"post_script_path": {
-													Type:        schema.TypeString,
-													Optional:    true,
-													Description: "Specifies the path to the post-backup script.",
-												},
-												"post_script_arguments": {
-													Type:        schema.TypeString,
-													Optional:    true,
-													Description: "Specifies arguments for the post-backup script.",
-												},
-												"repository_snapshots_only": {
-													Type:        schema.TypeBool,
-													Optional:    true,
-													Default:     false,
-													Description: "Defines whether to run the scripts only during repository snapshot creation.",
-												},
-												"ignore_exit_codes": {
-													Type:        schema.TypeBool,
-													Optional:    true,
-													Default:     false,
-													Description: "Defines whether to ignore script exit codes.",
-												},
-												"ignore_missing_scripts": {
-													Type:        schema.TypeBool,
-													Optional:    true,
-													Default:     false,
-													Description: "Defines whether to ignore missing scripts.",
-												},
-											},
-										},
-									},
-									"linux": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										MaxItems:    1,
-										Description: "Specifies user script settings for Windows VMs.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"scripts_enabled": {
-													Type:        schema.TypeBool,
-													Required:    true,
-													Description: "Defines whether to enable user scripts execution.",
-												},
-												"pre_script_path": {
-													Type:        schema.TypeString,
-													Optional:    true,
-													Description: "Specifies the path to the pre-backup script.",
-												},
-												"pre_script_arguments": {
-													Type:        schema.TypeString,
-													Optional:    true,
-													Description: "Specifies arguments for the pre-backup script.",
-												},
-												"post_script_path": {
-													Type:        schema.TypeString,
-													Optional:    true,
-													Description: "Specifies the path to the post-backup script.",
-												},
-												"post_script_arguments": {
-													Type:        schema.TypeString,
-													Optional:    true,
-													Description: "Specifies arguments for the post-backup script.",
-												},
-												"repository_snapshots_only": {
-													Type:        schema.TypeBool,
-													Optional:    true,
-													Default:     false,
-													Description: "Defines whether to run the scripts only during repository snapshot creation.",
-												},
-												"ignore_exit_codes": {
-													Type:        schema.TypeBool,
-													Optional:    true,
-													Default:     false,
-													Description: "Defines whether to ignore script exit codes.",
-												},
-												"ignore_missing_scripts": {
-													Type:        schema.TypeBool,
-													Optional:    true,
-													Default:     false,
-													Description: "Defines whether to ignore missing scripts.",
-												},
-											},
-										},
-									},
-								},
+			Blocks: map[string]schema.Block{
+				"regions": schema.ListNestedBlock{
+					Description: "Specifies Azure regions where the resources that will be backed up reside.",
+					Validators: []validator.List{
+						listvalidator.SizeAtLeast(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"name": schema.StringAttribute{
+								Description: "Azure region name.",
+								Required:    true,
 							},
 						},
 					},
 				},
-			},
-			"tenant_id": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "Specifies a Microsoft Azure ID assigned to a tenant.",
-			},
-			"service_account_id": {
-				Type:         schema.TypeString,
-				Required:     true,
-				Description:  "Specifies the system ID assigned to the service account.",
-				ValidateFunc: validation.IsUUID,
-			},
-			"selected_items": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Specifies Azure resources to protect by the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"subscriptions": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies a list of Azure subscription IDs to include in the backup scope.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"subscription_id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Azure subscription ID.",
+				"snapshot_settings": schema.ListNestedBlock{
+					Description: "Specifies cloud-native snapshot settings for the backup policy.",
+					Validators: []validator.List{
+						listvalidator.SizeAtLeast(1),
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"copy_original_tags": schema.BoolAttribute{
+								Description: "Defines whether to assign to the snapshots tags of virtual disks.",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(false),
+							},
+							"application_aware_snapshot": schema.BoolAttribute{
+								Description: "Defines whether to enable application-aware processing.",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(false),
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"additional_tags": schema.ListNestedBlock{
+								Description: "Specifies a list of additional tags to assign to the snapshots created by the backup policy.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"name": schema.StringAttribute{
+											Description: "Tag name.",
+											Required:    true,
+										},
+										"value": schema.StringAttribute{
+											Description: "Tag value.",
+											Required:    true,
+										},
 									},
 								},
 							},
-						},
-						"tags": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies a list of tags assigned to Azure resources to include in the backup scope.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"name": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Tag name.",
-									},
-									"value": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Tag value.",
-									},
+							"user_scripts": schema.ListNestedBlock{
+								Description: "Specifies user script settings for the backup policy.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
 								},
-							},
-						},
-						"resource_groups": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies a list of Azure resource groups to include in the backup scope.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Resource group system ID.",
-									},
-								},
-							},
-						},
-						"virtual_machines": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies a list of protected Azure VMs.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "VM system ID.",
-									},
-								},
-							},
-						},
-						"tag_groups": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies a list of tag groups assigned to Azure resources to include in the backup scope.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"name": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Tag group name.",
-									},
-									"subsciption": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies a list of Azure subscription IDs to include in the tag group.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"subscription_id": {
-													Type:        schema.TypeString,
-													Required:    true,
-													Description: "Azure subscription ID.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{},
+									Blocks: map[string]schema.Block{
+										"windows": schema.ListNestedBlock{
+											Description: "Specifies user script settings for Windows VMs.",
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"scripts_enabled": schema.BoolAttribute{
+														Description: "Defines whether to enable user scripts execution.",
+														Required:    true,
+													},
+													"pre_script_path": schema.StringAttribute{
+														Description: "Specifies the path to the pre-backup script.",
+														Optional:    true,
+													},
+													"pre_script_arguments": schema.StringAttribute{
+														Description: "Specifies arguments for the pre-backup script.",
+														Optional:    true,
+													},
+													"post_script_path": schema.StringAttribute{
+														Description: "Specifies the path to the post-backup script.",
+														Optional:    true,
+													},
+													"post_script_arguments": schema.StringAttribute{
+														Description: "Specifies arguments for the post-backup script.",
+														Optional:    true,
+													},
+													"repository_snapshots_only": schema.BoolAttribute{
+														Description: "Defines whether to run the scripts only during repository snapshot creation.",
+														Optional:    true,
+														Computed:    true,
+														Default:     booldefault.StaticBool(false),
+													},
+													"ignore_exit_codes": schema.BoolAttribute{
+														Description: "Defines whether to ignore script exit codes.",
+														Optional:    true,
+														Computed:    true,
+														Default:     booldefault.StaticBool(false),
+													},
+													"ignore_missing_scripts": schema.BoolAttribute{
+														Description: "Defines whether to ignore missing scripts.",
+														Optional:    true,
+														Computed:    true,
+														Default:     booldefault.StaticBool(false),
+													},
 												},
 											},
 										},
-									},
-									"resource_groups": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies a list of Azure resource groups to include in the tag group.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"id": {
-													Type:        schema.TypeString,
-													Required:    true,
-													Description: "Resource group system ID.",
-												},
+										"linux": schema.ListNestedBlock{
+											Description: "Specifies user script settings for Windows VMs.",
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
 											},
-										},
-									},
-									"tags": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies a list of tags assigned to Azure resources to include in the tag group.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"name": {
-													Type:        schema.TypeString,
-													Required:    true,
-													Description: "Tag name.",
-												},
-												"value": {
-													Type:        schema.TypeString,
-													Required:    true,
-													Description: "Tag value.",
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"scripts_enabled": schema.BoolAttribute{
+														Description: "Defines whether to enable user scripts execution.",
+														Required:    true,
+													},
+													"pre_script_path": schema.StringAttribute{
+														Description: "Specifies the path to the pre-backup script.",
+														Optional:    true,
+													},
+													"pre_script_arguments": schema.StringAttribute{
+														Description: "Specifies arguments for the pre-backup script.",
+														Optional:    true,
+													},
+													"post_script_path": schema.StringAttribute{
+														Description: "Specifies the path to the post-backup script.",
+														Optional:    true,
+													},
+													"post_script_arguments": schema.StringAttribute{
+														Description: "Specifies arguments for the post-backup script.",
+														Optional:    true,
+													},
+													"repository_snapshots_only": schema.BoolAttribute{
+														Description: "Defines whether to run the scripts only during repository snapshot creation.",
+														Optional:    true,
+														Computed:    true,
+														Default:     booldefault.StaticBool(false),
+													},
+													"ignore_exit_codes": schema.BoolAttribute{
+														Description: "Defines whether to ignore script exit codes.",
+														Optional:    true,
+														Computed:    true,
+														Default:     booldefault.StaticBool(false),
+													},
+													"ignore_missing_scripts": schema.BoolAttribute{
+														Description: "Defines whether to ignore missing scripts.",
+														Optional:    true,
+														Computed:    true,
+														Default:     booldefault.StaticBool(false),
+													},
 												},
 											},
 										},
@@ -434,547 +316,597 @@ func ResourceAzureVMBackupPolicy() *schema.Resource {
 						},
 					},
 				},
-			},
-			"excluded_items": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Specifies Azure resources to exclude from the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"virtual_machines": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies a list of protected Azure VMs to exclude from the backup policy.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"id": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "VM system ID.",
-									},
-								},
-							},
-						},
-						"tags": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies a list of tags assigned to Azure resources to exclude from the backup policy.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"name": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Tag name.",
-									},
-									"value": {
-										Type:        schema.TypeString,
-										Required:    true,
-										Description: "Tag value.",
-									},
-								},
-							},
-						},
+				"selected_items": schema.ListNestedBlock{
+					Description: "Specifies Azure resources to protect by the backup policy.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
 					},
-				},
-			},
-			"description": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Specifies a description for the backup policy.",
-			},
-			"retry_settings": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Specifies retry settings for the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"retry_count": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Default:     3,
-							Description: "Specifies the number of retry attempts for failed backup tasks.",
-						},
-					},
-				},
-			},
-			"policy_notification_settings": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Specifies notification settings for the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"recipient": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Specifies the email address of the notification recipient.",
-						},
-						"notify_on_success": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Default:     false,
-							Description: "Defines whether to send notifications on successful backup jobs.",
-						},
-						"notify_on_warning": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Default:     true,
-							Description: "Defines whether to send notifications on backup jobs with warnings.",
-						},
-						"notify_on_failure": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Default:     true,
-							Description: "Defines whether to send notifications on failed backup jobs.",
-						},
-					},
-				},
-			},
-			"backup_type": {
-				Type:         schema.TypeString,
-				Required:     true,
-				Description:  "Defines whether you want to include to the backup scope all resources residing in the specified Azure regions.",
-				ValidateFunc: validation.StringInSlice([]string{"AllSubscriptions", "SelectedItems", "Unknown"}, false),
-			},
-			"daily_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Specifies daily backup schedule settings for the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"daily_type": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Specifies the type of daily backup schedule.",
-							ValidateFunc: validation.StringInSlice([]string{"EveryDay", "Weekdays", "SelectedDays", "Unknown"}, false),
-						},
-						"selected_days": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies the days of the week when backups should be performed if the daily type is SelectedDays.",
-							Elem: &schema.Schema{
-								Type:         schema.TypeString,
-								ValidateFunc: validation.StringInSlice([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}, false),
-							},
-						},
-						"runs_per_hour": {
-							Type:         schema.TypeInt,
-							Optional:     true,
-							Description:  "Specifies the number of backup runs per hour.",
-							ValidateFunc: validation.IntBetween(1, 24),
-						},
-						"snapshot_schedule": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies snapshot schedule settings for daily backups.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"hours": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies the hours when snapshots should be taken.",
-										Elem: &schema.Schema{
-											Type:         schema.TypeInt,
-											ValidateFunc: validation.IntBetween(0, 23),
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{},
+						Blocks: map[string]schema.Block{
+							"subscriptions": schema.ListNestedBlock{
+								Description: "Specifies a list of Azure subscription IDs to include in the backup scope.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"subscription_id": schema.StringAttribute{
+											Description: "Azure subscription ID.",
+											Required:    true,
 										},
 									},
-									"snapshots_to_keep": {
-										Type:        schema.TypeInt,
-										Optional:    true,
-										Description: "Specifies the number of snapshots to retain.",
+								},
+							},
+							"tags": schema.ListNestedBlock{
+								Description: "Specifies a list of tags assigned to Azure resources to include in the backup scope.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"name": schema.StringAttribute{
+											Description: "Tag name.",
+											Required:    true,
+										},
+										"value": schema.StringAttribute{
+											Description: "Tag value.",
+											Required:    true,
+										},
 									},
 								},
 							},
-						},
-						"backup_schedule": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies backup schedule settings for daily backups.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"hours": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies the hours when backups should be performed.",
-										Elem: &schema.Schema{
-											Type:         schema.TypeInt,
-											ValidateFunc: validation.IntBetween(0, 23),
+							"resource_groups": schema.ListNestedBlock{
+								Description: "Specifies a list of Azure resource groups to include in the backup scope.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"id": schema.StringAttribute{
+											Description: "Resource group system ID.",
+											Required:    true,
 										},
 									},
-									"retention": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies retention settings for daily backups.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"time_retention_duration": {
-													Type:        schema.TypeInt,
-													Optional:    true,
-													Description: "Specifies the duration (in days) to retain daily backups.",
+								},
+							},
+							"virtual_machines": schema.ListNestedBlock{
+								Description: "Specifies a list of protected Azure VMs.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"id": schema.StringAttribute{
+											Description: "VM system ID.",
+											Required:    true,
+										},
+									},
+								},
+							},
+							"tag_groups": schema.ListNestedBlock{
+								Description: "Specifies a list of tag groups assigned to Azure resources to include in the backup scope.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"name": schema.StringAttribute{
+											Description: "Tag group name.",
+											Required:    true,
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"subsciption": schema.ListNestedBlock{
+											Description: "Specifies a list of Azure subscription IDs to include in the tag group.",
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"subscription_id": schema.StringAttribute{
+														Description: "Azure subscription ID.",
+														Required:    true,
+													},
 												},
-												"retention_duration_type": {
-													Type:         schema.TypeString,
-													Optional:     true,
-													Description:  "Specifies the type of retention duration.",
-													ValidateFunc: validation.StringInSlice([]string{"Days", "Months", "Years", "Unknown"}, false),
+											},
+										},
+										"resource_groups": schema.ListNestedBlock{
+											Description: "Specifies a list of Azure resource groups to include in the tag group.",
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"id": schema.StringAttribute{
+														Description: "Resource group system ID.",
+														Required:    true,
+													},
+												},
+											},
+										},
+										"tags": schema.ListNestedBlock{
+											Description: "Specifies a list of tags assigned to Azure resources to include in the tag group.",
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"name": schema.StringAttribute{
+														Description: "Tag name.",
+														Required:    true,
+													},
+													"value": schema.StringAttribute{
+														Description: "Tag value.",
+														Required:    true,
+													},
 												},
 											},
 										},
 									},
-									"target_repository_id": {
-										Type:        schema.TypeString,
-										Optional:    true,
-										Description: "Specifies the system ID of the target repository for daily backups.",
+								},
+							},
+						},
+					},
+				},
+				"excluded_items": schema.ListNestedBlock{
+					Description: "Specifies Azure resources to exclude from the backup policy.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{},
+						Blocks: map[string]schema.Block{
+							"virtual_machines": schema.ListNestedBlock{
+								Description: "Specifies a list of protected Azure VMs to exclude from the backup policy.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"id": schema.StringAttribute{
+											Description: "VM system ID.",
+											Required:    true,
+										},
+									},
+								},
+							},
+							"tags": schema.ListNestedBlock{
+								Description: "Specifies a list of tags assigned to Azure resources to exclude from the backup policy.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"name": schema.StringAttribute{
+											Description: "Tag name.",
+											Required:    true,
+										},
+										"value": schema.StringAttribute{
+											Description: "Tag value.",
+											Required:    true,
+										},
 									},
 								},
 							},
 						},
 					},
 				},
-			},
-			"weekly_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Specifies weekly backup schedule settings for the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"start_time": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "Specifies the start time for weekly backups.",
+				"retry_settings": schema.ListNestedBlock{
+					Description: "Specifies retry settings for the backup policy.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"retry_count": schema.Int64Attribute{
+								Description: "Specifies the number of retry attempts for failed backup tasks.",
+								Optional:    true,
+								Computed:    true,
+								Default:     int64default.StaticInt64(3),
+							},
 						},
-						"snapshot_schedule": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies snapshot schedule settings for weekly backups.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"selected_days": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies the days of the week when snapshots should be taken.",
-										Elem: &schema.Schema{
-											Type:         schema.TypeString,
-											ValidateFunc: validation.StringInSlice([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}, false),
-										},
-									},
-									"snapshots_to_keep": {
-										Type:        schema.TypeInt,
-										Optional:    true,
-										Description: "Specifies the number of snapshots to retain.",
-									},
+					},
+				},
+				"policy_notification_settings": schema.ListNestedBlock{
+					Description: "Specifies notification settings for the backup policy.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"recipient": schema.StringAttribute{
+								Description: "Specifies the email address of the notification recipient.",
+								Optional:    true,
+							},
+							"notify_on_success": schema.BoolAttribute{
+								Description: "Defines whether to send notifications on successful backup jobs.",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(false),
+							},
+							"notify_on_warning": schema.BoolAttribute{
+								Description: "Defines whether to send notifications on backup jobs with warnings.",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(true),
+							},
+							"notify_on_failure": schema.BoolAttribute{
+								Description: "Defines whether to send notifications on failed backup jobs.",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(true),
+							},
+						},
+					},
+				},
+				"daily_schedule": schema.ListNestedBlock{
+					Description: "Specifies daily backup schedule settings for the backup policy.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"daily_type": schema.StringAttribute{
+								Description: "Specifies the type of daily backup schedule.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"EveryDay", "Weekdays", "SelectedDays", "Unknown"}...),
+								},
+							},
+							"selected_days": schema.ListAttribute{
+								Description: "Specifies the days of the week when backups should be performed if the daily type is SelectedDays.",
+								Optional:    true,
+								Validators: []validator.List{
+									listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}...)),
+								},
+								ElementType: types.StringType,
+							},
+							"runs_per_hour": schema.Int64Attribute{
+								Description: "Specifies the number of backup runs per hour.",
+								Optional:    true,
+								Validators: []validator.Int64{
+									int64validator.Between(1, 24),
 								},
 							},
 						},
-						"backup_schedule": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies backup schedule settings for weekly backups.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"selected_days": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies the days of the week when backups should be performed.",
-										Elem: &schema.Schema{
-											Type:         schema.TypeString,
-											ValidateFunc: validation.StringInSlice([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}, false),
+						Blocks: map[string]schema.Block{
+							"snapshot_schedule": schema.ListNestedBlock{
+								Description: "Specifies snapshot schedule settings for daily backups.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"hours": schema.ListAttribute{
+											Description: "Specifies the hours when snapshots should be taken.",
+											Optional:    true,
+											Validators: []validator.List{
+												listvalidator.ValueInt64sAre(int64validator.Between(0, 23)),
+											},
+											ElementType: types.Int64Type,
+										},
+										"snapshots_to_keep": schema.Int64Attribute{
+											Description: "Specifies the number of snapshots to retain.",
+											Optional:    true,
 										},
 									},
-									"retention": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies retention settings for weekly backups.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"time_retention_duration": {
-													Type:        schema.TypeInt,
-													Optional:    true,
-													Description: "Specifies the duration (in days) to retain weekly backups.",
-												},
-												"retention_duration_type": {
-													Type:         schema.TypeString,
-													Optional:     true,
-													Description:  "Specifies the type of retention duration.",
-													ValidateFunc: validation.StringInSlice([]string{"Days", "Months", "Years", "Unknown"}, false),
+								},
+							},
+							"backup_schedule": schema.ListNestedBlock{
+								Description: "Specifies backup schedule settings for daily backups.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"hours": schema.ListAttribute{
+											Description: "Specifies the hours when backups should be performed.",
+											Optional:    true,
+											Validators: []validator.List{
+												listvalidator.ValueInt64sAre(int64validator.Between(0, 23)),
+											},
+											ElementType: types.Int64Type,
+										},
+										"target_repository_id": schema.StringAttribute{
+											Description: "Specifies the system ID of the target repository for daily backups.",
+											Optional:    true,
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"retention": schema.ListNestedBlock{
+											Description: "Specifies retention settings for daily backups.",
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"time_retention_duration": schema.Int64Attribute{
+														Description: "Specifies the duration (in days) to retain daily backups.",
+														Optional:    true,
+													},
+													"retention_duration_type": schema.StringAttribute{
+														Description: "Specifies the type of retention duration.",
+														Optional:    true,
+														Validators: []validator.String{
+															stringvalidator.OneOf([]string{"Days", "Months", "Years", "Unknown"}...),
+														},
+													},
 												},
 											},
 										},
 									},
-									"target_repository_id": {
-										Type:        schema.TypeString,
-										Optional:    true,
-										Description: "Specifies the system ID of the target repository for weekly backups.",
-									},
 								},
 							},
 						},
 					},
 				},
-			},
-			"monthly_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Specifies monthly backup schedule settings for the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"start_time": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "Specifies the start time for monthly backups.",
+				"weekly_schedule": schema.ListNestedBlock{
+					Description: "Specifies weekly backup schedule settings for the backup policy.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"start_time": schema.Int64Attribute{
+								Description: "Specifies the start time for weekly backups.",
+								Optional:    true,
+							},
 						},
-						"type": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Specifies the day of the month when the backup policy will run.",
-							ValidateFunc: validation.StringInSlice([]string{"First", "Second", "Third", "Fourth", "Last", "SelectedDay", "Unknown"}, false),
-						},
-						"day_of_week": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Applies if one of the First, Second, Third, Fourth or Last values is specified for the type parameter Specifies the days of the week when the backup policy will run.",
-							ValidateFunc: validation.StringInSlice([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}, false),
-						},
-						"day_of_month": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "Applies if SelectedDay is specified for the type parameter. Specifies the day of the month when the backup policy will run.",
-						},
-						"monthly_last_day": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Description: "Defines whether the backup policy will run on the last day of the month.",
-						},
-						"snapshot_schedule": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies snapshot schedule settings for monthly backups.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"selected_months": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies the months when snapshots should be taken.",
-										Elem: &schema.Schema{
-											Type:         schema.TypeString,
-											ValidateFunc: validation.StringInSlice([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}, false),
+						Blocks: map[string]schema.Block{
+							"snapshot_schedule": schema.ListNestedBlock{
+								Description: "Specifies snapshot schedule settings for weekly backups.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"selected_days": schema.ListAttribute{
+											Description: "Specifies the days of the week when snapshots should be taken.",
+											Optional:    true,
+											Validators: []validator.List{
+												listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}...)),
+											},
+											ElementType: types.StringType,
 										},
-									},
-									"snapshots_to_keep": {
-										Type:        schema.TypeInt,
-										Optional:    true,
-										Description: "Specifies the number of snapshots to retain.",
+										"snapshots_to_keep": schema.Int64Attribute{
+											Description: "Specifies the number of snapshots to retain.",
+											Optional:    true,
+										},
 									},
 								},
 							},
-						},
-						"backup_schedule": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies backup schedule settings for monthly backups.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"selected_months": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies the months when backups should be performed.",
-										Elem: &schema.Schema{
-											Type:         schema.TypeString,
-											ValidateFunc: validation.StringInSlice([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}, false),
+							"backup_schedule": schema.ListNestedBlock{
+								Description: "Specifies backup schedule settings for weekly backups.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"selected_days": schema.ListAttribute{
+											Description: "Specifies the days of the week when backups should be performed.",
+											Optional:    true,
+											Validators: []validator.List{
+												listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}...)),
+											},
+											ElementType: types.StringType,
+										},
+										"target_repository_id": schema.StringAttribute{
+											Description: "Specifies the system ID of the target repository for weekly backups.",
+											Optional:    true,
 										},
 									},
-									"retention": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Specifies retention settings for monthly backups.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"time_retention_duration": {
-													Type:        schema.TypeInt,
-													Optional:    true,
-													Description: "Specifies the duration (in days) to retain monthly backups.",
-												},
-												"retention_duration_type": {
-													Type:         schema.TypeString,
-													Optional:     true,
-													Description:  "Specifies the type of retention duration.",
-													ValidateFunc: validation.StringInSlice([]string{"Days", "Months", "Years", "Unknown"}, false),
+									Blocks: map[string]schema.Block{
+										"retention": schema.ListNestedBlock{
+											Description: "Specifies retention settings for weekly backups.",
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"time_retention_duration": schema.Int64Attribute{
+														Description: "Specifies the duration (in days) to retain weekly backups.",
+														Optional:    true,
+													},
+													"retention_duration_type": schema.StringAttribute{
+														Description: "Specifies the type of retention duration.",
+														Optional:    true,
+														Validators: []validator.String{
+															stringvalidator.OneOf([]string{"Days", "Months", "Years", "Unknown"}...),
+														},
+													},
 												},
 											},
 										},
 									},
-									"target_repository_id": {
-										Type:        schema.TypeString,
-										Optional:    true,
-										Description: "Specifies the system ID of the target repository for monthly backups.",
+								},
+							},
+						},
+					},
+				},
+				"monthly_schedule": schema.ListNestedBlock{
+					Description: "Specifies monthly backup schedule settings for the backup policy.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"start_time": schema.Int64Attribute{
+								Description: "Specifies the start time for monthly backups.",
+								Optional:    true,
+							},
+							"type": schema.StringAttribute{
+								Description: "Specifies the day of the month when the backup policy will run.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"First", "Second", "Third", "Fourth", "Last", "SelectedDay", "Unknown"}...),
+								},
+							},
+							"day_of_week": schema.StringAttribute{
+								Description: "Applies if one of the First, Second, Third, Fourth or Last values is specified for the type parameter Specifies the days of the week when the backup policy will run.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}...),
+								},
+							},
+							"day_of_month": schema.Int64Attribute{
+								Description: "Applies if SelectedDay is specified for the type parameter. Specifies the day of the month when the backup policy will run.",
+								Optional:    true,
+							},
+							"monthly_last_day": schema.BoolAttribute{
+								Description: "Defines whether the backup policy will run on the last day of the month.",
+								Optional:    true,
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"snapshot_schedule": schema.ListNestedBlock{
+								Description: "Specifies snapshot schedule settings for monthly backups.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"selected_months": schema.ListAttribute{
+											Description: "Specifies the months when snapshots should be taken.",
+											Optional:    true,
+											Validators: []validator.List{
+												listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}...)),
+											},
+											ElementType: types.StringType,
+										},
+										"snapshots_to_keep": schema.Int64Attribute{
+											Description: "Specifies the number of snapshots to retain.",
+											Optional:    true,
+										},
+									},
+								},
+							},
+							"backup_schedule": schema.ListNestedBlock{
+								Description: "Specifies backup schedule settings for monthly backups.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"selected_months": schema.ListAttribute{
+											Description: "Specifies the months when backups should be performed.",
+											Optional:    true,
+											Validators: []validator.List{
+												listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}...)),
+											},
+											ElementType: types.StringType,
+										},
+										"target_repository_id": schema.StringAttribute{
+											Description: "Specifies the system ID of the target repository for monthly backups.",
+											Optional:    true,
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"retention": schema.ListNestedBlock{
+											Description: "Specifies retention settings for monthly backups.",
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"time_retention_duration": schema.Int64Attribute{
+														Description: "Specifies the duration (in days) to retain monthly backups.",
+														Optional:    true,
+													},
+													"retention_duration_type": schema.StringAttribute{
+														Description: "Specifies the type of retention duration.",
+														Optional:    true,
+														Validators: []validator.String{
+															stringvalidator.OneOf([]string{"Days", "Months", "Years", "Unknown"}...),
+														},
+													},
+												},
+											},
+										},
 									},
 								},
 							},
 						},
 					},
 				},
-			},
-			"yearly_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Specifies yearly backup schedule settings for the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"start_time": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "Specifies the start time for yearly backups.",
-						},
-						"type": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Specifies the day of the month when the backup policy will run.",
-							ValidateFunc: validation.StringInSlice([]string{"First", "Second", "Third", "Fourth", "Last", "SelectedDay", "Unknown"}, false),
-						},
-						"month": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Specifies the month when the backup policy will run.",
-							ValidateFunc: validation.StringInSlice([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}, false),
-						},
-						"day_of_week": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Specifies the day of the week when the backup policy will run.",
-							ValidateFunc: validation.StringInSlice([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Unknown"}, false),
-						},
-						"day_of_month": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "Specifies the day of the month when the backup policy will run.",
-						},
-						"yearly_last_day": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Description: "Defines whether the backup policy will run on the last day of the month.",
-						},
-						"retention_years_count": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "Specifies the number of years to retain yearly backups.",
-						},
-						"target_repository_id": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Specifies the system ID of the target repository for yearly backups.",
-						},
-					},
-				},
-			},
-			"health_check_settings": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Specifies health check settings for the backup policy.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"health_check_enabled": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Default:     false,
-							Description: "Defines whether health checks are enabled for the backup policy.",
-						},
-						"local_time": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Specifies the date and time when the health check will run.",
-						},
-						"day_number_in_month": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Specifies the day number in the month when the health check will run.",
-							ValidateFunc: validation.StringInSlice([]string{"First", "Second", "Third", "Fourth", "Last", "OnDay", "EveryDay", "EverySelectedDay", "Unknown"}, false),
-						},
-						"day_of_week": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Specifies the day of the week when the health check will run.",
-							ValidateFunc: validation.StringInSlice([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}, false),
-						},
-						"day_of_month": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "Specifies the day of the month when the health check will run.",
-						},
-						"months": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Specifies the months when the health check will run.",
-							Elem: &schema.Schema{
-								Type:         schema.TypeString,
-								ValidateFunc: validation.StringInSlice([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}, false),
+				"yearly_schedule": schema.ListNestedBlock{
+					Description: "Specifies yearly backup schedule settings for the backup policy.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"start_time": schema.Int64Attribute{
+								Description: "Specifies the start time for yearly backups.",
+								Optional:    true,
+							},
+							"type": schema.StringAttribute{
+								Description: "Specifies the day of the month when the backup policy will run.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"First", "Second", "Third", "Fourth", "Last", "SelectedDay", "Unknown"}...),
+								},
+							},
+							"month": schema.StringAttribute{
+								Description: "Specifies the month when the backup policy will run.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}...),
+								},
+							},
+							"day_of_week": schema.StringAttribute{
+								Description: "Specifies the day of the week when the backup policy will run.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Unknown"}...),
+								},
+							},
+							"day_of_month": schema.Int64Attribute{
+								Description: "Specifies the day of the month when the backup policy will run.",
+								Optional:    true,
+							},
+							"yearly_last_day": schema.BoolAttribute{
+								Description: "Defines whether the backup policy will run on the last day of the month.",
+								Optional:    true,
+							},
+							"retention_years_count": schema.Int64Attribute{
+								Description: "Specifies the number of years to retain yearly backups.",
+								Optional:    true,
+							},
+							"target_repository_id": schema.StringAttribute{
+								Description: "Specifies the system ID of the target repository for yearly backups.",
+								Optional:    true,
 							},
 						},
 					},
 				},
-			}, // computed fields
-			"is_backup_configured": {
-				Type:        schema.TypeBool,
-				Computed:    true,
-				Description: "Indicates whether backup is configured for the policy.",
-			},
-			"is_schedule_configured": {
-				Type:        schema.TypeBool,
-				Computed:    true,
-				Description: "Indicates whether a backup schedule is configured for the policy.",
+				"health_check_settings": schema.ListNestedBlock{
+					Description: "Specifies health check settings for the backup policy.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"health_check_enabled": schema.BoolAttribute{
+								Description: "Defines whether health checks are enabled for the backup policy.",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(false),
+							},
+							"local_time": schema.StringAttribute{
+								Description: "Specifies the date and time when the health check will run.",
+								Optional:    true,
+							},
+							"day_number_in_month": schema.StringAttribute{
+								Description: "Specifies the day number in the month when the health check will run.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"First", "Second", "Third", "Fourth", "Last", "OnDay", "EveryDay", "EverySelectedDay", "Unknown"}...),
+								},
+							},
+							"day_of_week": schema.StringAttribute{
+								Description: "Specifies the day of the week when the health check will run.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}...),
+								},
+							},
+							"day_of_month": schema.Int64Attribute{
+								Description: "Specifies the day of the month when the health check will run.",
+								Optional:    true,
+							},
+							"months": schema.ListAttribute{
+								Description: "Specifies the months when the health check will run.",
+								Optional:    true,
+								Validators: []validator.List{
+									listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}...)),
+								},
+								ElementType: types.StringType,
+							},
+						},
+					},
+				},
 			},
 		},
-		Timeouts: &schema.ResourceTimeout{
-			Create: schema.DefaultTimeout(10 * time.Minute),
-			Read:   schema.DefaultTimeout(5 * time.Minute),
-			Update: schema.DefaultTimeout(10 * time.Minute),
-			Delete: schema.DefaultTimeout(10 * time.Minute),
+		tf.ResourceOperations{
+			Create: resourceVMBackupPolicyCreate,
+			Read:   resourceVMBackupPolicyRead,
+			Update: resourceVMBackupPolicyUpdate,
+			Delete: resourceVMBackupPolicyDelete,
 		},
-	}
+		tf.Timeouts{
+			Create: 10 * time.Minute,
+			Read:   5 * time.Minute,
+			Update: 10 * time.Minute,
+			Delete: 10 * time.Minute,
+		},
+		true,
+	)
 }
 
-func resourceVMBackupPolicyCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceVMBackupPolicyCreate(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	policyRequest := buildVMBackupPolicyRequest(d)
 
 	jsonData, err := json.Marshal(policyRequest)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to marshal policy request: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to marshal policy request: %w", err))
 	}
 
 	url := client.BuildAPIURL("/policies/virtualMachines")
 	resp, err := client.MakeAuthenticatedRequest("POST", url, strings.NewReader(string(jsonData)))
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to create VM backup policy: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to create VM backup policy: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to create VM backup policy (status %d): %s", resp.StatusCode, string(body)))
+		return tf.FromErr(fmt.Errorf("failed to create VM backup policy (status %d): %s", resp.StatusCode, string(body)))
 	}
 
 	var policyResponse VMBackupPolicyResponse
 	if err := json.NewDecoder(resp.Body).Decode(&policyResponse); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode policy response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to decode policy response: %w", err))
 	}
 
 	d.SetId(policyResponse.ID)
 	return resourceVMBackupPolicyRead(ctx, d, meta)
 }
 
-func resourceVMBackupPolicyRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceVMBackupPolicyRead(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	url := client.BuildAPIURL(fmt.Sprintf("/policies/virtualMachines/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("GET", url, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read VM backup policy: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read VM backup policy: %w", err))
 	}
 	defer resp.Body.Close()
 
@@ -985,12 +917,12 @@ func resourceVMBackupPolicyRead(ctx context.Context, d *schema.ResourceData, met
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read VM backup policy: %s", string(body)))
+		return tf.FromErr(fmt.Errorf("failed to read VM backup policy: %s", string(body)))
 	}
 
 	var policyResponse VMBackupPolicyResponse
 	if err := json.NewDecoder(resp.Body).Decode(&policyResponse); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode policy response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to decode policy response: %w", err))
 	}
 
 	// Set fields directly
@@ -1018,50 +950,50 @@ func resourceVMBackupPolicyRead(ctx context.Context, d *schema.ResourceData, met
 	return nil
 }
 
-func resourceVMBackupPolicyUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceVMBackupPolicyUpdate(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	policyRequest := buildVMBackupPolicyRequest(d)
 
 	jsonData, err := json.Marshal(policyRequest)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to marshal policy request: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to marshal policy request: %w", err))
 	}
 
 	url := client.BuildAPIURL(fmt.Sprintf("/policies/virtualMachines/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("PUT", url, strings.NewReader(string(jsonData)))
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to update VM backup policy: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to update VM backup policy: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to update VM backup policy (status %d): %s", resp.StatusCode, string(body)))
+		return tf.FromErr(fmt.Errorf("failed to update VM backup policy (status %d): %s", resp.StatusCode, string(body)))
 	}
 
 	return resourceVMBackupPolicyRead(ctx, d, meta)
 }
 
-func resourceVMBackupPolicyDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceVMBackupPolicyDelete(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	url := client.BuildAPIURL(fmt.Sprintf("/policies/virtualMachines/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("DELETE", url, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to delete VM backup policy: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to delete VM backup policy: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
 		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to delete VM backup policy: %s", string(body)))
+		return tf.FromErr(fmt.Errorf("failed to delete VM backup policy: %s", string(body)))
 	}
 
 	d.SetId("")
@@ -1069,7 +1001,7 @@ func resourceVMBackupPolicyDelete(ctx context.Context, d *schema.ResourceData, m
 }
 
 // Helper functions
-func buildVMBackupPolicyRequest(d *schema.ResourceData) VMBackupPolicyRequest {
+func buildVMBackupPolicyRequest(d *tf.Data) VMBackupPolicyRequest {
 	request := VMBackupPolicyRequest{
 		BackupType:       d.Get("backup_type").(string),
 		IsEnabled:        d.Get("is_enabled").(bool),

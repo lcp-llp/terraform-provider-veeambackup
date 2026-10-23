@@ -399,12 +399,16 @@ func (c *AzureBackupClient) Logout() error {
 
 // MakeAuthenticatedRequest makes an HTTP request with proper authentication headers
 func (c *AzureBackupClient) MakeAuthenticatedRequest(method, endpoint string, body io.Reader) (*http.Response, error) {
+	return c.MakeAuthenticatedRequestWithContext(context.Background(), method, endpoint, body)
+}
+
+func (c *AzureBackupClient) MakeAuthenticatedRequestWithContext(ctx context.Context, method, endpoint string, body io.Reader) (*http.Response, error) {
 	token, err := c.GetValidToken()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get valid token: %w", err)
 	}
 
-	req, err := http.NewRequest(method, endpoint, body)
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -632,6 +636,7 @@ func (c *VBRClient) DoRequest(ctx context.Context, method, endpoint string, body
 
 	return respBody, nil
 }
+
 // AuthenticateAWS performs the initial authentication with the Veeam Backup for AWS REST API
 func (c *AWSBackupClient) AuthenticateAWS() error {
 	tokenURL := fmt.Sprintf("https://%s/api/v1/token", c.hostname)

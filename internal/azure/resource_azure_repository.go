@@ -1,7 +1,6 @@
-﻿package azure
+package azure
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,10 +8,17 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"regexp"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 type AzureRepositoryStorageConsumptionLimit struct {
@@ -21,41 +27,41 @@ type AzureRepositoryStorageConsumptionLimit struct {
 }
 
 type AzureRepositoryRequest struct {
-	AzureStorageAccountID     string                   `json:"azureStorageAccountId"`
-	AzureStorageFolder        string                   `json:"azureStorageFolder"`
-	AzureStorageContainer     string                   `json:"azureStorageContainer"`
-	AzureAccountID            string                   `json:"azureAccountId"`
-	KeyVaultID                *string                  `json:"keyVaultId,omitempty"`
-	KeyVaultKeyURI            *string                  `json:"keyVaultKeyUri,omitempty"`
-	StorageTier               *string                  `json:"storageTier,omitempty"`
-	ConcurrencyLimit          *int                     `json:"concurrencyLimit,omitempty"`
-	ImportIfFolderHasBackup   *bool                    `json:"importIfFolderHasBackup,omitempty"`
-	AutoCreateTiers           *bool                    `json:"autoCreateTiers,omitempty"`
-	Name                      *string                  `json:"name,omitempty"`
-	Description               *string                  `json:"description,omitempty"`
-	EnableEncryption          *bool                    `json:"enableEncryption,omitempty"`
-	Password                  *string                  `json:"password,omitempty"`
-	Hint                      *string                  `json:"hint,omitempty"`
-	StorageConsumptionLimit   *AzureRepositoryStorageConsumptionLimit `json:"storageConsumptionLimit,omitempty"`
+	AzureStorageAccountID   string                                  `json:"azureStorageAccountId"`
+	AzureStorageFolder      string                                  `json:"azureStorageFolder"`
+	AzureStorageContainer   string                                  `json:"azureStorageContainer"`
+	AzureAccountID          string                                  `json:"azureAccountId"`
+	KeyVaultID              *string                                 `json:"keyVaultId,omitempty"`
+	KeyVaultKeyURI          *string                                 `json:"keyVaultKeyUri,omitempty"`
+	StorageTier             *string                                 `json:"storageTier,omitempty"`
+	ConcurrencyLimit        *int                                    `json:"concurrencyLimit,omitempty"`
+	ImportIfFolderHasBackup *bool                                   `json:"importIfFolderHasBackup,omitempty"`
+	AutoCreateTiers         *bool                                   `json:"autoCreateTiers,omitempty"`
+	Name                    *string                                 `json:"name,omitempty"`
+	Description             *string                                 `json:"description,omitempty"`
+	EnableEncryption        *bool                                   `json:"enableEncryption,omitempty"`
+	Password                *string                                 `json:"password,omitempty"`
+	Hint                    *string                                 `json:"hint,omitempty"`
+	StorageConsumptionLimit *AzureRepositoryStorageConsumptionLimit `json:"storageConsumptionLimit,omitempty"`
 }
 
 type AzureRepositoryResponse struct {
-	Status                           string                                              `json:"status"`
-	ID                               *string                                             `json:"id,omitempty"`
-	Type                             string                                              `json:"type"`
-	LocalizedType                    *string                                             `json:"localizedType,omitempty"`
-	ExecutionStartTime               *string                                             `json:"executionStartTime,omitempty"`
-	ExecutionStopTime                *string                                             `json:"executionStopTime,omitempty"`
-	ExecutionDuration                *string                                             `json:"executionDuration,omitempty"`
-	BackupJobInfo                    *AzureRepositoryBackupJobInfo                      `json:"backupJobInfo,omitempty"`
-	HealthCheckJobInfo               *AzureRepositoryHealthCheckJobInfo                 `json:"healthCheckJobInfo,omitempty"`
-	RestoreJobInfo                   *AzureRepositoryRestoreJobInfo                     `json:"restoreJobInfo,omitempty"`
-	FileLevelRestoreJobInfo          *AzureRepositoryFileLevelRestoreJobInfo            `json:"fileLevelRestoreJobInfo,omitempty"`
-	FileShareFileLevelRestoreJobInfo *AzureRepositoryFileShareFileLevelRestoreJobInfo   `json:"fileShareFileLevelRestoreJobInfo,omitempty"`
-	RepositoryJobInfo                *AzureRepositoryRepositoryJobInfo                  `json:"repositoryJobInfo,omitempty"`
-	RestorePointDataRetrievalJobInfo *AzureRepositoryRestorePointDataRetrievalJobInfo   `json:"restorePointDataRetrievalJobInfo,omitempty"`
-	RetentionJobInfo                 *AzureRepositoryRetentionJobInfo                   `json:"retentionJobInfo,omitempty"`
-	Links                            map[string]Link                                    `json:"_links,omitempty"`
+	Status                           string                                           `json:"status"`
+	ID                               *string                                          `json:"id,omitempty"`
+	Type                             string                                           `json:"type"`
+	LocalizedType                    *string                                          `json:"localizedType,omitempty"`
+	ExecutionStartTime               *string                                          `json:"executionStartTime,omitempty"`
+	ExecutionStopTime                *string                                          `json:"executionStopTime,omitempty"`
+	ExecutionDuration                *string                                          `json:"executionDuration,omitempty"`
+	BackupJobInfo                    *AzureRepositoryBackupJobInfo                    `json:"backupJobInfo,omitempty"`
+	HealthCheckJobInfo               *AzureRepositoryHealthCheckJobInfo               `json:"healthCheckJobInfo,omitempty"`
+	RestoreJobInfo                   *AzureRepositoryRestoreJobInfo                   `json:"restoreJobInfo,omitempty"`
+	FileLevelRestoreJobInfo          *AzureRepositoryFileLevelRestoreJobInfo          `json:"fileLevelRestoreJobInfo,omitempty"`
+	FileShareFileLevelRestoreJobInfo *AzureRepositoryFileShareFileLevelRestoreJobInfo `json:"fileShareFileLevelRestoreJobInfo,omitempty"`
+	RepositoryJobInfo                *AzureRepositoryRepositoryJobInfo                `json:"repositoryJobInfo,omitempty"`
+	RestorePointDataRetrievalJobInfo *AzureRepositoryRestorePointDataRetrievalJobInfo `json:"restorePointDataRetrievalJobInfo,omitempty"`
+	RetentionJobInfo                 *AzureRepositoryRetentionJobInfo                 `json:"retentionJobInfo,omitempty"`
+	Links                            map[string]Link                                  `json:"_links,omitempty"`
 }
 
 type AzureRepositoryBackupJobInfo struct {
@@ -79,24 +85,24 @@ type AzureRepositoryRestoreJobInfo struct {
 }
 
 type AzureRepositoryFileLevelRestoreJobInfo struct {
-	Initiator                  *string                       `json:"initiator,omitempty"`
-	Reason                     *string                       `json:"reason,omitempty"`
-	FlrLink                    *AzureRepositoryFlrLink       `json:"flrLink,omitempty"`
-	VMID                       *string                       `json:"vmId,omitempty"`
-	VMName                     *string                       `json:"vmName,omitempty"`
-	BackupPolicyDisplayName    *string                       `json:"backupPolicyDisplayName,omitempty"`
-	RestorePointCreatedDateUTC *string                       `json:"restorePointCreatedDateUtc,omitempty"`
-	IsFlrSessionReady          bool                          `json:"isFlrSessionReady"`
+	Initiator                  *string                 `json:"initiator,omitempty"`
+	Reason                     *string                 `json:"reason,omitempty"`
+	FlrLink                    *AzureRepositoryFlrLink `json:"flrLink,omitempty"`
+	VMID                       *string                 `json:"vmId,omitempty"`
+	VMName                     *string                 `json:"vmName,omitempty"`
+	BackupPolicyDisplayName    *string                 `json:"backupPolicyDisplayName,omitempty"`
+	RestorePointCreatedDateUTC *string                 `json:"restorePointCreatedDateUtc,omitempty"`
+	IsFlrSessionReady          bool                    `json:"isFlrSessionReady"`
 }
 
 type AzureRepositoryFileShareFileLevelRestoreJobInfo struct {
-	Initiator                  *string                       `json:"initiator,omitempty"`
-	Reason                     *string                       `json:"reason,omitempty"`
-	FlrLink                    *AzureRepositoryFlrLink       `json:"flrLink,omitempty"`
-	FileShareID                *string                       `json:"fileShareId,omitempty"`
-	FileShareName              *string                       `json:"fileShareName,omitempty"`
-	BackupPolicyDisplayName    *string                       `json:"backupPolicyDisplayName,omitempty"`
-	RestorePointCreatedDateUTC *string                       `json:"restorePointCreatedDateUtc,omitempty"`
+	Initiator                  *string                 `json:"initiator,omitempty"`
+	Reason                     *string                 `json:"reason,omitempty"`
+	FlrLink                    *AzureRepositoryFlrLink `json:"flrLink,omitempty"`
+	FileShareID                *string                 `json:"fileShareId,omitempty"`
+	FileShareName              *string                 `json:"fileShareName,omitempty"`
+	BackupPolicyDisplayName    *string                 `json:"backupPolicyDisplayName,omitempty"`
+	RestorePointCreatedDateUTC *string                 `json:"restorePointCreatedDateUtc,omitempty"`
 }
 
 type AzureRepositoryRepositoryJobInfo struct {
@@ -125,251 +131,250 @@ type AzureRepositoryFlrLink struct {
 	Thumbprint *string `json:"thumbprint,omitempty"`
 }
 
-func ResourceAzureRepository() *schema.Resource {
-	return &schema.Resource{
-		Description:   "Schema for Azure backup repository.",
-		CreateContext: ResourceAzureRepositoryCreate,
-		ReadContext:   ResourceAzureRepositoryRead,
-		UpdateContext: ResourceAzureRepositoryUpdate,
-		DeleteContext: ResourceAzureRepositoryDelete,
-		Schema: map[string]*schema.Schema{
-			"azure_storage_account_id": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "Specifies the Azure storage account ID.",
-			},
-			"azure_storage_folder": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "Specifies the folder in the Azure storage container.",
-			},
-			"azure_storage_container": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "Specifies the Azure storage container name.",
-			},
-			"azure_account_id": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ValidateFunc: validation.IsUUID,
-				Description:  "Specifies the system ID assigned to the Azure account.",
-			},
-			"service_account_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Specifies the service account ID used for read operations. If omitted, azure_account_id is used.",
-			},
-			"tenant_id": {
-				Type:         schema.TypeString,
-				Optional:     true,
-				ValidateFunc: validation.IsUUID,
-				Description:  "Specifies the tenant ID used for read operations.",
-			},
-			"key_vault_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Specifies the Azure Key Vault ID used for repository encryption.",
-			},
-			"key_vault_key_uri": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Specifies the Key Vault key URI used for repository encryption.",
-			},
-			"storage_tier": {
-				Type:         schema.TypeString,
-				Optional:     true,
-				ValidateFunc: validation.StringInSlice([]string{"Inferred", "Hot", "Cool", "Cold", "Archive"}, false),
-				Description:  "Specifies the storage tier. Valid values are Inferred, Hot, Cool, Cold, Archive.",
-			},
-			"concurrency_limit": {
-				Type:         schema.TypeInt,
-				Optional:     true,
-				ValidateFunc: validation.IntAtLeast(1),
-				Description:  "Specifies the maximum concurrent operations.",
-			},
-			"import_if_folder_has_backup": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Indicates whether to import backups if the folder already contains backup data.",
-			},
-			"auto_create_tiers": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Indicates whether storage tiers should be created automatically.",
-			},
-			"name": {
-				Type:         schema.TypeString,
-				Optional:     true,
-				ValidateFunc: validation.StringLenBetween(1, 256),
-				Description:  "Specifies the repository name.",
-			},
-			"description": {
-				Type:         schema.TypeString,
-				Optional:     true,
-				ValidateFunc: validation.StringLenBetween(0, 1024),
-				Description:  "Specifies the repository description.",
-			},
-			"enable_encryption": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Indicates whether repository-side encryption is enabled.",
-			},
-			"password": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Sensitive:   true,
-				Description: "Specifies the encryption password.",
-			},
-			"hint": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Specifies the password hint for encryption.",
-			},
-			"storage_consumption_limit": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Specifies the storage consumption limit for the repository.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"limit_value": {
-							Type:         schema.TypeInt,
-							Required:     true,
-							ValidateFunc: validation.IntAtLeast(1),
-							Description:  "Specifies the limit value.",
-						},
-						"limit_type": {
-							Type:         schema.TypeString,
-							Required:     true,
-							ValidateFunc: validation.StringInSlice([]string{"MB", "GB", "TB"}, false),
-							Description:  "Specifies the limit type. Valid values are MB, GB, TB.",
+func ResourceAzureRepository() resource.Resource {
+	return tf.NewResource(
+		"azure_repository",
+		schema.Schema{
+			Description: "Schema for Azure backup repository.",
+			Attributes: map[string]schema.Attribute{
+				"azure_storage_account_id": schema.StringAttribute{
+					Description: "Specifies the Azure storage account ID.",
+					Required:    true,
+				},
+				"azure_storage_folder": schema.StringAttribute{
+					Description: "Specifies the folder in the Azure storage container.",
+					Required:    true,
+				},
+				"azure_storage_container": schema.StringAttribute{
+					Description: "Specifies the Azure storage container name.",
+					Required:    true,
+				},
+				"azure_account_id": schema.StringAttribute{
+					Description: "Specifies the system ID assigned to the Azure account.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.RegexMatches(regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`), "must be a UUID"),
+					},
+				},
+				"service_account_id": schema.StringAttribute{
+					Description: "Specifies the service account ID used for read operations. If omitted, azure_account_id is used.",
+					Optional:    true,
+				},
+				"tenant_id": schema.StringAttribute{
+					Description: "Specifies the tenant ID used for read operations.",
+					Optional:    true,
+					Validators: []validator.String{
+						stringvalidator.RegexMatches(regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`), "must be a UUID"),
+					},
+				},
+				"key_vault_id": schema.StringAttribute{
+					Description: "Specifies the Azure Key Vault ID used for repository encryption.",
+					Optional:    true,
+				},
+				"key_vault_key_uri": schema.StringAttribute{
+					Description: "Specifies the Key Vault key URI used for repository encryption.",
+					Optional:    true,
+				},
+				"storage_tier": schema.StringAttribute{
+					Description: "Specifies the storage tier. Valid values are Inferred, Hot, Cool, Cold, Archive.",
+					Optional:    true,
+					Computed:    true,
+					Validators: []validator.String{
+						stringvalidator.OneOf([]string{"Inferred", "Hot", "Cool", "Cold", "Archive"}...),
+					},
+				},
+				"concurrency_limit": schema.Int64Attribute{
+					Description: "Specifies the maximum concurrent operations.",
+					Optional:    true,
+					Computed:    true,
+					Validators: []validator.Int64{
+						int64validator.AtLeast(1),
+					},
+				},
+				"import_if_folder_has_backup": schema.BoolAttribute{
+					Description: "Indicates whether to import backups if the folder already contains backup data.",
+					Optional:    true,
+				},
+				"auto_create_tiers": schema.BoolAttribute{
+					Description: "Indicates whether storage tiers should be created automatically.",
+					Optional:    true,
+				},
+				"name": schema.StringAttribute{
+					Description: "Specifies the repository name.",
+					Optional:    true,
+					Computed:    true,
+					Validators: []validator.String{
+						stringvalidator.LengthBetween(1, 256),
+					},
+				},
+				"description": schema.StringAttribute{
+					Description: "Specifies the repository description.",
+					Optional:    true,
+					Computed:    true,
+					Validators: []validator.String{
+						stringvalidator.LengthBetween(0, 1024),
+					},
+				},
+				"enable_encryption": schema.BoolAttribute{
+					Description: "Indicates whether repository-side encryption is enabled.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"password": schema.StringAttribute{
+					Description: "Specifies the encryption password.",
+					Sensitive:   true,
+					Optional:    true,
+				},
+				"hint": schema.StringAttribute{
+					Description: "Specifies the password hint for encryption.",
+					Optional:    true,
+				},
+				"status": schema.StringAttribute{
+					Description: "Specifies the status of the latest operation session.",
+					Computed:    true,
+				},
+				"session_id": schema.StringAttribute{
+					Description: "Specifies the job session ID returned by the API.",
+					Computed:    true,
+				},
+				"session_type": schema.StringAttribute{
+					Description: "Specifies the operation session type.",
+					Computed:    true,
+				},
+				"localized_type": schema.StringAttribute{
+					Description: "Specifies the localized session type displayed in UI.",
+					Computed:    true,
+				},
+				"execution_start_time": schema.StringAttribute{
+					Description: "Specifies the date and time when the session started.",
+					Computed:    true,
+				},
+				"execution_stop_time": schema.StringAttribute{
+					Description: "Specifies the date and time when the session stopped.",
+					Computed:    true,
+				},
+				"execution_duration": schema.StringAttribute{
+					Description: "Specifies the duration of the session.",
+					Computed:    true,
+				},
+				"repository_id": schema.StringAttribute{
+					Description: "Specifies the system ID assigned to the repository.",
+					Computed:    true,
+				},
+				"repository_job_info": schema.ListNestedAttribute{
+					Description: "Repository information returned by the operation session.",
+					Computed:    true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"repository_id": schema.StringAttribute{
+								Description: "Specifies the system ID assigned to the repository.",
+								Computed:    true,
+							},
+							"repository_name": schema.StringAttribute{
+								Description: "Specifies the repository name.",
+								Computed:    true,
+							},
+							"repository_removed": schema.BoolAttribute{
+								Description: "Defines whether the repository was removed.",
+								Computed:    true,
+							},
 						},
 					},
 				},
 			},
-			"status": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Specifies the status of the latest operation session.",
-			},
-			"session_id": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Specifies the job session ID returned by the API.",
-			},
-			"session_type": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Specifies the operation session type.",
-			},
-			"localized_type": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Specifies the localized session type displayed in UI.",
-			},
-			"execution_start_time": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Specifies the date and time when the session started.",
-			},
-			"execution_stop_time": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Specifies the date and time when the session stopped.",
-			},
-			"execution_duration": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Specifies the duration of the session.",
-			},
-			"repository_id": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Specifies the system ID assigned to the repository.",
-			},
-			"repository_job_info": {
-				Type:        schema.TypeList,
-				Computed:    true,
-				Description: "Repository information returned by the operation session.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"repository_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Specifies the system ID assigned to the repository.",
-						},
-						"repository_name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Specifies the repository name.",
-						},
-						"repository_removed": {
-							Type:        schema.TypeBool,
-							Computed:    true,
-							Description: "Defines whether the repository was removed.",
+			Blocks: map[string]schema.Block{
+				"storage_consumption_limit": schema.ListNestedBlock{
+					Description: "Specifies the storage consumption limit for the repository.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"limit_value": schema.Int64Attribute{
+								Description: "Specifies the limit value.",
+								Required:    true,
+								Validators: []validator.Int64{
+									int64validator.AtLeast(1),
+								},
+							},
+							"limit_type": schema.StringAttribute{
+								Description: "Specifies the limit type. Valid values are MB, GB, TB.",
+								Required:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"MB", "GB", "TB"}...),
+								},
+							},
 						},
 					},
 				},
 			},
 		},
-	}
+		tf.ResourceOperations{
+			Create: ResourceAzureRepositoryCreate,
+			Read:   ResourceAzureRepositoryRead,
+			Update: ResourceAzureRepositoryUpdate,
+			Delete: ResourceAzureRepositoryDelete,
+		},
+		tf.Timeouts{},
+		false,
+	)
 }
 
-func ResourceAzureRepositoryCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func ResourceAzureRepositoryCreate(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	request := buildAzureRepositoryRequest(d)
 
 	jsonData, err := json.Marshal(request)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to marshal Azure repository request: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to marshal Azure repository request: %w", err))
 	}
 
 	url := client.BuildAPIURL("/repositories")
 	resp, err := client.MakeAuthenticatedRequest("POST", url, strings.NewReader(string(jsonData)))
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to create Azure repository: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to create Azure repository: %w", err))
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read Azure repository response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read Azure repository response: %w", err))
 	}
 
 	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return diag.FromErr(fmt.Errorf("failed to create Azure repository, status: %d, response: %s", resp.StatusCode, string(body)))
+		return tf.FromErr(fmt.Errorf("failed to create Azure repository, status: %d, response: %s", resp.StatusCode, string(body)))
 	}
 
 	repositoryResponse, err := decodeAzureRepositoryResponse(body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode Azure repository response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to decode Azure repository response: %w", err))
 	}
 
 	if err := setAzureRepositorySessionFields(d, repositoryResponse); err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	if repositoryResponse.RepositoryJobInfo == nil || repositoryResponse.RepositoryJobInfo.RepositoryID == nil || *repositoryResponse.RepositoryJobInfo.RepositoryID == "" {
-		return diag.FromErr(fmt.Errorf("repository ID was not returned in repositoryJobInfo.repositoryId"))
+		return tf.FromErr(fmt.Errorf("repository ID was not returned in repositoryJobInfo.repositoryId"))
 	}
 
 	repositoryID := *repositoryResponse.RepositoryJobInfo.RepositoryID
 	d.SetId(repositoryID)
 	if err := d.Set("repository_id", repositoryID); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set repository_id: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set repository_id: %w", err))
 	}
 
 	return ResourceAzureRepositoryRead(ctx, d, meta)
 }
 
-func ResourceAzureRepositoryRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func ResourceAzureRepositoryRead(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	queryParams := url.Values{}
@@ -382,7 +387,7 @@ func ResourceAzureRepositoryRead(ctx context.Context, d *schema.ResourceData, me
 	}
 
 	if serviceAccountID == "" {
-		return diag.FromErr(fmt.Errorf("serviceAccountId is required for GET /repositories/{repositoryId}; set service_account_id or azure_account_id"))
+		return tf.FromErr(fmt.Errorf("serviceAccountId is required for GET /repositories/{repositoryId}; set service_account_id or azure_account_id"))
 	}
 	queryParams.Set("ServiceAccountId", serviceAccountID)
 
@@ -397,13 +402,13 @@ func ResourceAzureRepositoryRead(ctx context.Context, d *schema.ResourceData, me
 
 	resp, err := client.MakeAuthenticatedRequest("GET", requestURL, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read Azure repository: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read Azure repository: %w", err))
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read Azure repository response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read Azure repository response: %w", err))
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
@@ -412,88 +417,88 @@ func ResourceAzureRepositoryRead(ctx context.Context, d *schema.ResourceData, me
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return diag.FromErr(fmt.Errorf("failed to read Azure repository, status: %d, response: %s", resp.StatusCode, string(body)))
+		return tf.FromErr(fmt.Errorf("failed to read Azure repository, status: %d, response: %s", resp.StatusCode, string(body)))
 	}
 
 	var repository BackupRepositoryDetail
 	if err := json.Unmarshal(body, &repository); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode Azure repository response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to decode Azure repository response: %w", err))
 	}
 
 	if err := setAzureRepositoryStateFromDetails(d, &repository); err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	if d.Id() != "" {
 		if err := d.Set("repository_id", d.Id()); err != nil {
-			return diag.FromErr(fmt.Errorf("failed to set repository_id: %w", err))
+			return tf.FromErr(fmt.Errorf("failed to set repository_id: %w", err))
 		}
 	}
 	return nil
 }
 
-func ResourceAzureRepositoryUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func ResourceAzureRepositoryUpdate(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	request := buildAzureRepositoryRequest(d)
 	jsonData, err := json.Marshal(request)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to marshal Azure repository update request: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to marshal Azure repository update request: %w", err))
 	}
 
 	url := client.BuildAPIURL(fmt.Sprintf("/repositories/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("PUT", url, strings.NewReader(string(jsonData)))
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to update Azure repository: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to update Azure repository: %w", err))
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read Azure repository update response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read Azure repository update response: %w", err))
 	}
 
 	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return diag.FromErr(fmt.Errorf("failed to update Azure repository, status: %d, response: %s", resp.StatusCode, string(body)))
+		return tf.FromErr(fmt.Errorf("failed to update Azure repository, status: %d, response: %s", resp.StatusCode, string(body)))
 	}
 
 	if len(body) > 0 {
 		repositoryResponse, err := decodeAzureRepositoryResponse(body)
 		if err == nil {
 			if err := setAzureRepositorySessionFields(d, repositoryResponse); err != nil {
-				return diag.FromErr(err)
+				return tf.FromErr(err)
 			}
 		}
 	}
 
 	if d.Id() != "" {
 		if err := d.Set("repository_id", d.Id()); err != nil {
-			return diag.FromErr(fmt.Errorf("failed to set repository_id: %w", err))
+			return tf.FromErr(fmt.Errorf("failed to set repository_id: %w", err))
 		}
 	}
 
 	return ResourceAzureRepositoryRead(ctx, d, meta)
 }
 
-func ResourceAzureRepositoryDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func ResourceAzureRepositoryDelete(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	url := client.BuildAPIURL(fmt.Sprintf("/repositories/%s", d.Id()))
 	resp, err := client.MakeAuthenticatedRequest("DELETE", url, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to delete Azure repository: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to delete Azure repository: %w", err))
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read Azure repository delete response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read Azure repository delete response: %w", err))
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
@@ -502,14 +507,14 @@ func ResourceAzureRepositoryDelete(ctx context.Context, d *schema.ResourceData, 
 	}
 
 	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return diag.FromErr(fmt.Errorf("failed to delete Azure repository, status: %d, response: %s", resp.StatusCode, string(body)))
+		return tf.FromErr(fmt.Errorf("failed to delete Azure repository, status: %d, response: %s", resp.StatusCode, string(body)))
 	}
 
 	d.SetId("")
 	return nil
 }
 
-func buildAzureRepositoryRequest(d *schema.ResourceData) AzureRepositoryRequest {
+func buildAzureRepositoryRequest(d *tf.Data) AzureRepositoryRequest {
 	request := AzureRepositoryRequest{
 		AzureStorageAccountID: d.Get("azure_storage_account_id").(string),
 		AzureStorageFolder:    d.Get("azure_storage_folder").(string),
@@ -603,7 +608,7 @@ func decodeAzureRepositoryResponse(body []byte) (AzureRepositoryResponse, error)
 	return response, nil
 }
 
-func setAzureRepositorySessionFields(d *schema.ResourceData, response AzureRepositoryResponse) error {
+func setAzureRepositorySessionFields(d *tf.Data, response AzureRepositoryResponse) error {
 	if err := d.Set("status", response.Status); err != nil {
 		return fmt.Errorf("failed to set status: %w", err)
 	}
@@ -666,7 +671,7 @@ func setAzureRepositorySessionFields(d *schema.ResourceData, response AzureRepos
 	return nil
 }
 
-func setAzureRepositoryStateFromDetails(d *schema.ResourceData, repository *BackupRepositoryDetail) error {
+func setAzureRepositoryStateFromDetails(d *tf.Data, repository *BackupRepositoryDetail) error {
 	if err := d.Set("azure_storage_account_id", repository.AzureStorageAccountId); err != nil {
 		return fmt.Errorf("failed to set azure_storage_account_id: %w", err)
 	}

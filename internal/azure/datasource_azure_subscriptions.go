@@ -1,16 +1,19 @@
-﻿package azure
+package azure
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
 	"strconv"
+	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 // Represents the get Azure Subscriptions api request
@@ -42,83 +45,73 @@ type AzureSubscriptionsResults struct {
 	WorkerResourceGroupName *string `json:"workerResourceGroupName,omitempty"`
 }
 
-func DataSourceAzureSubscriptions() *schema.Resource {
-	return &schema.Resource{
-		ReadContext: DataSourceAzureSubscriptionsRead,
-		Schema: map[string]*schema.Schema{
-			"account_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Returns only subscriptions to which the service account with the specified ID has permissions.",
-			},
-			"tenant_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Returns only subscriptions that belong to a tenant with the specified ID.",
-			},
-			"search_pattern": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "A search pattern to filter subscriptions by name.",
-			},
-			"only_ids": {
-				Type:        schema.TypeList,
-				Elem:        &schema.Schema{Type: schema.TypeString},
-				Optional:    true,
-				Description: "Returns only subscriptions with the specified IDs.",
-			},
-			"offset": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Description: "The number of subscriptions to skip in the result set.",
-			},
-			"limit": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Description: "The maximum number of subscriptions to return.",
-			}, // compute only fields
-			"id": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"environment": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"tenant_name": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"name": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"status": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"availability": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"worker_resource_group_name": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"subscriptions": {
-				Type:        schema.TypeMap,
-				Computed:    true,
-				Description: "Map of Azure Subscriptions to their complete details as JSON strings.",
-				Elem:        &schema.Schema{Type: schema.TypeString},
+func DataSourceAzureSubscriptions() datasource.DataSource {
+	return tf.NewDataSource(
+		"azure_subscriptions",
+		schema.Schema{
+			Attributes: map[string]schema.Attribute{
+				"account_id": schema.StringAttribute{
+					Description: "Returns only subscriptions to which the service account with the specified ID has permissions.",
+					Optional:    true,
+				},
+				"tenant_id": schema.StringAttribute{
+					Description: "Returns only subscriptions that belong to a tenant with the specified ID.",
+					Optional:    true,
+				},
+				"search_pattern": schema.StringAttribute{
+					Description: "A search pattern to filter subscriptions by name.",
+					Optional:    true,
+				},
+				"only_ids": schema.ListAttribute{
+					Description: "Returns only subscriptions with the specified IDs.",
+					Optional:    true,
+					ElementType: types.StringType,
+				},
+				"offset": schema.Int64Attribute{
+					Description: "The number of subscriptions to skip in the result set.",
+					Optional:    true,
+				},
+				"limit": schema.Int64Attribute{
+					Description: "The maximum number of subscriptions to return.",
+					Optional:    true,
+				},
+				"id": schema.StringAttribute{
+					Computed: true,
+				},
+				"environment": schema.StringAttribute{
+					Computed: true,
+				},
+				"tenant_name": schema.StringAttribute{
+					Computed: true,
+				},
+				"name": schema.StringAttribute{
+					Computed: true,
+				},
+				"status": schema.StringAttribute{
+					Computed: true,
+				},
+				"availability": schema.StringAttribute{
+					Computed: true,
+				},
+				"worker_resource_group_name": schema.StringAttribute{
+					Computed: true,
+				},
+				"subscriptions": schema.MapAttribute{
+					Description: "Map of Azure Subscriptions to their complete details as JSON strings.",
+					Computed:    true,
+					ElementType: types.StringType,
+				},
 			},
 		},
-	}
+		DataSourceAzureSubscriptionsRead,
+		map[string]interface{}{},
+	)
 }
 
-func DataSourceAzureSubscriptionsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func DataSourceAzureSubscriptionsRead(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	// Build query parameters
 	params := url.Values{}
@@ -148,7 +141,7 @@ func DataSourceAzureSubscriptionsRead(ctx context.Context, d *schema.ResourceDat
 		}
 		onlyIDsJson, err := json.Marshal(onlyIDsStr)
 		if err != nil {
-			return diag.FromErr(err)
+			return tf.FromErr(err)
 		}
 		params.Set("onlyIds", string(onlyIDsJson))
 	}
@@ -160,29 +153,29 @@ func DataSourceAzureSubscriptionsRead(ctx context.Context, d *schema.ResourceDat
 
 	resp, err := client.MakeAuthenticatedRequest("GET", apiURL, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to retrieve Azure subscriptions: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to retrieve Azure subscriptions: %w", err))
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return diag.FromErr(fmt.Errorf("failed to retrieve Azure subscriptions: status %d: %s", resp.StatusCode, string(body)))
+		return tf.FromErr(fmt.Errorf("failed to retrieve Azure subscriptions: status %d: %s", resp.StatusCode, string(body)))
 	}
 
 	// Parse the response
 	var subscriptionsResponse AzureSubscriptionsResponseModel
 	err = json.Unmarshal(body, &subscriptionsResponse)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to parse response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to parse response: %w", err))
 	}
 
 	if subscriptionsResponse.Results == nil || len(*subscriptionsResponse.Results) == 0 {
 		if err := d.Set("subscriptions", map[string]interface{}{}); err != nil {
-			return diag.FromErr(err)
+			return tf.FromErr(err)
 		}
 		d.SetId("azure_subscriptions")
 		return nil
@@ -194,7 +187,7 @@ func DataSourceAzureSubscriptionsRead(ctx context.Context, d *schema.ResourceDat
 	for _, subscription := range *subscriptionsResponse.Results {
 		subscriptionJson, err := json.Marshal(subscription)
 		if err != nil {
-			return diag.FromErr(err)
+			return tf.FromErr(err)
 		}
 		subscriptionsMap[subscription.ID] = string(subscriptionJson)
 	}
@@ -221,7 +214,7 @@ func DataSourceAzureSubscriptionsRead(ctx context.Context, d *schema.ResourceDat
 
 	// Set data source attributes
 	if err := d.Set("subscriptions", subscriptionsMap); err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	d.SetId("azure_subscriptions")
 	return nil

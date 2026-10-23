@@ -9,15 +9,18 @@ import (
 	"strconv"
 	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 type AWSrepositoriesDataSourceRequest struct {
-	SearchPattern             *string   `json:"SearchPattern,omitempty"`
-	Offset                    *int      `json:"Offset,omitempty"`
-	Limit                     *int      `json:"Limit,omitempty"`
-	Sort                      *int      `json:"Sort,omitempty"`
+	SearchPattern *string `json:"SearchPattern,omitempty"`
+	Offset        *int    `json:"Offset,omitempty"`
+	Limit         *int    `json:"Limit,omitempty"`
+	Sort          *int    `json:"Sort,omitempty"`
 }
 
 type AWSrepositoriesDataSourceResponse struct {
@@ -26,15 +29,15 @@ type AWSrepositoriesDataSourceResponse struct {
 }
 
 type AWSrepositoriesDataSourceResponseResults struct {
-	ID                  string                                             `json:"id"`
-	Name                string                                             `json:"name"`
-	Description         string                                             `json:"description"`
-	Identity            AWSrepositoriesDataSourceResponseResultsIdentity   `json:"identity"`
-	AmazonStorageFolder string                                             `json:"amazonStorageFolder"`
-	AmazonBucketID      string                                             `json:"amazonBucketId"`
-	Hint                string                                             `json:"hint"`
-	EnableEncryption    bool                                               `json:"enableEncryption"`
-	Embedded            AWSrepositoriesDataSourceResponseResultsEmbedded   `json:"_embedded"`
+	ID                  string                                           `json:"id"`
+	Name                string                                           `json:"name"`
+	Description         string                                           `json:"description"`
+	Identity            AWSrepositoriesDataSourceResponseResultsIdentity `json:"identity"`
+	AmazonStorageFolder string                                           `json:"amazonStorageFolder"`
+	AmazonBucketID      string                                           `json:"amazonBucketId"`
+	Hint                string                                           `json:"hint"`
+	EnableEncryption    bool                                             `json:"enableEncryption"`
+	Embedded            AWSrepositoriesDataSourceResponseResultsEmbedded `json:"_embedded"`
 }
 
 type AWSrepositoriesDataSourceResponseResultsIdentity struct {
@@ -46,12 +49,12 @@ type AWSrepositoriesDataSourceResponseResultsIdentity struct {
 }
 
 type AWSrepositoriesDataSourceResponseResultsEmbedded struct {
-	AmazonAccount     string                                                  `json:"amazonAccount"`
-	AmazonAccountLink AWSrepositoriesDataSourceResponseResultsEmbeddedLink    `json:"amazonAccountLink"`
-	Region            string                                                  `json:"region"`
-	RegionLink        AWSrepositoriesDataSourceResponseResultsEmbeddedLink    `json:"regionLink"`
-	Bucket            string                                                  `json:"bucket"`
-	BucketLink        AWSrepositoriesDataSourceResponseResultsEmbeddedLink    `json:"bucketLink"`
+	AmazonAccount     string                                               `json:"amazonAccount"`
+	AmazonAccountLink AWSrepositoriesDataSourceResponseResultsEmbeddedLink `json:"amazonAccountLink"`
+	Region            string                                               `json:"region"`
+	RegionLink        AWSrepositoriesDataSourceResponseResultsEmbeddedLink `json:"regionLink"`
+	Bucket            string                                               `json:"bucket"`
+	BucketLink        AWSrepositoriesDataSourceResponseResultsEmbeddedLink `json:"bucketLink"`
 }
 
 type AWSrepositoriesDataSourceResponseResultsEmbeddedLink struct {
@@ -60,202 +63,169 @@ type AWSrepositoriesDataSourceResponseResultsEmbeddedLink struct {
 	Href   string `json:"href"`
 }
 
-func DataSourceAwsRepositories() *schema.Resource {
-	return &schema.Resource{
-		ReadContext: DataSourceAwsRepositoriesRead,
-		Schema: map[string]*schema.Schema{
-			"search_pattern": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Returns only those items of a resource collection whose names match the specified search pattern in the parameter value.",
-			},
-			"offset": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Default:     0,
-				Description: "Excludes from a response the first N items of a resource collection.",
-			},
-			"limit": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Default:     -1,
-				Description: "Specifies the maximum number of items of a resource collection to return in a response.",
-			},
-			"sort": {
-				Type:        schema.TypeSet,
-				Optional:    true,
-				Description: "Specifies the order of items in the response.",
-				Elem:        &schema.Schema{Type: schema.TypeString},
-			},
-			"total_count": {
-				Type:        schema.TypeInt,
-				Computed:    true,
-				Description: "Total number of repositories.",
-			},
-			"results": {
-				Type:        schema.TypeList,
-				Computed:    true,
-				Description: "Information on each repository.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"veeam_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "System ID assigned to a repository in the Veeam Backup for AWS REST API.",
-						},
-						"name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Name of the repository.",
-						},
-						"description": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Description of the repository.",
-						},
-						"amazon_storage_folder": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Amazon storage folder used by the repository.",
-						},
-						"amazon_bucket_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "System ID of the Amazon bucket.",
-						},
-						"hint": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Repository hint value.",
-						},
-						"enable_encryption": {
-							Type:        schema.TypeBool,
-							Computed:    true,
-							Description: "Whether encryption is enabled for the repository.",
-						},
-						"identity": {
-							Type:        schema.TypeList,
-							Computed:    true,
-							Description: "Identity details associated with the repository.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"id": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "System ID of the identity.",
-									},
-									"type": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Type of identity.",
-									},
-									"aws_id": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "AWS account ID for the identity.",
-									},
-									"name": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Name of the identity.",
-									},
-									"region_type": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Region type of the identity.",
+func DataSourceAwsRepositories() datasource.DataSource {
+	return tf.NewDataSource(
+		"aws_repositories",
+		schema.Schema{
+			Attributes: map[string]schema.Attribute{
+				"search_pattern": schema.StringAttribute{
+					Description: "Returns only those items of a resource collection whose names match the specified search pattern in the parameter value.",
+					Optional:    true,
+				},
+				"offset": schema.Int64Attribute{
+					Description: "Excludes from a response the first N items of a resource collection.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"limit": schema.Int64Attribute{
+					Description: "Specifies the maximum number of items of a resource collection to return in a response.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"sort": schema.SetAttribute{
+					Description: "Specifies the order of items in the response.",
+					Optional:    true,
+					ElementType: types.StringType,
+				},
+				"total_count": schema.Int64Attribute{
+					Description: "Total number of repositories.",
+					Computed:    true,
+				},
+				"results": schema.ListNestedAttribute{
+					Description: "Information on each repository.",
+					Computed:    true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"veeam_id": schema.StringAttribute{
+								Description: "System ID assigned to a repository in the Veeam Backup for AWS REST API.",
+								Computed:    true,
+							},
+							"name": schema.StringAttribute{
+								Description: "Name of the repository.",
+								Computed:    true,
+							},
+							"description": schema.StringAttribute{
+								Description: "Description of the repository.",
+								Computed:    true,
+							},
+							"amazon_storage_folder": schema.StringAttribute{
+								Description: "Amazon storage folder used by the repository.",
+								Computed:    true,
+							},
+							"amazon_bucket_id": schema.StringAttribute{
+								Description: "System ID of the Amazon bucket.",
+								Computed:    true,
+							},
+							"hint": schema.StringAttribute{
+								Description: "Repository hint value.",
+								Computed:    true,
+							},
+							"enable_encryption": schema.BoolAttribute{
+								Description: "Whether encryption is enabled for the repository.",
+								Computed:    true,
+							},
+							"identity": schema.ListNestedAttribute{
+								Description: "Identity details associated with the repository.",
+								Computed:    true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"id": schema.StringAttribute{
+											Description: "System ID of the identity.",
+											Computed:    true,
+										},
+										"type": schema.StringAttribute{
+											Description: "Type of identity.",
+											Computed:    true,
+										},
+										"aws_id": schema.StringAttribute{
+											Description: "AWS account ID for the identity.",
+											Computed:    true,
+										},
+										"name": schema.StringAttribute{
+											Description: "Name of the identity.",
+											Computed:    true,
+										},
+										"region_type": schema.StringAttribute{
+											Description: "Region type of the identity.",
+											Computed:    true,
+										},
 									},
 								},
 							},
-						},
-						"embedded": {
-							Type:        schema.TypeList,
-							Computed:    true,
-							Description: "Embedded repository details.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"amazon_account": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Amazon account display name.",
-									},
-									"region": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "AWS region display name.",
-									},
-									"bucket": {
-										Type:        schema.TypeString,
-										Computed:    true,
-										Description: "Amazon bucket display name.",
-									},
-									"amazon_account_link": {
-										Type:        schema.TypeList,
-										Computed:    true,
-										Description: "REST API link to the Amazon account.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"method": {
-													Type:        schema.TypeString,
-													Computed:    true,
-													Description: "HTTP method.",
-												},
-												"rel": {
-													Type:        schema.TypeString,
-													Computed:    true,
-													Description: "Link relation.",
-												},
-												"href": {
-													Type:        schema.TypeString,
-													Computed:    true,
-													Description: "Link URL.",
+							"embedded": schema.ListNestedAttribute{
+								Description: "Embedded repository details.",
+								Computed:    true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"amazon_account": schema.StringAttribute{
+											Description: "Amazon account display name.",
+											Computed:    true,
+										},
+										"region": schema.StringAttribute{
+											Description: "AWS region display name.",
+											Computed:    true,
+										},
+										"bucket": schema.StringAttribute{
+											Description: "Amazon bucket display name.",
+											Computed:    true,
+										},
+										"amazon_account_link": schema.ListNestedAttribute{
+											Description: "REST API link to the Amazon account.",
+											Computed:    true,
+											NestedObject: schema.NestedAttributeObject{
+												Attributes: map[string]schema.Attribute{
+													"method": schema.StringAttribute{
+														Description: "HTTP method.",
+														Computed:    true,
+													},
+													"rel": schema.StringAttribute{
+														Description: "Link relation.",
+														Computed:    true,
+													},
+													"href": schema.StringAttribute{
+														Description: "Link URL.",
+														Computed:    true,
+													},
 												},
 											},
 										},
-									},
-									"region_link": {
-										Type:        schema.TypeList,
-										Computed:    true,
-										Description: "REST API link to the region.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"method": {
-													Type:        schema.TypeString,
-													Computed:    true,
-													Description: "HTTP method.",
-												},
-												"rel": {
-													Type:        schema.TypeString,
-													Computed:    true,
-													Description: "Link relation.",
-												},
-												"href": {
-													Type:        schema.TypeString,
-													Computed:    true,
-													Description: "Link URL.",
+										"region_link": schema.ListNestedAttribute{
+											Description: "REST API link to the region.",
+											Computed:    true,
+											NestedObject: schema.NestedAttributeObject{
+												Attributes: map[string]schema.Attribute{
+													"method": schema.StringAttribute{
+														Description: "HTTP method.",
+														Computed:    true,
+													},
+													"rel": schema.StringAttribute{
+														Description: "Link relation.",
+														Computed:    true,
+													},
+													"href": schema.StringAttribute{
+														Description: "Link URL.",
+														Computed:    true,
+													},
 												},
 											},
 										},
-									},
-									"bucket_link": {
-										Type:        schema.TypeList,
-										Computed:    true,
-										Description: "REST API link to the bucket.",
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"method": {
-													Type:        schema.TypeString,
-													Computed:    true,
-													Description: "HTTP method.",
-												},
-												"rel": {
-													Type:        schema.TypeString,
-													Computed:    true,
-													Description: "Link relation.",
-												},
-												"href": {
-													Type:        schema.TypeString,
-													Computed:    true,
-													Description: "Link URL.",
+										"bucket_link": schema.ListNestedAttribute{
+											Description: "REST API link to the bucket.",
+											Computed:    true,
+											NestedObject: schema.NestedAttributeObject{
+												Attributes: map[string]schema.Attribute{
+													"method": schema.StringAttribute{
+														Description: "HTTP method.",
+														Computed:    true,
+													},
+													"rel": schema.StringAttribute{
+														Description: "Link relation.",
+														Computed:    true,
+													},
+													"href": schema.StringAttribute{
+														Description: "Link URL.",
+														Computed:    true,
+													},
 												},
 											},
 										},
@@ -267,13 +237,18 @@ func DataSourceAwsRepositories() *schema.Resource {
 				},
 			},
 		},
-	}
+		DataSourceAwsRepositoriesRead,
+		map[string]interface{}{
+			"offset": 0,
+			"limit":  -1,
+		},
+	)
 }
 
-func DataSourceAwsRepositoriesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func DataSourceAwsRepositoriesRead(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAWSClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	params := url.Values{}
@@ -292,7 +267,7 @@ func DataSourceAwsRepositoriesRead(ctx context.Context, d *schema.ResourceData, 
 		params.Set("SearchPattern", v.(string))
 	}
 	if v, ok := d.GetOk("sort"); ok {
-		for _, s := range v.(*schema.Set).List() {
+		for _, s := range v.(*tf.Set).List() {
 			params.Add("Sort", s.(string))
 		}
 	}
@@ -301,26 +276,26 @@ func DataSourceAwsRepositoriesRead(ctx context.Context, d *schema.ResourceData, 
 
 	resp, err := client.MakeAuthenticatedRequestAWS("GET", apiURL, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to retrieve repositories: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to retrieve repositories: %w", err))
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read response body: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read response body: %w", err))
 	}
 
 	if resp.StatusCode != 200 {
-		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
+		return tf.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
 	}
 
 	var repositoriesResponse AWSrepositoriesDataSourceResponse
 	if err := json.Unmarshal(body, &repositoriesResponse); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to parse repositories response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to parse repositories response: %w", err))
 	}
 
 	if err := d.Set("total_count", repositoriesResponse.TotalCount); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set total_count: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set total_count: %w", err))
 	}
 
 	results := make([]interface{}, 0, len(repositoriesResponse.Results))
@@ -374,10 +349,9 @@ func DataSourceAwsRepositoriesRead(ctx context.Context, d *schema.ResourceData, 
 	}
 
 	if err := d.Set("results", results); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set results: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set results: %w", err))
 	}
 
 	d.SetId(fmt.Sprintf("aws-repositories-%d", repositoriesResponse.TotalCount))
 	return nil
 }
-

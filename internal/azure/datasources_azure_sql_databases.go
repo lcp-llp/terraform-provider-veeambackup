@@ -1,17 +1,22 @@
-﻿package azure
+package azure
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
 	"strconv"
+	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 // Azure Sql Databases
@@ -56,163 +61,141 @@ type AzureSQLDatabases struct {
 	DatabaseType      string  `json:"databaseType"`
 }
 
-func DataSourceAzureSqlDatabases() *schema.Resource {
-	return &schema.Resource{
-		ReadContext: DataSourceAzureSQLDatabasesRead,
-		Description: "Data source for retrieving Azure SQL Databases",
-		Schema: map[string]*schema.Schema{
-			"offset": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Description: "The number of items to skip before starting to collect the result set.",
-			},
-			"limit": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Description: "The numbers of items to return.",
-			},
-			"subscription_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Limit scope to a single azure subscription.",
-			},
-			"tenant_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The ID of the Azure tenant.",
-			},
-			"service_account_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The ID of the service account.",
-			},
-			"search_pattern": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The search pattern to filter SQL servers by name.",
-			},
-			"credentials_state": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The credentials state to filter SQL servers.",
-			},
-			"assignable_by_sql_account_id": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Description: "Filter SQL servers that can be assigned by the specified SQL account ID.",
-			},
-			"region_ids": {
-				Type:        schema.TypeList,
-				Elem:        &schema.Schema{Type: schema.TypeString},
-				Optional:    true,
-				Description: "List of region IDs to filter SQL servers.",
-			},
-			"protected_status": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Returns only SQL databases with the specified protection status.",
-				Elem: &schema.Schema{
-					Type:         schema.TypeString,
-					ValidateFunc: validation.StringInSlice([]string{"Unprotected", "Protected", "Unknown"}, false),
+func DataSourceAzureSqlDatabases() datasource.DataSource {
+	return tf.NewDataSource(
+		"azure_sql_databases",
+		schema.Schema{
+			Description: "Data source for retrieving Azure SQL Databases",
+			Attributes: map[string]schema.Attribute{
+				"offset": schema.Int64Attribute{
+					Description: "The number of items to skip before starting to collect the result set.",
+					Optional:    true,
 				},
-			},
-			"backup_destination": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Returns only SQL databases with the specified backup type.",
-				Elem: &schema.Schema{
-					Type:         schema.TypeString,
-					ValidateFunc: validation.StringInSlice([]string{"AzureBlob", "ManualBackup", "Archive"}, false),
+				"limit": schema.Int64Attribute{
+					Description: "The numbers of items to return.",
+					Optional:    true,
 				},
-			},
-			"db_from_protected_regions": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Defines whether Veeam Backup for Microsoft Azure must return only SQL databases that reside in regions protected by backup policies.",
-			}, //Computed fields
-			"results": {
-				Type:        schema.TypeList,
-				Computed:    true,
-				Description: "Detailed List of Azure SQL Databases.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"veeam_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The ID of the Azure SQL Database.",
-						},
-						"name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The name of the Azure SQL Database.",
-						},
-						"resource_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The resource ID of the Azure SQL Database.",
-						},
-						"server_name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Name of an Azure SQL Server hosting the database.",
-						},
-						"server_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "System ID assigned in the Veeam Backup for Microsoft Azure REST API to the SQL Server hosting the database.",
-						},
-						"resource_group_name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Information on a resource group to which the database belongs.",
-						},
-						"size_in_mb": {
-							Type:        schema.TypeInt,
-							Computed:    true,
-							Description: "Size of the database (in Mb).",
-						},
-						"subscription_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The subscription ID of the Azure SQL Server.",
-						},
-						"region_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The region ID of the Azure SQL Server.",
-						},
-						"has_elastic_pool": {
-							Type:        schema.TypeInt,
-							Computed:    true,
-							Description: "Defines whether the database belongs to an elastic pool.",
-						},
-						"status": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Status of the database.",
-						},
-						"database_type": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Type of the database.",
+				"subscription_id": schema.StringAttribute{
+					Description: "Limit scope to a single azure subscription.",
+					Optional:    true,
+				},
+				"tenant_id": schema.StringAttribute{
+					Description: "The ID of the Azure tenant.",
+					Optional:    true,
+				},
+				"service_account_id": schema.StringAttribute{
+					Description: "The ID of the service account.",
+					Optional:    true,
+				},
+				"search_pattern": schema.StringAttribute{
+					Description: "The search pattern to filter SQL servers by name.",
+					Optional:    true,
+				},
+				"credentials_state": schema.StringAttribute{
+					Description: "The credentials state to filter SQL servers.",
+					Optional:    true,
+				},
+				"assignable_by_sql_account_id": schema.Int64Attribute{
+					Description: "Filter SQL servers that can be assigned by the specified SQL account ID.",
+					Optional:    true,
+				},
+				"region_ids": schema.ListAttribute{
+					Description: "List of region IDs to filter SQL servers.",
+					Optional:    true,
+					ElementType: types.StringType,
+				},
+				"protected_status": schema.ListAttribute{
+					Description: "Returns only SQL databases with the specified protection status.",
+					Optional:    true,
+					Validators: []validator.List{
+						listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"Unprotected", "Protected", "Unknown"}...)),
+					},
+					ElementType: types.StringType,
+				},
+				"backup_destination": schema.ListAttribute{
+					Description: "Returns only SQL databases with the specified backup type.",
+					Optional:    true,
+					Validators: []validator.List{
+						listvalidator.ValueStringsAre(stringvalidator.OneOf([]string{"AzureBlob", "ManualBackup", "Archive"}...)),
+					},
+					ElementType: types.StringType,
+				},
+				"db_from_protected_regions": schema.BoolAttribute{
+					Description: "Defines whether Veeam Backup for Microsoft Azure must return only SQL databases that reside in regions protected by backup policies.",
+					Optional:    true,
+				},
+				"results": schema.ListNestedAttribute{
+					Description: "Detailed List of Azure SQL Databases.",
+					Computed:    true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"veeam_id": schema.StringAttribute{
+								Description: "The ID of the Azure SQL Database.",
+								Computed:    true,
+							},
+							"name": schema.StringAttribute{
+								Description: "The name of the Azure SQL Database.",
+								Computed:    true,
+							},
+							"resource_id": schema.StringAttribute{
+								Description: "The resource ID of the Azure SQL Database.",
+								Computed:    true,
+							},
+							"server_name": schema.StringAttribute{
+								Description: "Name of an Azure SQL Server hosting the database.",
+								Computed:    true,
+							},
+							"server_id": schema.StringAttribute{
+								Description: "System ID assigned in the Veeam Backup for Microsoft Azure REST API to the SQL Server hosting the database.",
+								Computed:    true,
+							},
+							"resource_group_name": schema.StringAttribute{
+								Description: "Information on a resource group to which the database belongs.",
+								Computed:    true,
+							},
+							"size_in_mb": schema.Int64Attribute{
+								Description: "Size of the database (in Mb).",
+								Computed:    true,
+							},
+							"subscription_id": schema.StringAttribute{
+								Description: "The subscription ID of the Azure SQL Server.",
+								Computed:    true,
+							},
+							"region_id": schema.StringAttribute{
+								Description: "The region ID of the Azure SQL Server.",
+								Computed:    true,
+							},
+							"has_elastic_pool": schema.Int64Attribute{
+								Description: "Defines whether the database belongs to an elastic pool.",
+								Computed:    true,
+							},
+							"status": schema.StringAttribute{
+								Description: "Status of the database.",
+								Computed:    true,
+							},
+							"database_type": schema.StringAttribute{
+								Description: "Type of the database.",
+								Computed:    true,
+							},
 						},
 					},
 				},
-			},
-			"sql_databases": {
-				Type:        schema.TypeMap,
-				Computed:    true,
-				Description: "Map of Azure SQL Databases names to their complete details as JSON strings.",
-				Elem:        &schema.Schema{Type: schema.TypeString},
+				"sql_databases": schema.MapAttribute{
+					Description: "Map of Azure SQL Databases names to their complete details as JSON strings.",
+					Computed:    true,
+					ElementType: types.StringType,
+				},
 			},
 		},
-	}
+		DataSourceAzureSQLDatabasesRead,
+		map[string]interface{}{},
+	)
 }
 
-func DataSourceAzureSQLDatabasesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func DataSourceAzureSQLDatabasesRead(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(meta)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	request := AzureSqlDatabasesDataSourceModel{}
 
@@ -281,21 +264,21 @@ func DataSourceAzureSQLDatabasesRead(ctx context.Context, d *schema.ResourceData
 	// Make API request
 	resp, err := client.MakeAuthenticatedRequest("GET", apiUrl, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to retrieve Azure SQL Databases: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to retrieve Azure SQL Databases: %w", err))
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to read response body: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to read response body: %w", err))
 	}
 	if resp.StatusCode != 200 && resp.StatusCode != 202 {
-		return diag.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
+		return tf.FromErr(fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)))
 	}
 
 	// Parse response
 	var sqlDatabasesResponse AzureSqlDatabasesDataSourceResponse
 	if err := json.Unmarshal(body, &sqlDatabasesResponse); err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to parse response JSON: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to parse response JSON: %w", err))
 	}
 
 	// Create both a list and a map of SQL databases
@@ -318,16 +301,16 @@ func DataSourceAzureSQLDatabasesRead(ctx context.Context, d *schema.ResourceData
 		// Marshal complete SQL databases object to JSON for the map
 		sqlDatabasesJSON, err := json.Marshal(sqlDatabases)
 		if err != nil {
-			return diag.FromErr(fmt.Errorf("Failed to marshal SQL Server to JSON: %w", err))
+			return tf.FromErr(fmt.Errorf("Failed to marshal SQL Server to JSON: %w", err))
 		}
 		sqlDatabasesMap[sqlDatabases.Name] = string(sqlDatabasesJSON)
 	}
 
 	if err := d.Set("results", sqlDatabasesList); err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to set results: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to set results: %w", err))
 	}
 	if err := d.Set("sql_databases", sqlDatabasesMap); err != nil {
-		return diag.FromErr(fmt.Errorf("Failed to set sql_databases: %w", err))
+		return tf.FromErr(fmt.Errorf("Failed to set sql_databases: %w", err))
 	}
 
 	// Set ID for the data source

@@ -1,273 +1,261 @@
 package provider
 
 import (
-	"fmt"
+	"context"
+	"os"
+	"strconv"
 
+	"terraform-provider-veeambackup/internal/aws"
 	"terraform-provider-veeambackup/internal/azure"
 	"terraform-provider-veeambackup/internal/client"
 	"terraform-provider-veeambackup/internal/vbr"
-	"terraform-provider-veeambackup/internal/aws"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/action"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	fwprovider "github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-func Provider() *schema.Provider {
-	return &schema.Provider{
-		Schema: map[string]*schema.Schema{
-			// Azure Backup for Azure configuration
-			"azure": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Configuration for Veeam Backup for Azure",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"hostname": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Hostname or IP address of the Veeam Backup for Azure server",
-							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AZURE_HOSTNAME", nil),
-						},
-						"username": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Username for Veeam Backup for Azure authentication",
-							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AZURE_USERNAME", nil),
-						},
-						"password": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Sensitive:   true,
-							Description: "Password for Veeam Backup for Azure authentication",
-							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AZURE_PASSWORD", nil),
-						},
-						"api_version": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Default:     "8.1",
-							Description: "Azure Backup REST API version (default: 8.1)",
-							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AZURE_API_VERSION", "8.1"),
-						},
-						"insecure_skip_verify": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Default:     false,
-							Description: "Skip SSL certificate verification (default: false)",
-							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AZURE_INSECURE_SKIP_VERIFY", false),
-						},
-					},
-				},
-			},
-			// AWS Backup for AWS configuration
-			"aws": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Configuration for Veeam Backup for AWS",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"hostname": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Hostname or IP address of the Veeam Backup for AWS server",
-							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AWS_HOSTNAME", nil),
-						},
-						"port": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Default:     "11005",
-							Description: "Port for AWS REST API (default: 11005)",
-							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AWS_PORT", "11005"),
-						},
-						"username": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Username for Veeam Backup for AWS authentication",
-							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AWS_USERNAME", nil),
-						},
-						"password": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Sensitive:   true,
-							Description: "Password for Veeam Backup for AWS authentication",
-							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AWS_PASSWORD", nil),
-						},
-						"api_version": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Default:     "1.8-rev0",
-							Description: "AWS Backup REST API version (default: 1.8-rev0)",
-							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AWS_API_VERSION", "1.8-rev0"),
-						},
-						"insecure_skip_verify": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Default:     false,
-							Description: "Skip SSL certificate verification (default: false)",
-							DefaultFunc: schema.EnvDefaultFunc("VEEAM_AWS_INSECURE_SKIP_VERIFY", false),
-						},
-					},
-				},
-			},
-			// Veeam Backup & Replication configuration
-			"vbr": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Configuration for Veeam Backup & Replication REST API",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"hostname": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Hostname or IP address of the VBR server",
-							DefaultFunc: schema.EnvDefaultFunc("VEEAM_VBR_HOSTNAME", nil),
-						},
-						"port": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Default:     "9419",
-							Description: "Port for VBR REST API (default: 9419)",
-							DefaultFunc: schema.EnvDefaultFunc("VEEAM_VBR_PORT", "9419"),
-						},
-						"username": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Username for VBR authentication",
-							DefaultFunc: schema.EnvDefaultFunc("VEEAM_VBR_USERNAME", nil),
-						},
-						"password": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Sensitive:   true,
-							Description: "Password for VBR authentication",
-							DefaultFunc: schema.EnvDefaultFunc("VEEAM_VBR_PASSWORD", nil),
-						},
-						"api_version": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Default:     "1.3-rev1",
-							Description: "VBR REST API version (default: 1.3-rev1)",
-							DefaultFunc: schema.EnvDefaultFunc("VEEAM_VBR_API_VERSION", "1.3-rev1"),
-						},
-						"insecure_skip_verify": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Default:     false,
-							Description: "Skip SSL certificate verification (default: false)",
-							DefaultFunc: schema.EnvDefaultFunc("VEEAM_VBR_INSECURE_SKIP_VERIFY", false),
-						},
-					},
-				},
-			},
+var _ fwprovider.Provider = &veeamProvider{}
+var _ fwprovider.ProviderWithActions = &veeamProvider{}
+
+type veeamProvider struct {
+	version string
+}
+
+type providerModel struct {
+	Azure types.List `tfsdk:"azure"`
+	AWS   types.List `tfsdk:"aws"`
+	VBR   types.List `tfsdk:"vbr"`
+}
+
+type azureProviderModel struct {
+	Hostname           types.String `tfsdk:"hostname"`
+	Username           types.String `tfsdk:"username"`
+	Password           types.String `tfsdk:"password"`
+	APIVersion         types.String `tfsdk:"api_version"`
+	InsecureSkipVerify types.Bool   `tfsdk:"insecure_skip_verify"`
+}
+
+type remoteProviderModel struct {
+	Hostname           types.String `tfsdk:"hostname"`
+	Port               types.String `tfsdk:"port"`
+	Username           types.String `tfsdk:"username"`
+	Password           types.String `tfsdk:"password"`
+	APIVersion         types.String `tfsdk:"api_version"`
+	InsecureSkipVerify types.Bool   `tfsdk:"insecure_skip_verify"`
+}
+
+func Provider() fwprovider.Provider { return New("dev")() }
+
+func New(version string) func() fwprovider.Provider {
+	return func() fwprovider.Provider { return &veeamProvider{version: version} }
+}
+
+func (implementation *veeamProvider) Metadata(_ context.Context, _ fwprovider.MetadataRequest, resp *fwprovider.MetadataResponse) {
+	resp.TypeName = "veeambackup"
+	resp.Version = implementation.version
+}
+
+func (implementation *veeamProvider) Schema(_ context.Context, _ fwprovider.SchemaRequest, resp *fwprovider.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Blocks: map[string]schema.Block{
+			"azure": serviceBlock("Veeam Backup for Azure", "8.1", ""),
+			"aws":   serviceBlock("Veeam Backup for AWS", "1.8-rev0", "11005"),
+			"vbr":   serviceBlock("Veeam Backup & Replication", "1.3-rev1", "9419"),
 		},
-		ResourcesMap: map[string]*schema.Resource{
-			"veeambackup_azure_service_account":           azure.ResourceAzureServiceAccount(),
-			"veeambackup_azure_repository":                azure.ResourceAzureRepository(),
-			"veeambackup_azure_vm_backup_policy":          azure.ResourceAzureVMBackupPolicy(),
-			"veeambackup_azure_file_shares_backup_policy": azure.ResourceAzureFileSharesBackupPolicy(),
-			"veeambackup_azure_sql_backup_policy":         azure.ResourceAzureSQLBackupPolicy(),
-			"veeambackup_azure_cosmos_backup_policy":      azure.ResourceAzureCosmosDbBackupPolicy(),
-			"veeambackup_vbr_unstructured_data_server":    vbr.ResourceVbrUnstructuredDataServer(),
-			"veeambackup_vbr_azure_cloud_credential":      vbr.ResourceVbrAzureCloudCredential(),
-			"veeambackup_vbr_amazon_cloud_credential":     vbr.ResourceVbrAmazonCloudCredential(),
-			"veeambackup_vbr_object_storage_backup_job":   vbr.ResourceVbrObjectStorageBackupJob(),
-			"veeambackup_vbr_file_share_backup_job":       vbr.ResourceVbrFileShareBackupJob(),
-			"veeambackup_vbr_repository":                  vbr.ResourceVbrRepository(),
-			"veeambackup_aws_iam_role":                    aws.ResourceAwsIAMRole(),
-			"veeambackup_aws_ec2_backup_policy":           aws.ResourceAwsEC2InstanceBackupPolicy(),
-			"veeambackup_aws_rds_backup_policy":           aws.ResourceAwsRDSBackupPolicy(),
-			"veeambackup_aws_dynamo_db_backup_policy":     aws.ResourceAwsDynamoDbBackupPolicy(),
-			"veeambackup_aws_repository":                  aws.ResourceAwsRepository(),
-		},
-		DataSourcesMap: map[string]*schema.Resource{
-			"veeambackup_azure_backup_repositories":     azure.DataSourceAzureBackupRepositories(),
-			"veeambackup_azure_service_accounts":        azure.DataSourceAzureServiceAccounts(),
-			"veeambackup_azure_service_account":         azure.DataSourceAzureServiceAccount(),
-			"veeambackup_azure_vms":                     azure.DataSourceAzureVMs(),
-			"veeambackup_azure_subscriptions":           azure.DataSourceAzureSubscriptions(),
-			"veeambackup_azure_resource_groups":         azure.DataSourceAzureResourceGroups(),
-			"veeambackup_azure_sql_servers":             azure.DataSourceAzureSqlServers(),
-			"veeambackup_azure_sql_databases":           azure.DataSourceAzureSqlDatabases(),
-			"veeambackup_azure_sql_backup_policy_cost_estimation": azure.DataSourceAzureSqlBackupPolicyCostEstimation(),
-			"veeambackup_azure_cosmos_accounts":         azure.DataSourceAzureCosmosDbAccounts(),
-			"veeambackup_azure_storage_accounts":        azure.DataSourceAzureStorageAccounts(),
-			"veeambackup_azure_file_shares":             azure.DataSourceAzureFileShares(),
-			"veeambackup_azure_vm_restore_points":       azure.DataSourceAzureVMRestorePoints(),
-			"veeambackup_azure_vm_restore_point":        azure.DataSourceAzureVMRestorePoint(),
-			"veeambackup_vbr_unstructured_data_servers": vbr.DataSourceVbrUnstructuredDataServers(),
-			"veeambackup_vbr_cloud_credentials":         vbr.DataSourceVbrCloudCredentials(),
-			"veeambackup_vbr_cloud_credential":          vbr.DataSourceVbrCloudCredential(),
-			"veeambackup_vbr_repositories":              vbr.DataSourceVBRRepositories(),
-			"veeambackup_vbr_proxies":                   vbr.DataSourceVbrProxies(),
-			"veeambackup_aws_repositories":              aws.DataSourceAwsRepositories(),
-			"veeambackup_aws_iam_roles":                 aws.DataSourceAwsIAMRoles(),
-			"veeambackup_aws_ec2_instances":             aws.DataSourceAwsEC2Instances(),
-			"veeambackup_aws_regions":                   aws.DataSourceAwsRegions(),
-			"veeambackup_aws_rds_instances":             aws.DataSourceAwsRDSInstances(),
-			"veeambackup_aws_dynamo_db_tables":          aws.DataSourceAwsDynamoDbTables(),
-		},
-		ConfigureFunc: providerConfigure,
 	}
 }
 
-// providerConfigure configures the provider and returns a client
-func providerConfigure(d *schema.ResourceData) (interface{}, error) {
-	// Check for service-specific configurations
-	azureConfig := d.Get("azure").([]interface{})
-	awsConfig := d.Get("aws").([]interface{})
-	vbrConfig := d.Get("vbr").([]interface{})
-
-	config := client.ClientConfig{}
-
-	// Handle Azure configuration
-	if len(azureConfig) > 0 {
-		azureMap := azureConfig[0].(map[string]interface{})
-		config.Azure = &client.AzureConfig{
-			Hostname:           azureMap["hostname"].(string),
-			Username:           azureMap["username"].(string),
-			Password:           azureMap["password"].(string),
-			APIVersion:         azureMap["api_version"].(string),
-			InsecureSkipVerify: azureMap["insecure_skip_verify"].(bool),
+func serviceBlock(name, apiVersion, port string) schema.ListNestedBlock {
+	attributes := map[string]schema.Attribute{
+		"hostname": schema.StringAttribute{
+			Optional:    true,
+			Description: "Hostname or IP address of the " + name + " server.",
+		},
+		"username": schema.StringAttribute{
+			Optional:    true,
+			Description: "Username for " + name + " authentication.",
+		},
+		"password": schema.StringAttribute{
+			Optional:    true,
+			Sensitive:   true,
+			Description: "Password for " + name + " authentication.",
+		},
+		"api_version": schema.StringAttribute{
+			Optional:    true,
+			Description: "REST API version (default: " + apiVersion + ").",
+		},
+		"insecure_skip_verify": schema.BoolAttribute{
+			Optional:    true,
+			Description: "Skip SSL certificate verification (default: false).",
+		},
+	}
+	if port != "" {
+		attributes["port"] = schema.StringAttribute{
+			Optional:    true,
+			Description: "REST API port (default: " + port + ").",
 		}
 	}
-
-	// Handle AWS configuration
-	if len(awsConfig) > 0 {
-		awsMap := awsConfig[0].(map[string]interface{})
-		config.AWS = &client.AWSConfig{
-			Hostname:           awsMap["hostname"].(string),
-			Port:               awsMap["port"].(string),
-			Username:           awsMap["username"].(string),
-			Password:           awsMap["password"].(string),
-			APIVersion:         awsMap["api_version"].(string),
-			InsecureSkipVerify: awsMap["insecure_skip_verify"].(bool),
-		}
+	return schema.ListNestedBlock{
+		Description: "Configuration for " + name,
+		NestedObject: schema.NestedBlockObject{
+			Attributes: attributes,
+		},
+		Validators: []validator.List{
+			listvalidator.SizeAtMost(1),
+		},
 	}
+}
 
-	// Handle VBR configuration
-	if len(vbrConfig) > 0 {
-		vbrMap := vbrConfig[0].(map[string]interface{})
-		config.VBR = &client.VBRConfig{
-			Hostname:           vbrMap["hostname"].(string),
-			Port:               vbrMap["port"].(string),
-			Username:           vbrMap["username"].(string),
-			Password:           vbrMap["password"].(string),
-			APIVersion:         vbrMap["api_version"].(string),
-			InsecureSkipVerify: vbrMap["insecure_skip_verify"].(bool),
-		}
+func (implementation *veeamProvider) Configure(ctx context.Context, req fwprovider.ConfigureRequest, resp *fwprovider.ConfigureResponse) {
+	config := implementation.clientConfig(ctx, req, resp)
+	if resp.Diagnostics.HasError() {
+		return
 	}
-
-	// Validate that at least one service is configured
-	if config.Azure == nil && config.AWS == nil && config.VBR == nil {
-		return nil, fmt.Errorf("at least one service configuration (azure, aws, vbr) must be provided")
-	}
-
-	// Create the unified client
-	veeamClient, err := client.NewVeeamClient(config)
+	configured, err := client.NewVeeamClient(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Veeam client: %w", err)
+		resp.Diagnostics.AddError("Failed to Configure Veeam Client", err.Error())
+		return
 	}
+	resp.ResourceData = configured
+	resp.DataSourceData = configured
+	resp.ActionData = configured
+}
 
-	// Return unified client for all scenarios
-	return veeamClient, nil
+func (implementation *veeamProvider) clientConfig(ctx context.Context, req fwprovider.ConfigureRequest, resp *fwprovider.ConfigureResponse) client.ClientConfig {
+	var data providerModel
+	config := client.ClientConfig{}
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return config
+	}
+	if !req.Config.Raw.IsFullyKnown() {
+		resp.Diagnostics.AddError("Unknown Provider Configuration", "Veeam connection settings must be known before the provider can connect.")
+		return config
+	}
+	var azureSettings []azureProviderModel
+	var awsSettings, vbrSettings []remoteProviderModel
+	resp.Diagnostics.Append(data.Azure.ElementsAs(ctx, &azureSettings, false)...)
+	resp.Diagnostics.Append(data.AWS.ElementsAs(ctx, &awsSettings, false)...)
+	resp.Diagnostics.Append(data.VBR.ElementsAs(ctx, &vbrSettings, false)...)
+	if resp.Diagnostics.HasError() {
+		return config
+	}
+	if len(azureSettings) > 0 {
+		settings := azureSettings[0]
+		insecure, err := configuredBool(settings.InsecureSkipVerify, "VEEAM_AZURE_INSECURE_SKIP_VERIFY")
+		if err != nil {
+			resp.Diagnostics.AddError("Invalid Azure TLS Configuration", err.Error())
+		}
+		config.Azure = &client.AzureConfig{
+			Hostname:           configuredString(settings.Hostname, "VEEAM_AZURE_HOSTNAME", ""),
+			Username:           configuredString(settings.Username, "VEEAM_AZURE_USERNAME", ""),
+			Password:           configuredString(settings.Password, "VEEAM_AZURE_PASSWORD", ""),
+			APIVersion:         configuredString(settings.APIVersion, "VEEAM_AZURE_API_VERSION", "8.1"),
+			InsecureSkipVerify: insecure,
+		}
+		validateConnection("azure", config.Azure.Hostname, config.Azure.Username, config.Azure.Password, resp)
+	}
+	if len(awsSettings) > 0 {
+		settings := awsSettings[0]
+		insecure, err := configuredBool(settings.InsecureSkipVerify, "VEEAM_AWS_INSECURE_SKIP_VERIFY")
+		if err != nil {
+			resp.Diagnostics.AddError("Invalid AWS TLS Configuration", err.Error())
+		}
+		config.AWS = &client.AWSConfig{
+			Hostname:           configuredString(settings.Hostname, "VEEAM_AWS_HOSTNAME", ""),
+			Port:               configuredString(settings.Port, "VEEAM_AWS_PORT", "11005"),
+			Username:           configuredString(settings.Username, "VEEAM_AWS_USERNAME", ""),
+			Password:           configuredString(settings.Password, "VEEAM_AWS_PASSWORD", ""),
+			APIVersion:         configuredString(settings.APIVersion, "VEEAM_AWS_API_VERSION", "1.8-rev0"),
+			InsecureSkipVerify: insecure,
+		}
+		validateConnection("aws", config.AWS.Hostname, config.AWS.Username, config.AWS.Password, resp)
+	}
+	if len(vbrSettings) > 0 {
+		settings := vbrSettings[0]
+		insecure, err := configuredBool(settings.InsecureSkipVerify, "VEEAM_VBR_INSECURE_SKIP_VERIFY")
+		if err != nil {
+			resp.Diagnostics.AddError("Invalid VBR TLS Configuration", err.Error())
+		}
+		config.VBR = &client.VBRConfig{
+			Hostname:           configuredString(settings.Hostname, "VEEAM_VBR_HOSTNAME", ""),
+			Port:               configuredString(settings.Port, "VEEAM_VBR_PORT", "9419"),
+			Username:           configuredString(settings.Username, "VEEAM_VBR_USERNAME", ""),
+			Password:           configuredString(settings.Password, "VEEAM_VBR_PASSWORD", ""),
+			APIVersion:         configuredString(settings.APIVersion, "VEEAM_VBR_API_VERSION", "1.3-rev1"),
+			InsecureSkipVerify: insecure,
+		}
+		validateConnection("vbr", config.VBR.Hostname, config.VBR.Username, config.VBR.Password, resp)
+	}
+	if config.Azure == nil && config.AWS == nil && config.VBR == nil {
+		resp.Diagnostics.AddError("Missing Veeam Configuration", "At least one service configuration (azure, aws, vbr) must be provided.")
+	}
+	return config
+}
+
+func configuredString(value types.String, environment, fallback string) string {
+	if !value.IsNull() {
+		return value.ValueString()
+	}
+	if configured := os.Getenv(environment); configured != "" {
+		return configured
+	}
+	return fallback
+}
+
+func configuredBool(value types.Bool, environment string) (bool, error) {
+	if !value.IsNull() {
+		return value.ValueBool(), nil
+	}
+	if configured := os.Getenv(environment); configured != "" {
+		return strconv.ParseBool(configured)
+	}
+	return false, nil
+}
+
+func validateConnection(service, hostname, username, password string, resp *fwprovider.ConfigureResponse) {
+	for _, entry := range []struct{ name, value string }{{"hostname", hostname}, {"username", username}, {"password", password}} {
+		if entry.value == "" {
+			resp.Diagnostics.AddError("Missing Veeam Connection Setting", service+"."+entry.name+" must be configured in the provider block or its VEEAM environment variable.")
+		}
+	}
+}
+
+func (implementation *veeamProvider) Resources(context.Context) []func() resource.Resource {
+	return []func() resource.Resource{
+		azure.ResourceAzureServiceAccount, azure.ResourceAzureRepository,
+		azure.ResourceAzureVMBackupPolicy, azure.ResourceAzureFileSharesBackupPolicy,
+		azure.ResourceAzureSQLBackupPolicy, azure.ResourceAzureCosmosDbBackupPolicy,
+		vbr.ResourceVbrUnstructuredDataServer, vbr.ResourceVbrAzureCloudCredential,
+		vbr.ResourceVbrAmazonCloudCredential, vbr.ResourceVbrObjectStorageBackupJob,
+		vbr.ResourceVbrFileShareBackupJob, vbr.ResourceVbrRepository,
+		aws.ResourceAwsIAMRole, aws.ResourceAwsEC2InstanceBackupPolicy,
+		aws.ResourceAwsRDSBackupPolicy, aws.ResourceAwsDynamoDbBackupPolicy, aws.ResourceAwsRepository,
+	}
+}
+
+func (implementation *veeamProvider) DataSources(context.Context) []func() datasource.DataSource {
+	return []func() datasource.DataSource{
+		azure.DataSourceAzureBackupRepositories, azure.DataSourceAzureServiceAccounts,
+		azure.DataSourceAzureServiceAccount, azure.DataSourceAzureVMs,
+		azure.DataSourceAzureSubscriptions, azure.DataSourceAzureResourceGroups,
+		azure.DataSourceAzureSqlServers, azure.DataSourceAzureSqlDatabases,
+		azure.DataSourceAzureSqlBackupPolicyCostEstimation, azure.DataSourceAzureCosmosDbAccounts,
+		azure.DataSourceAzureStorageAccounts, azure.DataSourceAzureFileShares,
+		azure.DataSourceAzureVMRestorePoints, azure.DataSourceAzureVMRestorePoint,
+		vbr.DataSourceVbrUnstructuredDataServers, vbr.DataSourceVbrCloudCredentials,
+		vbr.DataSourceVbrCloudCredential, vbr.DataSourceVBRRepositories, vbr.DataSourceVbrProxies,
+		aws.DataSourceAwsRepositories, aws.DataSourceAwsIAMRoles, aws.DataSourceAwsEC2Instances,
+		aws.DataSourceAwsRegions, aws.DataSourceAwsRDSInstances, aws.DataSourceAwsDynamoDbTables,
+	}
+}
+
+func (implementation *veeamProvider) Actions(context.Context) []func() action.Action {
+	return []func() action.Action{NewVBRStartBackupJobAction, NewAzureSQLDatabasesRescanAction}
 }

@@ -10,9 +10,18 @@ import (
 	"strings"
 	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"regexp"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 type AzureSQLBackupPolicyRequest struct {
@@ -182,400 +191,306 @@ type AzureSQLBackupPolicyResponse struct {
 	} `json:"healthCheckSchedule,omitempty"`
 }
 
-func ResourceAzureSQLBackupPolicy() *schema.Resource {
-	return &schema.Resource{
-		CreateContext: ResourceAzureSQLBackupPolicyCreate,
-		ReadContext:   ResourceAzureSQLBackupPolicyRead,
-		UpdateContext: ResourceAzureSQLBackupPolicyUpdate,
-		DeleteContext: ResourceAzureSQLBackupPolicyDelete,
-		Importer: &schema.ResourceImporter{
-			StateContext: schema.ImportStatePassthroughContext,
-		},
-		Schema: map[string]*schema.Schema{
-			"id": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Policy ID assigned by Veeam.",
-			},
-			"name": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ValidateFunc: validation.StringLenBetween(1, 255),
-				Description:  "Name of the SQL backup policy.",
-			},
-			"backup_type": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ValidateFunc: validation.StringInSlice([]string{"AllSubscriptions", "SelectedItems", "Unknown"}, false),
-				Description:  "Whether to protect all subscriptions or selected items.",
-			},
-			"is_enabled": {
-				Type:        schema.TypeBool,
-				Required:    true,
-				Description: "Whether the policy is enabled.",
-			},
-			"regions": {
-				Type:        schema.TypeList,
-				Required:    true,
-				MinItems:    1,
-				Description: "Azure regions containing the resources to protect.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"region_id": {
-							Type:         schema.TypeString,
-							Required:     true,
-							ValidateFunc: validation.StringIsNotEmpty,
-							Description:  "Azure region ID.",
-						},
+func ResourceAzureSQLBackupPolicy() resource.Resource {
+	return tf.NewResource(
+		"azure_sql_backup_policy",
+		schema.Schema{
+			Attributes: map[string]schema.Attribute{
+				"id": schema.StringAttribute{
+					Description: "Policy ID assigned by Veeam.",
+					Computed:    true,
+				},
+				"name": schema.StringAttribute{
+					Description: "Name of the SQL backup policy.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.LengthBetween(1, 255),
 					},
 				},
-			},
-			"tenant_id": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ValidateFunc: validation.StringIsNotEmpty,
-				Description:  "Azure tenant ID.",
-			},
-			"service_account_id": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ValidateFunc: validation.IsUUID,
-				Description:  "Veeam service account ID.",
-			},
-			"selected_items": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "SQL databases and servers to include.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"databases":   azureSQLPolicyItemsSchema("SQL databases to include."),
-						"sql_servers": azureSQLPolicyItemsSchema("SQL servers to include."),
+				"backup_type": schema.StringAttribute{
+					Description: "Whether to protect all subscriptions or selected items.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.OneOf([]string{"AllSubscriptions", "SelectedItems", "Unknown"}...),
 					},
 				},
-			},
-			"excluded_items": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "SQL databases to exclude.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"databases": azureSQLPolicyItemsSchema("SQL databases to exclude."),
+				"is_enabled": schema.BoolAttribute{
+					Description: "Whether the policy is enabled.",
+					Required:    true,
+				},
+				"tenant_id": schema.StringAttribute{
+					Description: "Azure tenant ID.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.LengthAtLeast(1),
 					},
 				},
-			},
-			"staging_server_id": {
-				Type:         schema.TypeString,
-				Optional:     true,
-				ValidateFunc: validation.IsUUID,
-				Description:  "Veeam staging server ID.",
-			},
-			"managed_staging_server_id": {
-				Type:         schema.TypeString,
-				Optional:     true,
-				ValidateFunc: validation.IsUUID,
-				Description:  "Veeam managed staging server ID.",
-			},
-			"description": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Description of the policy.",
-			},
-			"retry_settings": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Retry settings for failed backups.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"retry_count": {
-							Type:         schema.TypeInt,
-							Optional:     true,
-							Default:      3,
-							ValidateFunc: validation.IntAtLeast(0),
-							Description:  "Number of retries. Zero disables retries.",
-						},
+				"service_account_id": schema.StringAttribute{
+					Description: "Veeam service account ID.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.RegexMatches(regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`), "must be a UUID"),
 					},
 				},
-			},
-			"policy_notification_settings": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Email notification settings.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"recipient": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Notification recipient.",
-						},
-						"notify_on_success": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Default:     false,
-							Description: "Send notifications on success.",
-						},
-						"notify_on_failure": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Default:     true,
-							Description: "Send notifications on failure.",
-						},
-						"notify_on_warning": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Default:     true,
-							Description: "Send notifications on warning. Not returned by the API.",
-						},
+				"staging_server_id": schema.StringAttribute{
+					Description: "Veeam staging server ID.",
+					Optional:    true,
+					Validators: []validator.String{
+						stringvalidator.RegexMatches(regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`), "must be a UUID"),
 					},
 				},
+				"managed_staging_server_id": schema.StringAttribute{
+					Description: "Veeam managed staging server ID.",
+					Optional:    true,
+					Validators: []validator.String{
+						stringvalidator.RegexMatches(regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`), "must be a UUID"),
+					},
+				},
+				"description": schema.StringAttribute{
+					Description: "Description of the policy.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"create_private_endpoint_to_workload_automatically": schema.BoolAttribute{
+					Description: "Automatically create private endpoints to protected workloads.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"priority": schema.Int64Attribute{
+					Description: "Policy priority.",
+					Computed:    true,
+				},
+				"excluded_items_count": schema.Int64Attribute{
+					Description: "Number of excluded items.",
+					Computed:    true,
+				},
+				"backup_status": schema.StringAttribute{
+					Description: "Backup status.",
+					Computed:    true,
+				},
+				"archive_status": schema.StringAttribute{
+					Description: "Archive status.",
+					Computed:    true,
+				},
+				"health_check_status": schema.StringAttribute{
+					Description: "Health check status.",
+					Computed:    true,
+				},
+				"next_execution_time": schema.StringAttribute{
+					Description: "Next execution time in API format.",
+					Computed:    true,
+				},
+				"is_archive_backup_configured": schema.BoolAttribute{
+					Description: "Whether archive backup is configured.",
+					Computed:    true,
+				},
 			},
-			"create_private_endpoint_to_workload_automatically": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Automatically create private endpoints to protected workloads.",
-			},
-			"daily_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Daily backup schedule.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"daily_type": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							ValidateFunc: validation.StringInSlice([]string{"EveryDay", "Weekdays", "SelectedDays", "Unknown"}, false),
-							Description:  "Daily schedule type.",
-						},
-						"selected_days": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Weekdays used when daily_type is SelectedDays.",
-							Elem: &schema.Schema{
-								Type:         schema.TypeString,
-								ValidateFunc: validation.StringInSlice(azureSQLWeekdays, false),
-							},
-						},
-						"start_time": {
-							Type:        schema.TypeInt,
-							Computed:    true,
-							Description: "Start time returned by the API. Configure backup_schedule.hours instead.",
-						},
-						"backup_schedule": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "Daily repository backup settings.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"hours": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Backup hours (0-23).",
-										Elem: &schema.Schema{
-											Type:         schema.TypeInt,
-											ValidateFunc: validation.IntBetween(0, 23),
-										},
-									},
-									"target_repository_id": {
-										Type:         schema.TypeString,
-										Required:     true,
-										ValidateFunc: validation.IsUUID,
-										Description:  "Target Veeam repository ID.",
-									},
-									"retention": azureSQLRetentionSchema(),
+			Blocks: map[string]schema.Block{
+				"regions": schema.ListNestedBlock{
+					Description: "Azure regions containing the resources to protect.",
+					Validators: []validator.List{
+						listvalidator.SizeAtLeast(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"region_id": schema.StringAttribute{
+								Description: "Azure region ID.",
+								Required:    true,
+								Validators: []validator.String{
+									stringvalidator.LengthAtLeast(1),
 								},
 							},
 						},
 					},
 				},
-			},
-			"weekly_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Weekly backup schedule.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"start_time": {
-							Type:         schema.TypeInt,
-							Optional:     true,
-							ValidateFunc: validation.IntBetween(0, 23),
-							Description:  "Backup start hour (0-23).",
-						},
-						"backup_schedule": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "Weekly repository backup settings.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"selected_days": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Backup weekdays.",
-										Elem: &schema.Schema{
-											Type:         schema.TypeString,
-											ValidateFunc: validation.StringInSlice(azureSQLWeekdays, false),
+				"selected_items": schema.ListNestedBlock{
+					Description: "SQL databases and servers to include.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{},
+						Blocks: map[string]schema.Block{
+							"databases": schema.ListNestedBlock{
+								Description: "SQL databases to include.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"id": schema.StringAttribute{
+											Description: "Veeam resource ID.",
+											Required:    true,
+											Validators: []validator.String{
+												stringvalidator.LengthAtLeast(1),
+											},
 										},
 									},
-									"target_repository_id": {
-										Type:         schema.TypeString,
-										Required:     true,
-										ValidateFunc: validation.IsUUID,
-										Description:  "Target Veeam repository ID.",
+								},
+							},
+							"sql_servers": schema.ListNestedBlock{
+								Description: "SQL servers to include.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"id": schema.StringAttribute{
+											Description: "Veeam resource ID.",
+											Required:    true,
+											Validators: []validator.String{
+												stringvalidator.LengthAtLeast(1),
+											},
+										},
 									},
-									"retention": azureSQLRetentionSchema(),
 								},
 							},
 						},
 					},
 				},
-			},
-			"monthly_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Monthly backup schedule.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"start_time": {
-							Type:         schema.TypeInt,
-							Optional:     true,
-							ValidateFunc: validation.IntBetween(0, 23),
-							Description:  "Backup start hour (0-23).",
-						},
-						"type": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							ValidateFunc: validation.StringInSlice(azureSQLDayTypes, false),
-							Description:  "Day selection method.",
-						},
-						"day_of_week": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							ValidateFunc: validation.StringInSlice(azureSQLWeekdays, false),
-							Description:  "Backup weekday.",
-						},
-						"day_of_month": {
-							Type:         schema.TypeInt,
-							Optional:     true,
-							ValidateFunc: validation.IntBetween(1, 31),
-							Description:  "Backup day of the month.",
-						},
-						"monthly_last_day": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Description: "Run on the last day of the month.",
-						},
-						"backup_schedule": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							MaxItems:    1,
-							Description: "Monthly repository backup settings.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"selected_months": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										Description: "Backup months.",
-										Elem: &schema.Schema{
-											Type:         schema.TypeString,
-											ValidateFunc: validation.StringInSlice(azureSQLMonths, false),
+				"excluded_items": schema.ListNestedBlock{
+					Description: "SQL databases to exclude.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{},
+						Blocks: map[string]schema.Block{
+							"databases": schema.ListNestedBlock{
+								Description: "SQL databases to exclude.",
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"id": schema.StringAttribute{
+											Description: "Veeam resource ID.",
+											Required:    true,
+											Validators: []validator.String{
+												stringvalidator.LengthAtLeast(1),
+											},
 										},
 									},
-									"target_repository_id": {
-										Type:         schema.TypeString,
-										Required:     true,
-										ValidateFunc: validation.IsUUID,
-										Description:  "Target Veeam repository ID.",
-									},
-									"retention": azureSQLRetentionSchema(),
 								},
 							},
 						},
 					},
 				},
-			},
-			"yearly_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Yearly backup schedule.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"start_time": {
-							Type:         schema.TypeInt,
-							Optional:     true,
-							ValidateFunc: validation.IntBetween(0, 23),
-							Description:  "Backup start hour (0-23).",
+				"retry_settings": schema.ListNestedBlock{
+					Description: "Retry settings for failed backups.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"retry_count": schema.Int64Attribute{
+								Description: "Number of retries. Zero disables retries.",
+								Optional:    true,
+								Computed:    true,
+								Default:     int64default.StaticInt64(3),
+								Validators: []validator.Int64{
+									int64validator.AtLeast(0),
+								},
+							},
 						},
-						"month": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							ValidateFunc: validation.StringInSlice(azureSQLMonths, false),
-							Description:  "Backup month.",
+					},
+				},
+				"policy_notification_settings": schema.ListNestedBlock{
+					Description: "Email notification settings.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"recipient": schema.StringAttribute{
+								Description: "Notification recipient.",
+								Optional:    true,
+							},
+							"notify_on_success": schema.BoolAttribute{
+								Description: "Send notifications on success.",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(false),
+							},
+							"notify_on_failure": schema.BoolAttribute{
+								Description: "Send notifications on failure.",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(true),
+							},
+							"notify_on_warning": schema.BoolAttribute{
+								Description: "Send notifications on warning. Not returned by the API.",
+								Optional:    true,
+								Computed:    true,
+								Default:     booldefault.StaticBool(true),
+							},
 						},
-						"type": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							ValidateFunc: validation.StringInSlice(azureSQLDayTypes, false),
-							Description:  "Day selection method.",
+					},
+				},
+				"daily_schedule": schema.ListNestedBlock{
+					Description: "Daily backup schedule.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"daily_type": schema.StringAttribute{
+								Description: "Daily schedule type.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"EveryDay", "Weekdays", "SelectedDays", "Unknown"}...),
+								},
+							},
+							"selected_days": schema.ListAttribute{
+								Description: "Weekdays used when daily_type is SelectedDays.",
+								Optional:    true,
+								Validators: []validator.List{
+									listvalidator.ValueStringsAre(stringvalidator.OneOf(azureSQLWeekdays...)),
+								},
+								ElementType: types.StringType,
+							},
+							"start_time": schema.Int64Attribute{
+								Description: "Start time returned by the API. Configure backup_schedule.hours instead.",
+								Computed:    true,
+							},
 						},
-						"day_of_week": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							ValidateFunc: validation.StringInSlice(azureSQLWeekdays, false),
-							Description:  "Backup weekday.",
-						},
-						"day_of_month": {
-							Type:         schema.TypeInt,
-							Optional:     true,
-							ValidateFunc: validation.IntBetween(1, 31),
-							Description:  "Backup day of the month.",
-						},
-						"yearly_last_day": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Description: "Run on the last day of the month.",
-						},
-						"retention_years_count": {
-							Type:         schema.TypeInt,
-							Optional:     true,
-							ValidateFunc: validation.IntAtLeast(1),
-							Description:  "Years to retain yearly backups.",
-						},
-						"target_repository_id": {
-							Type:         schema.TypeString,
-							Required:     true,
-							ValidateFunc: validation.IsUUID,
-							Description:  "Target Veeam repository ID.",
-						},
-						"backup_schedule": {
-							Type:        schema.TypeList,
-							Computed:    true,
-							Description: "Yearly repository and retention summary returned by the API.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"target_repository_id": {
-										Type:     schema.TypeString,
-										Computed: true,
+						Blocks: map[string]schema.Block{
+							"backup_schedule": schema.ListNestedBlock{
+								Description: "Daily repository backup settings.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"hours": schema.ListAttribute{
+											Description: "Backup hours (0-23).",
+											Optional:    true,
+											Validators: []validator.List{
+												listvalidator.ValueInt64sAre(int64validator.Between(0, 23)),
+											},
+											ElementType: types.Int64Type,
+										},
+										"target_repository_id": schema.StringAttribute{
+											Description: "Target Veeam repository ID.",
+											Required:    true,
+											Validators: []validator.String{
+												stringvalidator.RegexMatches(regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`), "must be a UUID"),
+											},
+										},
 									},
-									"retention": {
-										Type:     schema.TypeList,
-										Computed: true,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"time_retention_duration": {
-													Type:     schema.TypeInt,
-													Computed: true,
-												},
-												"retention_duration_type": {
-													Type:     schema.TypeString,
-													Computed: true,
+									Blocks: map[string]schema.Block{
+										"retention": schema.ListNestedBlock{
+											Description: "Repository backup retention.",
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"time_retention_duration": schema.Int64Attribute{
+														Description: "Retention duration.",
+														Optional:    true,
+														Validators: []validator.Int64{
+															int64validator.AtLeast(1),
+														},
+													},
+													"retention_duration_type": schema.StringAttribute{
+														Description: "Retention duration unit.",
+														Optional:    true,
+														Validators: []validator.String{
+															stringvalidator.OneOf([]string{"Days", "Months", "Years", "Unknown"}...),
+														},
+													},
 												},
 											},
 										},
@@ -585,173 +500,351 @@ func ResourceAzureSQLBackupPolicy() *schema.Resource {
 						},
 					},
 				},
-			},
-			"health_check_schedule": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Backup health check schedule.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"health_check_enabled": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Description: "Enable health checks.",
-						},
-						"local_time": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Local health check time in API format.",
-						},
-						"day_number_in_month": {
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Description: "API day-number-in-month value.",
-						},
-						"days_of_week": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Health check weekdays.",
-							Elem: &schema.Schema{
-								Type:         schema.TypeString,
-								ValidateFunc: validation.StringInSlice(azureSQLWeekdays, false),
+				"weekly_schedule": schema.ListNestedBlock{
+					Description: "Weekly backup schedule.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"start_time": schema.Int64Attribute{
+								Description: "Backup start hour (0-23).",
+								Optional:    true,
+								Validators: []validator.Int64{
+									int64validator.Between(0, 23),
+								},
 							},
 						},
-						"day_of_month": {
-							Type:         schema.TypeInt,
-							Optional:     true,
-							ValidateFunc: validation.IntBetween(1, 31),
-							Description:  "Health check day of the month.",
+						Blocks: map[string]schema.Block{
+							"backup_schedule": schema.ListNestedBlock{
+								Description: "Weekly repository backup settings.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"selected_days": schema.ListAttribute{
+											Description: "Backup weekdays.",
+											Optional:    true,
+											Validators: []validator.List{
+												listvalidator.ValueStringsAre(stringvalidator.OneOf(azureSQLWeekdays...)),
+											},
+											ElementType: types.StringType,
+										},
+										"target_repository_id": schema.StringAttribute{
+											Description: "Target Veeam repository ID.",
+											Required:    true,
+											Validators: []validator.String{
+												stringvalidator.RegexMatches(regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`), "must be a UUID"),
+											},
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"retention": schema.ListNestedBlock{
+											Description: "Repository backup retention.",
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"time_retention_duration": schema.Int64Attribute{
+														Description: "Retention duration.",
+														Optional:    true,
+														Validators: []validator.Int64{
+															int64validator.AtLeast(1),
+														},
+													},
+													"retention_duration_type": schema.StringAttribute{
+														Description: "Retention duration unit.",
+														Optional:    true,
+														Validators: []validator.String{
+															stringvalidator.OneOf([]string{"Days", "Months", "Years", "Unknown"}...),
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
 						},
-						"months": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							Description: "Health check months.",
-							Elem: &schema.Schema{
-								Type:         schema.TypeString,
-								ValidateFunc: validation.StringInSlice(azureSQLMonths, false),
+					},
+				},
+				"monthly_schedule": schema.ListNestedBlock{
+					Description: "Monthly backup schedule.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"start_time": schema.Int64Attribute{
+								Description: "Backup start hour (0-23).",
+								Optional:    true,
+								Validators: []validator.Int64{
+									int64validator.Between(0, 23),
+								},
+							},
+							"type": schema.StringAttribute{
+								Description: "Day selection method.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf(azureSQLDayTypes...),
+								},
+							},
+							"day_of_week": schema.StringAttribute{
+								Description: "Backup weekday.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf(azureSQLWeekdays...),
+								},
+							},
+							"day_of_month": schema.Int64Attribute{
+								Description: "Backup day of the month.",
+								Optional:    true,
+								Validators: []validator.Int64{
+									int64validator.Between(1, 31),
+								},
+							},
+							"monthly_last_day": schema.BoolAttribute{
+								Description: "Run on the last day of the month.",
+								Optional:    true,
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"backup_schedule": schema.ListNestedBlock{
+								Description: "Monthly repository backup settings.",
+								Validators: []validator.List{
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"selected_months": schema.ListAttribute{
+											Description: "Backup months.",
+											Optional:    true,
+											Validators: []validator.List{
+												listvalidator.ValueStringsAre(stringvalidator.OneOf(azureSQLMonths...)),
+											},
+											ElementType: types.StringType,
+										},
+										"target_repository_id": schema.StringAttribute{
+											Description: "Target Veeam repository ID.",
+											Required:    true,
+											Validators: []validator.String{
+												stringvalidator.RegexMatches(regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`), "must be a UUID"),
+											},
+										},
+									},
+									Blocks: map[string]schema.Block{
+										"retention": schema.ListNestedBlock{
+											Description: "Repository backup retention.",
+											Validators: []validator.List{
+												listvalidator.SizeAtMost(1),
+											},
+											NestedObject: schema.NestedBlockObject{
+												Attributes: map[string]schema.Attribute{
+													"time_retention_duration": schema.Int64Attribute{
+														Description: "Retention duration.",
+														Optional:    true,
+														Validators: []validator.Int64{
+															int64validator.AtLeast(1),
+														},
+													},
+													"retention_duration_type": schema.StringAttribute{
+														Description: "Retention duration unit.",
+														Optional:    true,
+														Validators: []validator.String{
+															stringvalidator.OneOf([]string{"Days", "Months", "Years", "Unknown"}...),
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"yearly_schedule": schema.ListNestedBlock{
+					Description: "Yearly backup schedule.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"start_time": schema.Int64Attribute{
+								Description: "Backup start hour (0-23).",
+								Optional:    true,
+								Validators: []validator.Int64{
+									int64validator.Between(0, 23),
+								},
+							},
+							"month": schema.StringAttribute{
+								Description: "Backup month.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf(azureSQLMonths...),
+								},
+							},
+							"type": schema.StringAttribute{
+								Description: "Day selection method.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf(azureSQLDayTypes...),
+								},
+							},
+							"day_of_week": schema.StringAttribute{
+								Description: "Backup weekday.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf(azureSQLWeekdays...),
+								},
+							},
+							"day_of_month": schema.Int64Attribute{
+								Description: "Backup day of the month.",
+								Optional:    true,
+								Validators: []validator.Int64{
+									int64validator.Between(1, 31),
+								},
+							},
+							"yearly_last_day": schema.BoolAttribute{
+								Description: "Run on the last day of the month.",
+								Optional:    true,
+							},
+							"retention_years_count": schema.Int64Attribute{
+								Description: "Years to retain yearly backups.",
+								Optional:    true,
+								Validators: []validator.Int64{
+									int64validator.AtLeast(1),
+								},
+							},
+							"target_repository_id": schema.StringAttribute{
+								Description: "Target Veeam repository ID.",
+								Required:    true,
+								Validators: []validator.String{
+									stringvalidator.RegexMatches(regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`), "must be a UUID"),
+								},
+							},
+							"backup_schedule": schema.ListNestedAttribute{
+								Description: "Yearly repository and retention summary returned by the API.",
+								Computed:    true,
+								NestedObject: schema.NestedAttributeObject{
+									Attributes: map[string]schema.Attribute{
+										"target_repository_id": schema.StringAttribute{
+											Computed: true,
+										},
+										"retention": schema.ListNestedAttribute{
+											Computed: true,
+											NestedObject: schema.NestedAttributeObject{
+												Attributes: map[string]schema.Attribute{
+													"time_retention_duration": schema.Int64Attribute{
+														Computed: true,
+													},
+													"retention_duration_type": schema.StringAttribute{
+														Computed: true,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"health_check_schedule": schema.ListNestedBlock{
+					Description: "Backup health check schedule.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"health_check_enabled": schema.BoolAttribute{
+								Description: "Enable health checks.",
+								Optional:    true,
+							},
+							"local_time": schema.StringAttribute{
+								Description: "Local health check time in API format.",
+								Optional:    true,
+							},
+							"day_number_in_month": schema.Int64Attribute{
+								Description: "API day-number-in-month value.",
+								Optional:    true,
+							},
+							"days_of_week": schema.ListAttribute{
+								Description: "Health check weekdays.",
+								Optional:    true,
+								Validators: []validator.List{
+									listvalidator.ValueStringsAre(stringvalidator.OneOf(azureSQLWeekdays...)),
+								},
+								ElementType: types.StringType,
+							},
+							"day_of_month": schema.Int64Attribute{
+								Description: "Health check day of the month.",
+								Optional:    true,
+								Validators: []validator.Int64{
+									int64validator.Between(1, 31),
+								},
+							},
+							"months": schema.ListAttribute{
+								Description: "Health check months.",
+								Optional:    true,
+								Validators: []validator.List{
+									listvalidator.ValueStringsAre(stringvalidator.OneOf(azureSQLMonths...)),
+								},
+								ElementType: types.StringType,
 							},
 						},
 					},
 				},
 			},
-			"priority": {
-				Type:        schema.TypeInt,
-				Computed:    true,
-				Description: "Policy priority.",
-			},
-			"excluded_items_count": {
-				Type:        schema.TypeInt,
-				Computed:    true,
-				Description: "Number of excluded items.",
-			},
-			"backup_status": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Backup status.",
-			},
-			"archive_status": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Archive status.",
-			},
-			"health_check_status": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Health check status.",
-			},
-			"next_execution_time": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Next execution time in API format.",
-			},
-			"is_archive_backup_configured": {
-				Type:        schema.TypeBool,
-				Computed:    true,
-				Description: "Whether archive backup is configured.",
-			},
 		},
-	}
+		tf.ResourceOperations{
+			Create: ResourceAzureSQLBackupPolicyCreate,
+			Read:   ResourceAzureSQLBackupPolicyRead,
+			Update: ResourceAzureSQLBackupPolicyUpdate,
+			Delete: ResourceAzureSQLBackupPolicyDelete,
+		},
+		tf.Timeouts{},
+		true,
+	)
 }
 
 var azureSQLWeekdays = []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
 var azureSQLMonths = []string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}
 var azureSQLDayTypes = []string{"First", "Second", "Third", "Fourth", "Last", "SelectedDay", "Unknown"}
 
-func azureSQLPolicyItemsSchema(description string) *schema.Schema {
-	return &schema.Schema{
-		Type:        schema.TypeList,
-		Optional:    true,
-		Description: description,
-		Elem: &schema.Resource{
-			Schema: map[string]*schema.Schema{
-				"id": {
-					Type:         schema.TypeString,
-					Required:     true,
-					ValidateFunc: validation.StringIsNotEmpty,
-					Description:  "Veeam resource ID.",
-				},
-			},
-		},
-	}
-}
-
-func azureSQLRetentionSchema() *schema.Schema {
-	return &schema.Schema{
-		Type:        schema.TypeList,
-		Optional:    true,
-		MaxItems:    1,
-		Description: "Repository backup retention.",
-		Elem: &schema.Resource{
-			Schema: map[string]*schema.Schema{
-				"time_retention_duration": {
-					Type:         schema.TypeInt,
-					Optional:     true,
-					ValidateFunc: validation.IntAtLeast(1),
-					Description:  "Retention duration.",
-				},
-				"retention_duration_type": {
-					Type:         schema.TypeString,
-					Optional:     true,
-					ValidateFunc: validation.StringInSlice([]string{"Days", "Months", "Years", "Unknown"}, false),
-					Description:  "Retention duration unit.",
-				},
-			},
-		},
-	}
-}
-
-func ResourceAzureSQLBackupPolicyCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func ResourceAzureSQLBackupPolicyCreate(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	resp, err := azureSQLPolicyRequest(ctx, d, meta, http.MethodPost)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
-		return diag.FromErr(azureSQLResponseError("create", resp))
+		return tf.FromErr(azureSQLResponseError("create", resp))
 	}
 
 	var policy AzureSQLBackupPolicyResponse
 	if err := json.NewDecoder(resp.Body).Decode(&policy); err != nil {
-		return diag.Errorf("failed to decode Azure SQL backup policy creation response: %s", err)
+		return tf.Errorf("failed to decode Azure SQL backup policy creation response: %s", err)
 	}
 	if policy.ID == "" {
-		return diag.Errorf("Azure SQL backup policy creation response did not contain an ID")
+		return tf.Errorf("Azure SQL backup policy creation response did not contain an ID")
 	}
 
 	d.SetId(policy.ID)
 	return readAzureSQLBackupPolicy(ctx, d, meta, false)
 }
 
-func ResourceAzureSQLBackupPolicyRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func ResourceAzureSQLBackupPolicyRead(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	return readAzureSQLBackupPolicy(ctx, d, meta, true)
 }
 
-func readAzureSQLBackupPolicy(ctx context.Context, d *schema.ResourceData, meta interface{}, allowMissing bool) diag.Diagnostics {
+func readAzureSQLBackupPolicy(ctx context.Context, d *tf.Data, meta interface{}, allowMissing bool) diag.Diagnostics {
 	resp, err := azureSQLPolicyRequest(ctx, d, meta, http.MethodGet)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	defer resp.Body.Close()
 
@@ -760,47 +853,47 @@ func readAzureSQLBackupPolicy(ctx context.Context, d *schema.ResourceData, meta 
 		return nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return diag.FromErr(azureSQLResponseError("read", resp))
+		return tf.FromErr(azureSQLResponseError("read", resp))
 	}
 
 	var policy AzureSQLBackupPolicyResponse
 	if err := json.NewDecoder(resp.Body).Decode(&policy); err != nil {
-		return diag.Errorf("failed to decode Azure SQL backup policy: %s", err)
+		return tf.Errorf("failed to decode Azure SQL backup policy: %s", err)
 	}
 	if policy.ID != d.Id() {
-		return diag.Errorf("Azure SQL backup policy response ID %q does not match requested ID %q", policy.ID, d.Id())
+		return tf.Errorf("Azure SQL backup policy response ID %q does not match requested ID %q", policy.ID, d.Id())
 	}
-	return diag.FromErr(flattenAzureSQLBackupPolicy(d, &policy))
+	return tf.FromErr(flattenAzureSQLBackupPolicy(d, &policy))
 }
 
-func ResourceAzureSQLBackupPolicyUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func ResourceAzureSQLBackupPolicyUpdate(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	resp, err := azureSQLPolicyRequest(ctx, d, meta, http.MethodPut)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return diag.FromErr(azureSQLResponseError("update", resp))
+		return tf.FromErr(azureSQLResponseError("update", resp))
 	}
 	return readAzureSQLBackupPolicy(ctx, d, meta, false)
 }
 
-func ResourceAzureSQLBackupPolicyDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func ResourceAzureSQLBackupPolicyDelete(ctx context.Context, d *tf.Data, meta interface{}) diag.Diagnostics {
 	resp, err := azureSQLPolicyRequest(ctx, d, meta, http.MethodDelete)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
-		return diag.FromErr(azureSQLResponseError("delete", resp))
+		return tf.FromErr(azureSQLResponseError("delete", resp))
 	}
 	d.SetId("")
 	return nil
 }
 
-func azureSQLPolicyRequest(ctx context.Context, d *schema.ResourceData, meta interface{}, method string) (*http.Response, error) {
+func azureSQLPolicyRequest(ctx context.Context, d *tf.Data, meta interface{}, method string) (*http.Response, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -843,7 +936,7 @@ func azureSQLResponseError(operation string, resp *http.Response) error {
 	return fmt.Errorf("failed to %s Azure SQL backup policy (HTTP %d): %s", operation, resp.StatusCode, body)
 }
 
-func buildSQLBackupPolicyRequest(d *schema.ResourceData) *AzureSQLBackupPolicyRequest {
+func buildSQLBackupPolicyRequest(d *tf.Data) *AzureSQLBackupPolicyRequest {
 	request := &AzureSQLBackupPolicyRequest{
 		BackupType:             getStringPtr(d.Get("backup_type")),
 		IsEnabled:              getBoolPtr(d.Get("is_enabled")),
@@ -1028,7 +1121,7 @@ func azureSQLValue[T any](value *T) T {
 	return zero
 }
 
-func flattenAzureSQLBackupPolicy(d *schema.ResourceData, policy *AzureSQLBackupPolicyResponse) error {
+func flattenAzureSQLBackupPolicy(d *tf.Data, policy *AzureSQLBackupPolicyResponse) error {
 	values := map[string]interface{}{
 		"description":                  azureSQLValue(policy.Description),
 		"priority":                     azureSQLValue(policy.Priority),

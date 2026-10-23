@@ -9,10 +9,17 @@ import (
 	vc "terraform-provider-veeambackup/internal/client"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/customdiff"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 type VbrUnstructuredDataServer struct {
@@ -69,341 +76,297 @@ type VbrUnstructuredDataServerDetail struct {
 
 // Schema
 
-func ResourceVbrUnstructuredDataServer() *schema.Resource {
-	return &schema.Resource{
-		Description:   "Manages a Veeam Backup & Replication Unstructured Data Server.",
-		CreateContext: ResourceVbrUnstructuredDataServerCreate,
-		ReadContext:   ResourceVbrUnstructuredDataServerRead,
-		UpdateContext: ResourceVbrUnstructuredDataServerUpdate,
-		DeleteContext: ResourceVbrUnstructuredDataServerDelete,
-		Schema: map[string]*schema.Schema{
-			"type": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ForceNew:     true,
-				Description:  "Type of the unstructured data server.",
-				ValidateFunc: validation.StringInSlice([]string{"AzureBlob", "AmazonS3", "S3Compatible", "FileServer", "SMBShare"}, false),
+func ResourceVbrUnstructuredDataServer() resource.Resource {
+	return tf.NewResource(
+		"vbr_unstructured_data_server",
+		schema.Schema{
+			Description: "Manages a Veeam Backup & Replication Unstructured Data Server.",
+			Attributes: map[string]schema.Attribute{
+				"type": schema.StringAttribute{
+					Description: "Type of the unstructured data server.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.OneOf([]string{"AzureBlob", "AmazonS3", "S3Compatible", "FileServer", "SMBShare"}...),
+					},
+					PlanModifiers: []planmodifier.String{
+						stringplanmodifier.RequiresReplace(),
+					},
+				},
+				"host_id": schema.StringAttribute{
+					Description: "Host ID for File Server type. Note: Only required if type is 'FileServer'.",
+					Optional:    true,
+					Computed:    true,
+					PlanModifiers: []planmodifier.String{
+						stringplanmodifier.RequiresReplace(),
+					},
+				},
+				"path": schema.StringAttribute{
+					Description: "Path for SMB Share type. Note: Only required if type is 'SMBShare'.",
+					Optional:    true,
+					Computed:    true,
+					PlanModifiers: []planmodifier.String{
+						stringplanmodifier.RequiresReplace(),
+					},
+				},
+				"access_credentials_required": schema.BoolAttribute{
+					Description: "Whether access credentials are required for SMB Share type. Note: Only required if type is 'SMBShare'.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"access_credentials_id": schema.StringAttribute{
+					Description: "Access credentials ID for SMB Share type. Note: Only required if type is 'SMBShare'.",
+					Optional:    true,
+					Computed:    true,
+					PlanModifiers: []planmodifier.String{
+						stringplanmodifier.RequiresReplace(),
+					},
+				},
+				"friendly_name": schema.StringAttribute{
+					Description: "Friendly name for Azure Blob type. Note: Only required if type is 'AzureBlob'.",
+					Optional:    true,
+					Computed:    true,
+					PlanModifiers: []planmodifier.String{
+						stringplanmodifier.RequiresReplace(),
+					},
+				},
+				"credentials_id": schema.StringAttribute{
+					Description: "Credentials ID for Azure Blob type. Note: Only required if type is 'AzureBlob'.",
+					Optional:    true,
+					Computed:    true,
+					PlanModifiers: []planmodifier.String{
+						stringplanmodifier.RequiresReplace(),
+					},
+				},
+				"region_type": schema.StringAttribute{
+					Description: "Region type for Azure Blob type. Note: Only required if type is 'AzureBlob'.",
+					Optional:    true,
+					Computed:    true,
+					Validators: []validator.String{
+						stringvalidator.OneOf([]string{"Global", "Government", "China"}...),
+					},
+					PlanModifiers: []planmodifier.String{
+						stringplanmodifier.RequiresReplace(),
+					},
+				},
+				"id": schema.StringAttribute{
+					Description: "The ID of the unstructured data server.",
+					Computed:    true,
+				},
+				"job_id": schema.StringAttribute{
+					Description: "The job ID associated with the unstructured data server.",
+					Computed:    true,
+				},
+				"creation_time": schema.StringAttribute{
+					Description: "The creation time of the unstructured data server.",
+					Computed:    true,
+				},
+				"session_type": schema.StringAttribute{
+					Description: "The session type of the unstructured data server.",
+					Computed:    true,
+				},
+				"state": schema.StringAttribute{
+					Description: "The current state of the unstructured data server.",
+					Computed:    true,
+				},
+				"usn": schema.Int64Attribute{
+					Description: "The USN of the unstructured data server.",
+					Computed:    true,
+				},
+				"resource_id": schema.StringAttribute{
+					Description: "The resource ID of the unstructured data server.",
+					Computed:    true,
+				},
+				"result": schema.ListNestedAttribute{
+					Description: "The result details of the unstructured data server.",
+					Computed:    true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"result": schema.StringAttribute{
+								Description: "The result status.",
+								Computed:    true,
+							},
+							"message": schema.StringAttribute{
+								Description: "The result message.",
+								Computed:    true,
+							},
+							"is_canceled": schema.BoolAttribute{
+								Description: "Indicates if the operation was canceled.",
+								Computed:    true,
+							},
+						},
+					},
+				},
 			},
-			"processing": {
-				Type:        schema.TypeList,
-				Required:    true,
-				MaxItems:    1,
-				Description: "Processing settings for the unstructured data server.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"backup_proxies": {
-							Type:        schema.TypeList,
-							Required:    true,
-							MaxItems:    1,
-							Description: "Backup proxies settings.",
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"auto_selection_enabled": {
-										Type:        schema.TypeBool,
-										Optional:    true,
-										Description: "Enable automatic selection of backup proxies.",
-									},
-									"proxy_ids": {
-										Type:        schema.TypeSet,
-										Optional:    true,
-										Description: "List of backup proxy IDs to use.",
-										Elem:        &schema.Schema{Type: schema.TypeString},
+			Blocks: map[string]schema.Block{
+				"processing": schema.ListNestedBlock{
+					Description: "Processing settings for the unstructured data server.",
+					Validators: []validator.List{
+						listvalidator.SizeAtLeast(1),
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"cache_repository_id": schema.StringAttribute{
+								Description: "ID of the cache repository.",
+								Optional:    true,
+							},
+							"backup_io_control_level": schema.StringAttribute{
+								Description: "Backup I/O control level.",
+								Optional:    true,
+							},
+						},
+						Blocks: map[string]schema.Block{
+							"backup_proxies": schema.ListNestedBlock{
+								Description: "Backup proxies settings.",
+								Validators: []validator.List{
+									listvalidator.SizeAtLeast(1),
+									listvalidator.SizeAtMost(1),
+								},
+								NestedObject: schema.NestedBlockObject{
+									Attributes: map[string]schema.Attribute{
+										"auto_selection_enabled": schema.BoolAttribute{
+											Description: "Enable automatic selection of backup proxies.",
+											Optional:    true,
+										},
+										"proxy_ids": schema.SetAttribute{
+											Description: "List of backup proxy IDs to use.",
+											Optional:    true,
+											ElementType: types.StringType,
+										},
 									},
 								},
 							},
 						},
-						"cache_repository_id": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "ID of the cache repository.",
-						},
-						"backup_io_control_level": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Backup I/O control level.",
+					},
+				},
+				"advanced_settings": schema.ListNestedBlock{
+					Description: "Advanced settings for SMB Share type. Note: Only required if type is 'SMBShare'.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"processing_mode": schema.StringAttribute{
+								Description: "Processing mode.",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.OneOf([]string{"StorageSnapshot", "Direct", "VSSSnapshot"}...),
+								},
+							},
+							"direct_backup_failover_enabled": schema.BoolAttribute{
+								Description: "Enable direct backup failover.",
+								Optional:    true,
+							},
+							"storage_snapshot_path": schema.StringAttribute{
+								Description: "Storage snapshot path.",
+								Optional:    true,
+							},
 						},
 					},
 				},
-			},
-			"host_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Description: "Host ID for File Server type. Note: Only required if type is 'FileServer'.",
-			},
-			"path": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Description: "Path for SMB Share type. Note: Only required if type is 'SMBShare'.",
-			},
-			"access_credentials_required": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "Whether access credentials are required for SMB Share type. Note: Only required if type is 'SMBShare'.",
-			},
-			"access_credentials_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Description: "Access credentials ID for SMB Share type. Note: Only required if type is 'SMBShare'.",
-			},
-			"advanced_settings": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				MaxItems:    1,
-				Description: "Advanced settings for SMB Share type. Note: Only required if type is 'SMBShare'.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"processing_mode": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							Description:  "Processing mode.",
-							ValidateFunc: validation.StringInSlice([]string{"StorageSnapshot", "Direct", "VSSSnapshot"}, false),
-						},
-						"direct_backup_failover_enabled": {
-							Type:        schema.TypeBool,
-							Optional:    true,
-							Description: "Enable direct backup failover.",
-						},
-						"storage_snapshot_path": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Storage snapshot path.",
-						},
+				"account": schema.ListNestedBlock{
+					Description: "Account settings for Amazon S3 or S3 Compatible types. Note: Only required if type is 'AmazonS3' or 'S3Compatible'.",
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
 					},
-				},
-			},
-			"account": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				ForceNew:    true,
-				MaxItems:    1,
-				Description: "Account settings for Amazon S3 or S3 Compatible types. Note: Only required if type is 'AmazonS3' or 'S3Compatible'.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"friendly_name": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Friendly name for the account.",
-						},
-						"credentials_id": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Credentials ID for the account.",
-						},
-						"region_type": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Region type for the account.",
-						},
-						"region_id": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Region ID for the account.",
-						},
+					PlanModifiers: []planmodifier.List{
+						listplanmodifier.RequiresReplace(),
 					},
-				},
-			},
-			"friendly_name": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Description: "Friendly name for Azure Blob type. Note: Only required if type is 'AzureBlob'.",
-			},
-			"credentials_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Description: "Credentials ID for Azure Blob type. Note: Only required if type is 'AzureBlob'.",
-			},
-			"region_type": {
-				Type:         schema.TypeString,
-				Optional:     true,
-				ForceNew:     true,
-				Description:  "Region type for Azure Blob type. Note: Only required if type is 'AzureBlob'.",
-				ValidateFunc: validation.StringInSlice([]string{"Global", "Government", "China"}, false),
-			}, // Completed Schema
-			"id": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "The ID of the unstructured data server.",
-			},
-			"job_id": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "The job ID associated with the unstructured data server.",
-			},
-			"creation_time": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "The creation time of the unstructured data server.",
-			},
-			"session_type": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "The session type of the unstructured data server.",
-			},
-			"state": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "The current state of the unstructured data server.",
-			},
-			"usn": {
-				Type:        schema.TypeInt,
-				Computed:    true,
-				Description: "The USN of the unstructured data server.",
-			},
-			"resource_id": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "The resource ID of the unstructured data server.",
-			},
-			"result": {
-				Type:        schema.TypeList,
-				Computed:    true,
-				Description: "The result details of the unstructured data server.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"result": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The result status.",
-						},
-						"message": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "The result message.",
-						},
-						"is_canceled": {
-							Type:        schema.TypeBool,
-							Computed:    true,
-							Description: "Indicates if the operation was canceled.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"friendly_name": schema.StringAttribute{
+								Description: "Friendly name for the account.",
+								Required:    true,
+							},
+							"credentials_id": schema.StringAttribute{
+								Description: "Credentials ID for the account.",
+								Required:    true,
+							},
+							"region_type": schema.StringAttribute{
+								Description: "Region type for the account.",
+								Optional:    true,
+							},
+							"region_id": schema.StringAttribute{
+								Description: "Region ID for the account.",
+								Optional:    true,
+							},
 						},
 					},
 				},
 			},
 		},
-		CustomizeDiff: customdiff.Sequence(
-			func(ctx context.Context, d *schema.ResourceDiff, meta interface{}) error {
-				var diags diag.Diagnostics
-				t := d.Get("type").(string)
+		tf.ResourceOperations{
+			Create:   ResourceVbrUnstructuredDataServerCreate,
+			Read:     ResourceVbrUnstructuredDataServerRead,
+			Update:   ResourceVbrUnstructuredDataServerUpdate,
+			Delete:   ResourceVbrUnstructuredDataServerDelete,
+			Validate: validateUnstructuredDataServer,
+		},
+		tf.Timeouts{},
+		false,
+	)
+}
 
-				switch t {
-				case "FileServer":
-					if d.NewValueKnown("host_id") {
-						if v, ok := d.GetOk("host_id"); !ok || v == "" {
-							diags = append(diags, diag.Diagnostic{
-								Severity: diag.Error,
-								Summary:  "host_id is required when type is FileServer",
-							})
-						}
-					}
-				case "SMBShare":
-					if v, ok := d.GetOk("path"); !ok || v == "" {
-						diags = append(diags, diag.Diagnostic{
-							Severity: diag.Error,
-							Summary:  "path is required when type is SMBShare",
-						})
-					}
-					if _, ok := d.GetOk("access_credentials_required"); !ok {
-						diags = append(diags, diag.Diagnostic{
-							Severity: diag.Error,
-							Summary:  "access_credentials_required is required when type is SMBShare",
-						})
-					}
-					if d.NewValueKnown("access_credentials_id") {
-						if v, ok := d.GetOk("access_credentials_id"); !ok || v == "" {
-							diags = append(diags, diag.Diagnostic{
-								Severity: diag.Error,
-								Summary:  "access_credentials_id is required when type is SMBShare",
-							})
-						}
-					}
-					if v, ok := d.GetOk("advanced_settings"); !ok || v == nil {
-						diags = append(diags, diag.Diagnostic{
-							Severity: diag.Error,
-							Summary:  "advanced_settings is required when type is SMBShare",
-						})
-					}
-				case "AmazonS3", "S3Compatible":
-					if v, ok := d.GetOk("account"); !ok || len(v.([]interface{})) == 0 {
-						diags = append(diags, diag.Diagnostic{
-							Severity: diag.Error,
-							Summary:  "account is required when type is AmazonS3 or S3Compatible",
-						})
-					}
-				case "AzureBlob":
-					if v, ok := d.GetOk("friendly_name"); !ok || v == "" {
-						diags = append(diags, diag.Diagnostic{
-							Severity: diag.Error,
-							Summary:  "friendly_name is required when type is AzureBlob",
-						})
-					}
-					if d.NewValueKnown("credentials_id") {
-						if v, ok := d.GetOk("credentials_id"); !ok || v == "" {
-							diags = append(diags, diag.Diagnostic{
-								Severity: diag.Error,
-								Summary:  "credentials_id is required when type is AzureBlob",
-							})
-						}
-					}
-					if v, ok := d.GetOk("region_type"); !ok || v == "" {
-						diags = append(diags, diag.Diagnostic{
-							Severity: diag.Error,
-							Summary:  "region_type is required when type is AzureBlob",
-						})
-					}
-				}
-				if len(diags) > 0 {
-					return fmt.Errorf("%s", diags[0].Summary)
-				}
-				return nil
-			},
-		),
+func validateUnstructuredDataServer(_ context.Context, data *tf.Data, _ interface{}) error {
+	serverType := data.Get("type").(string)
+	required := map[string][]string{
+		"FileServer":   {"host_id"},
+		"SMBShare":     {"path", "access_credentials_id", "advanced_settings"},
+		"AmazonS3":     {"account"},
+		"S3Compatible": {"account"},
+		"AzureBlob":    {"friendly_name", "credentials_id", "region_type"},
 	}
+	for _, name := range required[serverType] {
+		if _, exists := data.GetOk(name); !exists {
+			return fmt.Errorf("%s is required when type is %s", name, serverType)
+		}
+	}
+	if serverType == "SMBShare" && !data.Configured("access_credentials_required") {
+		return fmt.Errorf("access_credentials_required is required when type is SMBShare")
+	}
+	return nil
 }
 
 // CRUD Operations for Resource (Create)
-func ResourceVbrUnstructuredDataServerCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func ResourceVbrUnstructuredDataServerCreate(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	var diags diag.Diagnostics
 	unstructuredDataServer, err := expandVbrUnstructuredDataServer(d)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	url := client.BuildAPIURL("/api/v1/inventory/unstructuredDataServers")
 	reqBodyBytes, err := json.Marshal(unstructuredDataServer)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	respBody, err := client.DoRequest(ctx, "POST", url, reqBodyBytes)
 	if err != nil {
 		if respBody != nil {
-			return diag.FromErr(fmt.Errorf("API error: %v, response: %s", err, string(respBody)))
+			return tf.FromErr(fmt.Errorf("API error: %v, response: %s", err, string(respBody)))
 		}
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	var VbrUnstructuredDataServerResponse VbrUnstructuredDataServerResponse
 	err = json.Unmarshal(respBody, &VbrUnstructuredDataServerResponse)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	// Wait for the session to complete
 	sessionID := VbrUnstructuredDataServerResponse.ID
 	err = waitForVbrSession(ctx, client, sessionID)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed waiting for session to complete: %w", err))
+		return tf.FromErr(fmt.Errorf("failed waiting for session to complete: %w", err))
 	}
 
 	// Find the actual resource by its identifying attribute
 	resourceID, err := findUnstructuredDataServer(ctx, client, unstructuredDataServer)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to find created resource: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to find created resource: %w", err))
 	}
 
 	d.SetId(resourceID)
@@ -414,10 +377,10 @@ func ResourceVbrUnstructuredDataServerCreate(ctx context.Context, d *schema.Reso
 
 // CRUD Operations for Resource (Read)
 
-func ResourceVbrUnstructuredDataServerRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func ResourceVbrUnstructuredDataServerRead(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	var diags diag.Diagnostics
 	url := client.BuildAPIURL(fmt.Sprintf("/api/v1/inventory/unstructuredDataServers/%s", url.PathEscape(d.Id())))
@@ -428,15 +391,15 @@ func ResourceVbrUnstructuredDataServerRead(ctx context.Context, d *schema.Resour
 			return diags
 		}
 		if respBody != nil {
-			return diag.FromErr(fmt.Errorf("API error: %v, response: %s", err, string(respBody)))
+			return tf.FromErr(fmt.Errorf("API error: %v, response: %s", err, string(respBody)))
 		}
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	var server VbrUnstructuredDataServer
 	err = json.Unmarshal(respBody, &server)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	// Set the server configuration fields
@@ -481,32 +444,32 @@ func ResourceVbrUnstructuredDataServerRead(ctx context.Context, d *schema.Resour
 }
 
 // CRUD Operations for Resource (Update)
-func ResourceVbrUnstructuredDataServerUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func ResourceVbrUnstructuredDataServerUpdate(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	var diags diag.Diagnostics
 	unstructuredDataServer, err := expandVbrUnstructuredDataServer(d)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	resourceID := d.Id()
 	unstructuredDataServer.ID = &resourceID
 	url := client.BuildAPIURL(fmt.Sprintf("/api/v1/inventory/unstructuredDataServers/%s", url.PathEscape(d.Id())))
 	reqBodyBytes, err := json.Marshal(unstructuredDataServer)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	respBody, err := client.DoRequest(ctx, "PUT", url, reqBodyBytes)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 
 	var VbrUnstructuredDataServerResponse VbrUnstructuredDataServerResponse
 	err = json.Unmarshal(respBody, &VbrUnstructuredDataServerResponse)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	d.Set("job_id", VbrUnstructuredDataServerResponse.JobID)
 	d.Set("result", []interface{}{
@@ -520,16 +483,16 @@ func ResourceVbrUnstructuredDataServerUpdate(ctx context.Context, d *schema.Reso
 }
 
 // CRUD Operations for Resource (Delete)
-func ResourceVbrUnstructuredDataServerDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func ResourceVbrUnstructuredDataServerDelete(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	client, err := vc.GetVBRClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	var diags diag.Diagnostics
 	url := client.BuildAPIURL(fmt.Sprintf("/api/v1/inventory/unstructuredDataServers/%s", url.PathEscape(d.Id())))
 	_, err = client.DoRequest(ctx, "DELETE", url, nil)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	d.SetId("")
 	return diags
@@ -544,7 +507,7 @@ func isNotFoundError(err error) bool {
 	return strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "not found")
 }
 
-func expandVbrUnstructuredDataServer(d *schema.ResourceData) (*VbrUnstructuredDataServer, error) {
+func expandVbrUnstructuredDataServer(d *tf.Data) (*VbrUnstructuredDataServer, error) {
 	unstructuredDataServer := &VbrUnstructuredDataServer{
 		Type: d.Get("type").(string),
 	}
@@ -562,7 +525,7 @@ func expandVbrUnstructuredDataServer(d *schema.ResourceData) (*VbrUnstructuredDa
 				backupProxies.AutoSelectionEnabled = &val
 			}
 			if v, ok := backupProxiesMap["proxy_ids"]; ok {
-				proxyIDsSet := v.(*schema.Set)
+				proxyIDsSet := v.(*tf.Set)
 				proxyIDs := make([]string, 0, proxyIDsSet.Len())
 				for _, id := range proxyIDsSet.List() {
 					proxyIDs = append(proxyIDs, id.(string))

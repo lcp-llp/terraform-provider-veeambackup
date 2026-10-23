@@ -1,190 +1,175 @@
-﻿package azure
+package azure
 
 import (
-	vc "terraform-provider-veeambackup/internal/client"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
 	"strconv"
+	vc "terraform-provider-veeambackup/internal/client"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"terraform-provider-veeambackup/internal/tf"
 )
 
 type AzureFileSharesDataSourceModel struct {
-	Offset			  				int      `json:"Offset,omitempty"`
-	Limit 			  				int      `json:"Limit,omitempty"`
-	RegionIDs 		    			[]string   `json:"RegionIds,omitempty"`
-	SearchPattern       			string   `json:"SearchPattern,omitempty"`
-	SubscriptionID 					string `json:"subscriptionId,omitempty"`
-	TenantID 			   			string `json:"tenantId,omitempty"`
-	ServiceAccountID    			string   `json:"ServiceAccountId,omitempty"`
-	FileShareFromProtectedRegions 	bool     `json:"FileShareFromProtectedRegions,omitempty"`
-	ProtectionStatus 				[]string `json:"ProtectionStatus,omitempty"`
-	BackupDestination  	    		[]string `json:"BackupDestination,omitempty"`
+	Offset                        int      `json:"Offset,omitempty"`
+	Limit                         int      `json:"Limit,omitempty"`
+	RegionIDs                     []string `json:"RegionIds,omitempty"`
+	SearchPattern                 string   `json:"SearchPattern,omitempty"`
+	SubscriptionID                string   `json:"subscriptionId,omitempty"`
+	TenantID                      string   `json:"tenantId,omitempty"`
+	ServiceAccountID              string   `json:"ServiceAccountId,omitempty"`
+	FileShareFromProtectedRegions bool     `json:"FileShareFromProtectedRegions,omitempty"`
+	ProtectionStatus              []string `json:"ProtectionStatus,omitempty"`
+	BackupDestination             []string `json:"BackupDestination,omitempty"`
 }
 
 type AzureFileSharesResponse struct {
-	Results 	[]AzureFileSharesDetail 	`json:"results"`
-	TotalCount  int              		`json:"totalCount"`
-	Offset	   	int              		`json:"offset"`
-	Limit 	   	int              		`json:"limit"`
+	Results    []AzureFileSharesDetail `json:"results"`
+	TotalCount int                     `json:"totalCount"`
+	Offset     int                     `json:"offset"`
+	Limit      int                     `json:"limit"`
 }
 
 type AzureFileSharesDetail struct {
-	VeeamID                string `json:"id"`
-	AzureID                string `json:"azureId"`
-	Name                   string `json:"name"`
-	AccessTier 			   string `json:"accessTier"`
-	RegionID			   string `json:"regionId"`
-	RegionName             string `json:"regionName"`
-	StorageAccountName     string `json:"storageAccountName"`
-	ResourceGroupName      string `json:"resourceGroupName"`
-	Size 				   int64  `json:"size"`
-	SubscriptionID         string `json:"subscriptionId"`
-	TenantID               string `json:"tenantId"`
+	VeeamID            string `json:"id"`
+	AzureID            string `json:"azureId"`
+	Name               string `json:"name"`
+	AccessTier         string `json:"accessTier"`
+	RegionID           string `json:"regionId"`
+	RegionName         string `json:"regionName"`
+	StorageAccountName string `json:"storageAccountName"`
+	ResourceGroupName  string `json:"resourceGroupName"`
+	Size               int64  `json:"size"`
+	SubscriptionID     string `json:"subscriptionId"`
+	TenantID           string `json:"tenantId"`
 }
 
-func DataSourceAzureFileShares() *schema.Resource {
-	return &schema.Resource{
-		ReadContext: DataSourceAzureFileSharesRead,
-		Schema: map[string]*schema.Schema{
-
-			"offset": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Default:     0,
-				Description: "Number of items to skip from the beginning of the result set.",
-			},
-			"limit": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Default:     -1,
-				Description: "Maximum number of items to return. Use -1 for all items.",
-			},
-			"search_pattern": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Returns only those items of a resource collection whose names match the specified search pattern in the parameter value.",
-			},
-			"subscription_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Returns only Azure VMs that belong to an Azure subscription with the specified ID.",
-			},
-			"tenant_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Returns only Azure VMs that belong to an Azure tenant with the specified ID.",
-			},
-			"service_account_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Returns only Azure VMs that are associated with the specified service account ID.",
-			},
-			"file_share_from_protected_regions": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Description: "If set to true, returns only Azure file shares that are located in regions protected by backup policies.",
-			},
-			"protection_status": {
-				Type:		schema.TypeSet,
-				Optional:	true,
-				Description:	"Returns only Azure VMs with the specified protection status. Possible values are 'Protected', 'Unprotected', and 'Unknown'.",
-				Elem:		&schema.Schema{Type: schema.TypeString},
-			},
-			"backup_destination" : {
-				Type:		schema.TypeSet,
-				Optional:	true,
-				Description:	"Returns only Azure file shares that are backed up to the specified backup destinations.",
-				Elem:		&schema.Schema{Type: schema.TypeString},
-			},
-			// Computed attributes
-			"file_shares": {
-				Type:        schema.TypeMap,
-				Computed:    true,
-				Description: "Map of file share names to their complete details as JSON strings.",
-				Elem:        &schema.Schema{Type: schema.TypeString},
-			},
-			"file_share_details": {
-				Type:        schema.TypeList,
-				Computed:    true,
-				Description: "Detailed list of Azure file shares matching the specified criteria.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"veeam_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Veeam internal ID for the file share.",
-						},
-						"azure_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Azure resource ID of the file share.",
-						},
-						"name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Name of the Azure file share.",
-						},
-						"access_tier": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Access tier of the file share.",
-						},
-						"region_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Region ID of the file share.",
-						},
-						"region_name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Region name of the file share.",
-						},
-						"storage_account_name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Storage account name containing the file share.",
-						},
-						"resource_group_name": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Resource group name of the file share.",
-						},
-						"size": {
-							Type:        schema.TypeInt,
-							Computed:    true,
-							Description: "Size of the file share in bytes.",
-						},
-						"subscription_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Subscription ID of the file share.",
-						},
-						"tenant_id": {
-							Type:        schema.TypeString,
-							Computed:    true,
-							Description: "Tenant ID of the file share.",
+func DataSourceAzureFileShares() datasource.DataSource {
+	return tf.NewDataSource(
+		"azure_file_shares",
+		schema.Schema{
+			Attributes: map[string]schema.Attribute{
+				"offset": schema.Int64Attribute{
+					Description: "Number of items to skip from the beginning of the result set.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"limit": schema.Int64Attribute{
+					Description: "Maximum number of items to return. Use -1 for all items.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"search_pattern": schema.StringAttribute{
+					Description: "Returns only those items of a resource collection whose names match the specified search pattern in the parameter value.",
+					Optional:    true,
+				},
+				"subscription_id": schema.StringAttribute{
+					Description: "Returns only Azure VMs that belong to an Azure subscription with the specified ID.",
+					Optional:    true,
+				},
+				"tenant_id": schema.StringAttribute{
+					Description: "Returns only Azure VMs that belong to an Azure tenant with the specified ID.",
+					Optional:    true,
+				},
+				"service_account_id": schema.StringAttribute{
+					Description: "Returns only Azure VMs that are associated with the specified service account ID.",
+					Optional:    true,
+				},
+				"file_share_from_protected_regions": schema.BoolAttribute{
+					Description: "If set to true, returns only Azure file shares that are located in regions protected by backup policies.",
+					Optional:    true,
+				},
+				"protection_status": schema.SetAttribute{
+					Description: "Returns only Azure VMs with the specified protection status. Possible values are 'Protected', 'Unprotected', and 'Unknown'.",
+					Optional:    true,
+					ElementType: types.StringType,
+				},
+				"backup_destination": schema.SetAttribute{
+					Description: "Returns only Azure file shares that are backed up to the specified backup destinations.",
+					Optional:    true,
+					ElementType: types.StringType,
+				},
+				"file_shares": schema.MapAttribute{
+					Description: "Map of file share names to their complete details as JSON strings.",
+					Computed:    true,
+					ElementType: types.StringType,
+				},
+				"file_share_details": schema.ListNestedAttribute{
+					Description: "Detailed list of Azure file shares matching the specified criteria.",
+					Computed:    true,
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"veeam_id": schema.StringAttribute{
+								Description: "Veeam internal ID for the file share.",
+								Computed:    true,
+							},
+							"azure_id": schema.StringAttribute{
+								Description: "Azure resource ID of the file share.",
+								Computed:    true,
+							},
+							"name": schema.StringAttribute{
+								Description: "Name of the Azure file share.",
+								Computed:    true,
+							},
+							"access_tier": schema.StringAttribute{
+								Description: "Access tier of the file share.",
+								Computed:    true,
+							},
+							"region_id": schema.StringAttribute{
+								Description: "Region ID of the file share.",
+								Computed:    true,
+							},
+							"region_name": schema.StringAttribute{
+								Description: "Region name of the file share.",
+								Computed:    true,
+							},
+							"storage_account_name": schema.StringAttribute{
+								Description: "Storage account name containing the file share.",
+								Computed:    true,
+							},
+							"resource_group_name": schema.StringAttribute{
+								Description: "Resource group name of the file share.",
+								Computed:    true,
+							},
+							"size": schema.Int64Attribute{
+								Description: "Size of the file share in bytes.",
+								Computed:    true,
+							},
+							"subscription_id": schema.StringAttribute{
+								Description: "Subscription ID of the file share.",
+								Computed:    true,
+							},
+							"tenant_id": schema.StringAttribute{
+								Description: "Tenant ID of the file share.",
+								Computed:    true,
+							},
 						},
 					},
 				},
-			},
-			"total_count": {
-				Type:        schema.TypeInt,
-				Computed:    true,
-				Description: "Total number of file shares matching the criteria.",
+				"total_count": schema.Int64Attribute{
+					Description: "Total number of file shares matching the criteria.",
+					Computed:    true,
+				},
 			},
 		},
-	}
+		DataSourceAzureFileSharesRead,
+		map[string]interface{}{
+			"offset": 0,
+			"limit":  -1,
+		},
+	)
 }
 
-func DataSourceAzureFileSharesRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func DataSourceAzureFileSharesRead(ctx context.Context, d *tf.Data, m interface{}) diag.Diagnostics {
 	client, err := vc.GetAzureClient(m)
 	if err != nil {
-		return diag.FromErr(err)
+		return tf.FromErr(err)
 	}
 	// Build request from schema inputs
 	request := AzureFileSharesDataSourceModel{
@@ -199,7 +184,7 @@ func DataSourceAzureFileSharesRead(ctx context.Context, d *schema.ResourceData, 
 
 	// Convert protection_status set to slice
 	if v, ok := d.GetOk("protection_status"); ok {
-		set := v.(*schema.Set)
+		set := v.(*tf.Set)
 		for _, val := range set.List() {
 			request.ProtectionStatus = append(request.ProtectionStatus, val.(string))
 		}
@@ -207,7 +192,7 @@ func DataSourceAzureFileSharesRead(ctx context.Context, d *schema.ResourceData, 
 
 	// Convert backup_destination set to slice
 	if v, ok := d.GetOk("backup_destination"); ok {
-		set := v.(*schema.Set)
+		set := v.(*tf.Set)
 		for _, val := range set.List() {
 			request.BackupDestination = append(request.BackupDestination, val.(string))
 		}
@@ -254,24 +239,24 @@ func DataSourceAzureFileSharesRead(ctx context.Context, d *schema.ResourceData, 
 	// Make API request
 	resp, err := client.MakeAuthenticatedRequest("GET", apiUrl, nil)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to fetch Azure file shares: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to fetch Azure file shares: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body)))
+		return tf.FromErr(fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body)))
 	}
 
 	// Read and parse response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read response body: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to read response body: %w", err))
 	}
 
 	var fileSharesResp AzureFileSharesResponse
 	if err := json.Unmarshal(body, &fileSharesResp); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to parse response: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to parse response: %w", err))
 	}
 
 	// Create maps for file shares
@@ -282,7 +267,7 @@ func DataSourceAzureFileSharesRead(ctx context.Context, d *schema.ResourceData, 
 		// Marshal share details to JSON string for map
 		shareJSON, err := json.Marshal(share)
 		if err != nil {
-			return diag.FromErr(fmt.Errorf("failed to marshal file share %s: %w", share.Name, err))
+			return tf.FromErr(fmt.Errorf("failed to marshal file share %s: %w", share.Name, err))
 		}
 		fileSharesMap[share.Name] = string(shareJSON)
 
@@ -305,15 +290,15 @@ func DataSourceAzureFileSharesRead(ctx context.Context, d *schema.ResourceData, 
 
 	// Set computed attributes
 	if err := d.Set("file_shares", fileSharesMap); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set file_shares: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set file_shares: %w", err))
 	}
 
 	if err := d.Set("file_share_details", fileShareDetails); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set file_share_details: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set file_share_details: %w", err))
 	}
 
 	if err := d.Set("total_count", fileSharesResp.TotalCount); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to set total_count: %w", err))
+		return tf.FromErr(fmt.Errorf("failed to set total_count: %w", err))
 	}
 
 	// Set resource ID

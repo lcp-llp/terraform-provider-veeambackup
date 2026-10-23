@@ -19,6 +19,16 @@ This unified Terraform provider enables you to manage and query multiple Veeam s
 - **Lookup Maps**: Convenient name-to-ID and ID-to-name mappings
 - **Error Handling**: Comprehensive error handling and validation
 
+## Provider Architecture
+
+The provider uses the Terraform Plugin Framework and protocol version 6 for all resources, data sources, and actions. Registration and service configuration are managed in [provider/provider.go](provider/provider.go); there is no SDK v2 provider or multiplexer.
+
+Azure, AWS, and VBR implementations remain in their respective service directories. The shared [internal/tf](internal/tf) helpers handle Framework lifecycle calls and conversion between Terraform values and API payload values.
+
+Existing resource names, data-source names, nested block syntax, and state IDs are retained. The service blocks and `VEEAM_*` environment variables remain supported. At least one service block is required, including when its connection settings come from environment variables; explicit settings take precedence over environment values.
+
+Before applying this provider upgrade, back up Terraform state and review a plan in a non-production workspace. The schema type and state upgrade tests cover structural compatibility; they do not replace acceptance testing against your Veeam versions.
+
 ## Quick Start
 
 ## Terraform Version Requirement
